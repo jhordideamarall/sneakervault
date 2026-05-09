@@ -65,10 +65,18 @@ SneakerVault menggantikan itu semua — dengan sistem yang dirancang khusus untu
 ## Alur Kerja
 
 ```
-Barang Masuk   →  Scan barcode  →  Stok tercatat + HPP ter-update
-Barang Keluar  →  Sesi packing  →  Scan item + isi order ID + kurir
-Pengembalian   →  Admin Online inisiasi  →  Admin Gudang verifikasi fisik
-                  →  Tukar size atau Refund
+BARANG MASUK
+Tim Akuntan input ke Accurate → Print barcode → Tempel di box
+→ Admin Gudang scan barcode di SneakerVault → Stok tercatat ✓
+
+BARANG KELUAR
+Shopkeeper buka SneakerVault → Buat sesi packing → Scan barang satu per satu
+→ Isi platform + nomor order + kurir → Selesai → Stok berkurang otomatis ✓
+
+PENGEMBALIAN
+Admin Online tandai "Pengembalian" + isi alasan
+→ Admin Gudang cek fisik barang → Verified
+→ Pilih: Tukar Size (stok in/out) atau Refund (stok masuk kembali) ✓
 ```
 
 ---
