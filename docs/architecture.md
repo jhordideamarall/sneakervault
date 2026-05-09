@@ -111,7 +111,7 @@ erDiagram
         uuid id PK "references auth.users"
         text full_name
         text email
-        text[] roles "array: owner | admin_gudang | admin_online | shopkeeper"
+        user_role[] roles "enum array: owner | admin_gudang | admin_online | shopkeeper"
         text avatar_url
         boolean is_active
         timestamp created_at

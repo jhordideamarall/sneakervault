@@ -1,3 +1,12 @@
+import type { Metadata } from "next";
+import "./globals.css";
+import { ToastProvider } from "@/components/toast";
+
+export const metadata: Metadata = {
+  title: "SneakerVault",
+  description: "Sistem manajemen gudang sneakers",
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -5,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
-      <body>{children}</body>
+      <body className="antialiased">
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }

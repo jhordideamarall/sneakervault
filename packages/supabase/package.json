@@ -17,5 +17,8 @@
   "dependencies": {
     "@supabase/supabase-js": "2.49.4",
     "@supabase/ssr": "0.6.1"
+  },
+  "peerDependencies": {
+    "next": ">=14"
   }
 }
