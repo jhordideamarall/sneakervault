@@ -5,8 +5,8 @@
 <h1 align="center">🏪 SneakerVault</h1>
 
 <p align="center">
-  <strong>Sistem Manajemen Gudang Sneakers — Simpel, Transparan, Anti-Fraud</strong><br/>
-  Menggantikan spreadsheet. Mencegah kecurangan. Memberikan kontrol penuh ke owner.
+  Sistem manajemen gudang sneakers yang dibangun untuk kecepatan, transparansi, dan keamanan data.<br/>
+  Dari scan barcode hingga laporan profit — semua dalam satu platform.
 </p>
 
 <p align="center">
@@ -21,78 +21,67 @@
 
 ---
 
-## 🎯 Masalah yang Diselesaikan
+## Mengapa SneakerVault?
 
-Toko sneakers dengan volume tinggi masih mencatat stok di dua tempat sekaligus — spreadsheet dan software akuntansi — sehingga data sering tidak sinkron. Tidak ada yang bisa menjawab dengan pasti: *"Barang ini keluar ke mana? Siapa yang packing? Kapan?"*
+Toko sneakers volume tinggi tidak bisa lagi mengandalkan spreadsheet. Data tercecer, tidak ada jejak siapa yang melakukan apa, dan owner tidak punya visibilitas real-time terhadap stok maupun profit.
 
-SneakerVault hadir untuk menjawab semua itu.
-
----
-
-## ✅ Apa yang Bisa Dilakukan Sistem Ini
-
-### Untuk Owner
-- **Dashboard finansial** — lihat total nilai stok, profit bulan ini, dan produk terlaris dalam satu halaman
-- **Kontrol penuh** — tidak ada yang bisa hapus data tanpa persetujuan owner
-- **Activity log** — rekam jejak siapa melakukan apa dan kapan, tidak bisa dimanipulasi
-- **Export data** — unduh laporan ke PDF atau Excel kapan saja, plus backup SQL untuk keamanan data jangka panjang
-
-### Untuk Tim Gudang (Admin Gudang)
-- **Scan barcode masuk** — tinggal scan barcode, stok langsung tercatat otomatis
-- **HPP otomatis** — harga modal dirata-rata otomatis setiap ada batch baru masuk
-
-### Untuk Tim Packing (Shopkeeper)
-- **Scan barcode keluar** — scan barang yang mau dipacking, stok langsung berkurang
-- **Catat per sesi** — satu sesi packing bisa berisi banyak item sekaligus, lengkap dengan platform (Shopee/TikTok/dll), nomor order, dan kurir
-
-### Untuk Admin Online
-- **Update status order** — dari Packing → Dikirim → Selesai, cukup satu tombol
-- **Proses pengembalian** — tukar size atau refund, dengan verifikasi 2 langkah agar tidak ada yang bisa manipulasi
+SneakerVault menggantikan itu semua — dengan sistem yang dirancang khusus untuk alur kerja toko sneakers.
 
 ---
 
-## 🔒 Sistem Anti-Fraud
+## Fitur Utama
 
-Ini yang membedakan SneakerVault dari spreadsheet biasa:
+**Untuk Owner**
+- Dashboard finansial: nilai stok, profit, dan produk terlaris dalam satu tampilan
+- Activity log yang tidak bisa dimanipulasi — setiap aksi tercatat permanen
+- Tidak ada yang bisa menghapus data tanpa persetujuan owner
+- Export laporan ke PDF, Excel, atau SQL backup kapan saja
 
-| Fitur | Cara Kerja |
+**Untuk Tim Gudang**
+- Scan barcode masuk → stok langsung tercatat, HPP otomatis ter-update
+- Tracking defect dan retur ke supplier per batch pembelian
+
+**Untuk Shopkeeper**
+- Buat sesi packing → scan barang satu per satu → stok berkurang otomatis
+- Catat platform (Shopee/TikTok/dll), nomor order, dan kurir dalam satu sesi
+
+**Untuk Admin Online**
+- Update status order dengan satu tombol: Packing → Dikirim → Selesai
+- Proses pengembalian dengan verifikasi 2 langkah — tukar size atau refund
+
+---
+
+## Anti-Fraud by Design
+
+| | |
 |---|---|
-| **Tidak ada tombol Hapus** | Semua role hanya bisa *request* hapus — owner yang approve atau tolak |
-| **Activity Log immutable** | Setiap aksi tercatat permanen: siapa, apa, kapan. Tidak bisa diedit atau dihapus. |
-| **Stok tidak bisa negatif** | Dijaga di dua lapis: validasi aplikasi + constraint database |
-| **Role-based access** | Setiap orang hanya bisa akses fitur sesuai tugasnya |
+| Tidak ada tombol Hapus | Semua role hanya bisa *request* — owner yang memutuskan |
+| Activity log immutable | Siapa, apa, kapan — tercatat permanen, tidak bisa diubah |
+| Stok tidak bisa negatif | Dijaga di level aplikasi dan database sekaligus |
+| Role-based access | Setiap orang hanya melihat dan mengakses apa yang relevan |
 
 ---
 
-## 📱 Alur Kerja Sehari-hari
+## Alur Kerja
 
 ```
-BARANG MASUK
-Tim Akuntan input ke Accurate → Print barcode → Tempel di box
-→ Admin Gudang scan barcode di SneakerVault → Stok tercatat ✓
-
-BARANG KELUAR
-Shopkeeper buka SneakerVault → Buat sesi packing → Scan barang satu per satu
-→ Isi platform + nomor order + kurir → Selesai → Stok berkurang otomatis ✓
-
-PENGEMBALIAN
-Admin Online tandai "Pengembalian" + isi alasan
-→ Admin Gudang cek fisik barang → Verified
-→ Pilih: Tukar Size (stok in/out) atau Refund (stok masuk kembali) ✓
+Barang Masuk   →  Scan barcode  →  Stok tercatat + HPP ter-update
+Barang Keluar  →  Sesi packing  →  Scan item + isi order ID + kurir
+Pengembalian   →  Admin Online inisiasi  →  Admin Gudang verifikasi fisik
+                  →  Tukar size atau Refund
 ```
 
 ---
 
-## 🗺️ Rencana Integrasi ke Depan
+## Siap Berkembang
 
-Sistem ini dibangun dengan arsitektur **monorepo** — artinya ketika website toko sudah jadi, integrasi stok antara sistem gudang dan website bisa dilakukan tanpa membangun ulang dari nol. Stok di gudang dan stok di website akan sinkron otomatis.
-
+Dibangun dengan arsitektur monorepo — ketika website toko siap, integrasi stok bisa dilakukan tanpa membangun ulang dari nol.
 
 ---
 
-## 📚 Dokumentasi Teknis
+## Dokumentasi
 
-| Dokumen | Isi |
+| | |
 |---|---|
 | [`docs/prd.md`](./docs/prd.md) | Spesifikasi lengkap semua fitur |
 | [`docs/architecture.md`](./docs/architecture.md) | Desain database & arsitektur teknis |
@@ -100,19 +89,17 @@ Sistem ini dibangun dengan arsitektur **monorepo** — artinya ketika website to
 
 ---
 
-## 👤 Developer
+## Developer
 
 Built by **[Jhordi De Amarall](https://github.com/jhordideamarall)**
 
 ---
 
-## 📄 Lisensi
+## Lisensi
 
 ```
 Copyright (c) 2026 Jhordi De Amarall. All rights reserved.
 
 Software ini bersifat proprietary dan rahasia. Dilarang menyalin,
 mendistribusikan, atau menggunakan tanpa izin tertulis dari developer.
-
-Dibangun sebagai proyek komisi. Kepemilikan source code ada pada developer.
 ```
