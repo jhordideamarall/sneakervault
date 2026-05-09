@@ -6,6 +6,7 @@
 - **Baca dulu** file yang relevan sebelum mengubahnya. Jangan asumsikan isi file.
 - **Tanya dulu** jika instruksi ambigu atau bisa merusak data/struktur yang sudah ada.
 - **Jangan pernah** jalankan perintah destructive (drop table, delete data, reset migration) tanpa konfirmasi eksplisit.
+- **Pahami setiap phase terlebih dahulu** harus pahami pekerjaan tiap phase berdasarkan codebase yang ada dan riwayat pekerjaan pada folder artifact
 
 ### Skala Risiko
 | Risiko | Contoh | Tindakan |

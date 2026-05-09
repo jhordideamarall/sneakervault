@@ -96,7 +96,6 @@ Dibangun dengan arsitektur monorepo — ketika website toko siap, integrasi stok
 |---|---|
 | [`docs/prd.md`](./docs/prd.md) | Spesifikasi lengkap semua fitur |
 | [`docs/architecture.md`](./docs/architecture.md) | Desain database & arsitektur teknis |
-| [`docs/implementation-plan.md`](./docs/implementation-plan.md) | Rencana sprint & checklist task |
 
 ---
 
