@@ -102,10 +102,7 @@ Sistem ini dibangun dengan arsitektur **monorepo** — artinya ketika website to
 
 ## 👤 Developer
 
-**Jhordi De Amarall**
-Full-stack developer — spesialisasi sistem web modern, arsitektur database, dan otomasi proses bisnis.
-
-- GitHub: [@jhordideamarall](https://github.com/jhordideamarall)
+Built by **[Jhordi De Amarall](https://github.com/jhordideamarall)**
 
 ---
 
