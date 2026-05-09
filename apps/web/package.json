@@ -1,0 +1,27 @@
+{
+  "name": "@sneakervault/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "15.5.18",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "@sneakervault/ui": "workspace:*",
+    "@sneakervault/supabase": "workspace:*",
+    "@sneakervault/shared": "workspace:*",
+    "@sneakervault/barcode": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.17",
+    "@types/react": "19.1.4",
+    "@types/react-dom": "19.1.2",
+    "typescript": "5.8.3"
+  }
+}

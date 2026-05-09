@@ -1,0 +1,4 @@
+{
+  "extends": "@sneakervault/tsconfig/nextjs.json",
+  "include": ["src"]
+}

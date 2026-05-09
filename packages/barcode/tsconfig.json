@@ -1,0 +1,4 @@
+{
+  "extends": "@sneakervault/tsconfig/react-library.json",
+  "include": ["src"]
+}
