@@ -67,16 +67,19 @@ SneakerVault menggantikan itu semua — dengan sistem yang dirancang khusus untu
 ```
 BARANG MASUK
 Tim Akuntan input ke Accurate → Print barcode → Tempel di box
-→ Admin Gudang scan barcode di SneakerVault → Stok tercatat ✓
+→ Admin Gudang scan barcode di SneakerVault → input harga beli → Stok tercatat ✓
+  (HPP otomatis dirata-rata jika model yang sama pernah masuk sebelumnya)
 
 BARANG KELUAR
 Shopkeeper buka SneakerVault → Buat sesi packing → Scan barang satu per satu
 → Isi platform + nomor order + kurir → Selesai → Stok berkurang otomatis ✓
+  (Satu sesi bisa berisi banyak item sekaligus)
 
 PENGEMBALIAN
 Admin Online tandai "Pengembalian" + isi alasan
 → Admin Gudang cek fisik barang → Verified
 → Pilih: Tukar Size (stok in/out) atau Refund (stok masuk kembali) ✓
+  (2 langkah verifikasi — tidak bisa diproses sepihak)
 ```
 
 ---
