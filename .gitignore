@@ -19,5 +19,8 @@ dist
 .vscode
 .idea
 
+# Private
+Riwayatmeeting.md
+
 # Supabase
 supabase/.temp
