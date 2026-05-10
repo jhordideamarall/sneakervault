@@ -35,19 +35,17 @@ const ResizableHandle = ({
 }) => (
   <Separator
     className={cn(
-      "relative flex w-px items-center justify-center bg-white/[0.04] transition-colors hover:bg-white/[0.1] focus-visible:outline-none data-[panel-group-direction=vertical]:h-px data-[panel-group-direction=vertical]:w-full",
+      "relative flex w-3 items-center justify-center bg-transparent transition-all focus-visible:outline-none data-[panel-group-direction=vertical]:h-3 data-[panel-group-direction=vertical]:w-full cursor-col-resize data-[panel-group-direction=vertical]:cursor-row-resize",
       className
     )}
     {...props}
   >
     {withHandle && (
-      <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border border-white/10 bg-[#262626]">
-        <GripVertical className="h-2.5 w-2.5 text-white/40" />
+      <div className="absolute z-10 flex h-6 w-4 items-center justify-center rounded-md border border-white/10 bg-[#262626] shadow-xl group-hover:scale-110 transition-transform">
+        <GripVertical className="h-3 w-3 text-white/40" />
       </div>
     )}
   </Separator>
 )
 
 export { ResizablePanelGroup, ResizablePanel, ResizableHandle }
-
-

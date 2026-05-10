@@ -4,6 +4,7 @@ import { createClient } from "@sneakervault/supabase/server";
 import { updateSessionStatusSchema } from "@sneakervault/shared";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
+import { notifyEvent } from "./notify";
 
 const STATUS_TRANSITIONS: Record<string, { from: string[]; roles: string[] }> = {
   shipped: { from: ["packing"], roles: ["owner", "shopkeeper"] },
@@ -62,6 +63,33 @@ export async function updateSessionStatus(input: unknown) {
     old_data: { status: session.status },
     new_data: { status },
   });
+
+  // Notif sesuai status baru
+  const { data: sessionInfo } = await supabase
+    .from("packing_sessions")
+    .select("platform, platform_order_id")
+    .eq("id", session_id)
+    .maybeSingle();
+
+  if (sessionInfo) {
+    const eventType =
+      status === "shipped" ? "packing.shipped"
+        : status === "completed" ? "packing.completed"
+        : status === "has_return" ? "packing.has_return"
+        : null;
+
+    if (eventType) {
+      await notifyEvent(
+        {
+          type: eventType,
+          sessionId: session_id,
+          platform: sessionInfo.platform,
+          orderId: sessionInfo.platform_order_id,
+        },
+        { actorId: profile.id }
+      );
+    }
+  }
 
   return { success: true };
 }

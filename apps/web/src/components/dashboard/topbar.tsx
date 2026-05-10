@@ -1,5 +1,8 @@
+"use client";
+
 import { logout } from "@/lib/actions/auth";
-import { Search, Bell } from "lucide-react";
+import { Search, Bell, Mail } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@sneakervault/ui";
 
 const roleBadgeColors: Record<string, string> = {
   owner: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
@@ -29,6 +32,20 @@ export function Topbar({ fullName, roles }: { fullName?: string; roles?: string[
         <button className="relative rounded-xl p-2.5 text-white/30 hover:bg-white/[0.05] hover:text-white/60 transition-colors">
           <Bell size={18} />
         </button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent("toggle-mail-inbox"))}
+                className="relative rounded-xl p-2.5 text-white/30 hover:bg-white/[0.05] hover:text-white/60 transition-colors"
+              >
+                <Mail size={18} />
+                <kbd className="absolute -bottom-1 -right-1 px-1 py-0.5 text-[8px] font-bold bg-white/10 border border-white/20 rounded text-white/50">M</kbd>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Pesan Internal (M)</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <div className="h-6 w-px bg-white/[0.08]" />
         <div className="flex items-center gap-3">
           <div className="text-right">

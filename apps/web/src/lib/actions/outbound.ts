@@ -4,6 +4,7 @@ import { createClient } from "@sneakervault/supabase/server";
 import { packingSessionInputSchema } from "@sneakervault/shared";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
+import { notifyEvent, checkLowStockAndNotify } from "./notify";
 
 export async function createPackingSession(input: unknown) {
   const profile = await requireRole(["owner", "shopkeeper"]);
@@ -25,6 +26,15 @@ export async function createPackingSession(input: unknown) {
   if (error) return { error: { _form: [error.message] } };
 
   await logActivity({ user_id: profile.id, action: "create", entity_type: "packing_session", entity_id: data.id, new_data: data });
+  await notifyEvent(
+    {
+      type: "packing.created",
+      sessionId: data.id,
+      platform: data.platform,
+      orderId: data.platform_order_id,
+    },
+    { actorId: profile.id }
+  );
   return { data };
 }
 
@@ -90,6 +100,9 @@ export async function scanPackingItem(sessionId: string, barcode: string) {
     entity_id: item.id,
     new_data: { product_id: product.id, barcode, session_id: sessionId },
   });
+
+  // Cek stok rendah setelah outbound — broadcast notif kalau di bawah threshold
+  await checkLowStockAndNotify(product.id, { actorId: profile.id });
 
   return { data: { product, item } };
 }

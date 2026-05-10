@@ -4,6 +4,7 @@ import { createClient } from "@sneakervault/supabase/server";
 import { productInputSchema, confirmInboundSchema } from "@sneakervault/shared";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
+import { notifyEvent } from "./notify";
 
 export async function scanInbound(barcode: string) {
   await requireRole(["owner", "admin_gudang"]);
@@ -88,9 +89,9 @@ export async function confirmInbound(input: unknown) {
     action: "scan_in",
     entity_type: "product",
     entity_id: product_id,
-    new_data: { 
-      quantity, 
-      unit_cost: batch_data.unit_cost, 
+    new_data: {
+      quantity,
+      unit_cost: batch_data.unit_cost,
       batch_id: batch.id,
       brand: product.brand,
       model: product.model,
@@ -98,6 +99,17 @@ export async function confirmInbound(input: unknown) {
       sku: (product as any).sku,   // Adding SKU if available
     },
   });
+
+  await notifyEvent(
+    {
+      type: "inbound.batch_received",
+      batchId: batch.id,
+      productLabel: `${product.brand} ${product.model}`,
+      quantity,
+      unitCost: batch_data.unit_cost,
+    },
+    { actorId: profile.id }
+  );
 
   return { success: true };
 }

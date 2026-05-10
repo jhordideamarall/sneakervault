@@ -58,6 +58,38 @@ export type Database = {
           },
         ]
       }
+      app_settings: {
+        Row: {
+          description: string | null
+          key: string
+          updated_at: string | null
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          description?: string | null
+          key: string
+          updated_at?: string | null
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          description?: string | null
+          key?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delete_requests: {
         Row: {
           created_at: string
@@ -85,8 +117,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          entity_id: string
-          entity_type: Database["public"]["Enums"]["delete_entity_type"]
+          entity_id?: string
+          entity_type?: Database["public"]["Enums"]["delete_entity_type"]
           id?: string
           reason?: string
           requested_by?: string
@@ -114,10 +146,14 @@ export type Database = {
       }
       internal_messages: {
         Row: {
+          attachment_urls: string[] | null
           content: string
           created_at: string | null
           id: string
           is_read: boolean | null
+          is_system: boolean
+          metadata: Json | null
+          parent_id: string | null
           receiver_id: string
           related_entity_id: string | null
           related_entity_type: string | null
@@ -125,10 +161,14 @@ export type Database = {
           subject: string | null
         }
         Insert: {
+          attachment_urls?: string[] | null
           content: string
           created_at?: string | null
           id?: string
           is_read?: boolean | null
+          is_system?: boolean
+          metadata?: Json | null
+          parent_id?: string | null
           receiver_id: string
           related_entity_id?: string | null
           related_entity_type?: string | null
@@ -136,10 +176,14 @@ export type Database = {
           subject?: string | null
         }
         Update: {
+          attachment_urls?: string[] | null
           content?: string
           created_at?: string | null
           id?: string
           is_read?: boolean | null
+          is_system?: boolean
+          metadata?: Json | null
+          parent_id?: string | null
           receiver_id?: string
           related_entity_id?: string | null
           related_entity_type?: string | null
@@ -147,6 +191,13 @@ export type Database = {
           subject?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "internal_messages_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "internal_messages"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "internal_messages_receiver_id_fkey"
             columns: ["receiver_id"]
@@ -158,6 +209,35 @@ export type Database = {
             foreignKeyName: "internal_messages_sender_id_fkey"
             columns: ["sender_id"]
             isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_preferences: {
+        Row: {
+          digest_mode: boolean | null
+          muted_event_types: string[] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          digest_mode?: boolean | null
+          muted_event_types?: string[] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          digest_mode?: boolean | null
+          muted_event_types?: string[] | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -490,7 +570,7 @@ export type Database = {
           processed_by?: string | null
           reason: string
           status?: Database["public"]["Enums"]["return_status"]
-          type?: Database["public"]["Enums"]["return_type"]
+          type: Database["public"]["Enums"]["return_type"]
           verified_at?: string | null
           verified_by?: string | null
         }
@@ -582,7 +662,7 @@ export type Database = {
           quantity?: number
           reference_id?: string | null
           reference_type?: string | null
-          type: Database["public"]["Enums"]["stock_movement_type"]
+          type?: Database["public"]["Enums"]["stock_movement_type"]
           unit_cost?: number
         }
         Relationships: [
@@ -651,6 +731,17 @@ export type Database = {
         Returns: undefined
       }
       bootstrap_first_owner: { Args: { p_email: string }; Returns: undefined }
+      create_system_notification: {
+        Args: {
+          p_content: string
+          p_metadata?: Json
+          p_receiver_id: string
+          p_related_entity_id?: string
+          p_related_entity_type?: string
+          p_subject?: string
+        }
+        Returns: string
+      }
       decrement_product_quantity: {
         Args: { p_id: string; qty: number }
         Returns: boolean

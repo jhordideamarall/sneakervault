@@ -2,7 +2,9 @@
 
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Send, Reply, X, Check, CheckCheck, Paperclip, Smile } from "lucide-react";
+import { Mail, Send, Reply, X, Check, CheckCheck, Paperclip, Smile, Bell, MessageCircle } from "lucide-react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { SystemMessageBubble } from "./system-message-bubble";
 import { 
   Dialog, 
   DialogContent, 
@@ -15,15 +17,15 @@ import {
 import { useInbox, InternalMessage } from "@/lib/use-inbox";
 import { usePresence } from "@/lib/use-presence";
 import { createClient } from "@sneakervault/supabase/client";
-import { formatDistanceToNow, format } from "date-fns";
+import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import { toast } from "sonner";
 
-const EMOJI_CATEGORIES = [
-  { label: "Smileys", emojis: ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😮", "😯", "😲", "😳", "🥺", "😦", "😧", "😨", "😰", "😥", "😢", "😭", "😱", "😖", "😣", "😞", "😓", "😩", "😫", "🥱", "😤", "😡", "😠", "🤬", "😈", "👿", "💀", "☠️", "💩", "🤡", "👹", "👺", "👻", "👽", "👾", "🤖"] },
-  { label: "Gestures", emojis: ["👋", "🤚", "🖐", "✋", "🖖", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️", "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌", "👐", "🤲", "🤝", "🙏", "✍️", "💅", "🤳", "💪", "🦾", "🦵", "🦿", "🦶", "👣", "👀", "👁", "👅", "👄", "💋"] },
-  { label: "Hearts", emojis: ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❤️‍🔥", "❤️‍🩹", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟"] },
-  { label: "Activities", emojis: ["⚽️", "🏀", "🏈", "⚾️", "🥎", "🎾", "🏐", "🏉", "🥏", "🎱", "🪀", "🏓", "🏸", "🏒", "🏑", "🥍", "🏏", "🪃", "🥅", "⛳️", "🪁", "🏹", "🎣", "🤿", "🥊", "🥋", "🎽", "🛹", "🛼", "🛷", "⛸", "🎿", "⛷", "🏂", "🏋️", "🤺", "🤼", "🤸", "⛹️", "🤽", "🚴", "🚵", "🧘"] },
+const QUICK_EMOJIS = [
+  "😀", "😂", "🥰", "😍", "😎", "🤔", "😅", "😭",
+  "😡", "🥺", "🙏", "👍", "👎", "👌", "👋", "💪",
+  "🙌", "👏", "🔥", "✨", "💯", "🎉", "❤️", "💔",
+  "😘", "🤗", "😴", "🤝", "👀", "🚀", "✅", "❌",
 ];
 
 export function MailGlobalDialog({ userId }: { userId: string }) {
@@ -37,10 +39,38 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
   const [isUploading, setIsUploading] = React.useState(false);
   const [isFocused, setIsFocused] = React.useState(false);
   const [showEmoji, setShowEmoji] = React.useState(false);
+  const [filter, setFilter] = React.useState<"all" | "notifications" | "chat">("all");
+  
+  const searchParams = useSearchParams();
+  const router = useRouter();
   
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
+
+  // Deep link: ?openMail=<user_id>
+  React.useEffect(() => {
+    const openMailId = searchParams.get("openMail");
+    if (openMailId) {
+      setOpen(true);
+      setSelectedId(openMailId);
+      // Clean up query param
+      const url = new URL(window.location.href);
+      url.searchParams.delete("openMail");
+      router.replace(url.pathname + url.search, { scroll: false });
+    }
+  }, [searchParams, router]);
+
+  // Filter conversations based on tab
+  const filteredConversations = React.useMemo(() => {
+    if (filter === "all") return conversations;
+    return conversations.filter(conv => {
+      const hasSystem = conv.messages.some(m => m.is_system);
+      const hasChat = conv.messages.some(m => !m.is_system);
+      if (filter === "notifications") return hasSystem;
+      return hasChat;
+    });
+  }, [conversations, filter]);
 
   // Autofocus when chat is selected or opened
   React.useEffect(() => {
@@ -92,7 +122,7 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
     const newAttachments = [...attachments];
 
     for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+      const file = files[i]!;
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
       const filePath = `${userId}/${fileName}`;
@@ -156,21 +186,59 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent hideClose className="max-w-none w-[1000px] h-[700px] bg-[#262626] border-white/[0.05] flex flex-col p-0 overflow-hidden shadow-2xl">
-        <DialogTitle className="sr-only">Messaging Center</DialogTitle>
-        
+      <AnimatePresence>
+        {open && (
+          <DialogContent forceMount hideClose className="max-w-none w-[95vw] md:w-[1000px] h-[95vh] md:h-[700px] bg-transparent border-0 p-0 overflow-visible shadow-none">
+            <DialogTitle className="sr-only">Messaging Center</DialogTitle>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 16, filter: "blur(10px)" }}
+              animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
+              exit={{ opacity: 0, scale: 0.96, y: 10, filter: "blur(6px)" }}
+              transition={{
+                duration: 0.4,
+                ease: [0.32, 0.72, 0, 1],
+                filter: { duration: 0.3 },
+              }}
+              className="w-full h-full bg-[#262626] border border-white/[0.05] rounded-[20px] md:rounded-[32px] flex flex-col overflow-hidden shadow-2xl"
+            >
         <div className="flex-1 flex overflow-hidden">
           {/* Left: Sidebar */}
-          <div className="w-[320px] border-r border-white/[0.05] flex flex-col bg-[#262626]">
+          <div className={cn(
+            "w-full md:w-[320px] border-r border-white/[0.05] flex flex-col bg-[#262626]",
+            selectedId && "hidden md:flex"
+          )}>
             <div className="px-6 py-6 border-b border-white/[0.05] flex items-center justify-between">
               <h2 className="text-lg font-bold text-white/90">Pesan</h2>
               <div className="size-8 rounded-full bg-white/[0.05] flex items-center justify-center text-white/40">
                 <Mail size={16} />
               </div>
             </div>
+
+            {/* Tab Filter */}
+            <div className="flex items-center gap-1 px-4 py-3 border-b border-white/[0.05]">
+              {([
+                { key: "all", label: "Semua" },
+                { key: "notifications", label: "Notifikasi", icon: Bell },
+                { key: "chat", label: "Chat", icon: MessageCircle },
+              ] as const).map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setFilter(tab.key)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all outline-none",
+                    filter === tab.key
+                      ? "bg-white/[0.1] text-white"
+                      : "text-white/30 hover:text-white/60 hover:bg-white/[0.03]"
+                  )}
+                >
+                  {"icon" in tab && tab.icon && <tab.icon size={12} />}
+                  {tab.label}
+                </button>
+              ))}
+            </div>
             
             <ScrollArea className="flex-1">
-              {conversations.length === 0 ? (
+              {filteredConversations.length === 0 ? (
                 <div className="p-12 text-center flex flex-col items-center gap-3">
                   <div className="size-12 rounded-2xl bg-white/[0.02] flex items-center justify-center text-white/10">
                     <Mail size={24} strokeWidth={1} />
@@ -179,7 +247,7 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
                 </div>
               ) : (
                 <div className="flex flex-col py-2">
-                  {conversations.map((conv) => {
+                  {filteredConversations.map((conv) => {
                     const isSelected = selectedId === conv.profile.id;
                     const isOnline = onlineUsers.includes(conv.profile.id);
                     return (
@@ -235,12 +303,18 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
           </div>
 
           {/* Right: Chat Thread */}
-          <div className="flex-1 flex flex-col bg-[#1F1F1E] relative overflow-hidden">
+          <div className={cn(
+            "flex-1 flex flex-col bg-[#1F1F1E] relative overflow-hidden",
+            !selectedId && "hidden md:flex"
+          )}>
             {activeChat ? (
               <>
                 {/* Header */}
-                <div className="absolute top-0 left-0 right-0 h-20 z-20 flex items-center justify-between px-8 bg-[#1F1F1E]/60 backdrop-blur-2xl border-b border-white/[0.03]">
-                  <div className="flex items-center gap-4">
+                <div className="absolute top-0 left-0 right-0 h-20 z-20 flex items-center justify-between px-4 md:px-8 bg-[#1F1F1E]/60 backdrop-blur-2xl border-b border-white/[0.03]">
+                  <div className="flex items-center gap-3 md:gap-4">
+                    <button onClick={() => setSelectedId(null)} className="md:hidden text-white/40 hover:text-white p-1">
+                      <Reply size={18} className="rotate-180" />
+                    </button>
                     <Avatar 
                       src={activeChat.profile.avatar_url} 
                       fallback={activeChat.profile.full_name?.slice(0, 2)} 
@@ -257,7 +331,7 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
                       </p>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => setSelectedId(null)} className="text-white/20 hover:text-white transition-all">
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedId(null)} className="text-white/20 hover:text-white transition-all p-2">
                     <X size={18} />
                   </Button>
                 </div>
@@ -273,10 +347,15 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
                 >
                   <div className="flex flex-col gap-3 px-8 pt-28 pb-40">
                     {activeChat.messages.map((msg, idx) => {
+                      // System notification — render differently
+                      if (msg.is_system) {
+                        return <SystemMessageBubble key={msg.id} msg={msg} />;
+                      }
+
                       const isMe = msg.sender_id === userId;
-                      const isLastInGroup = idx === activeChat.messages.length - 1 || activeChat.messages[idx + 1].sender_id !== msg.sender_id;
+                      const isLastInGroup = idx === activeChat.messages.length - 1 || activeChat.messages[idx + 1]?.sender_id !== msg.sender_id;
                       const showTime = idx === 0 || 
-                        new Date(msg.created_at!).getTime() - new Date(activeChat.messages[idx-1].created_at!).getTime() > 1000 * 60 * 30;
+                        new Date(msg.created_at!).getTime() - new Date(activeChat.messages[idx-1]!.created_at!).getTime() > 1000 * 60 * 30;
 
                       return (
                         <div key={msg.id} className={cn("flex flex-col", showTime && "mt-10")}>
@@ -382,37 +461,33 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
                     <AnimatePresence>
                       {showEmoji && (
                         <motion.div
-                          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                          initial={{ opacity: 0, y: 12, scale: 0.96 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                          className="mb-4 bg-[#262626]/95 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden"
+                          exit={{ opacity: 0, y: 12, scale: 0.96 }}
+                          transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+                          className="mb-3 bg-[#262626]/95 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
                         >
-                          <div className="p-4 border-b border-white/5 flex items-center justify-between px-6">
-                            <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.25em]">Emoji</span>
-                            <button onClick={() => setShowEmoji(false)} className="text-white/20 hover:text-white transition-colors">
+                          <div className="px-4 py-3 flex items-center justify-between border-b border-white/[0.04]">
+                            <span className="text-[10px] font-bold text-white/40 uppercase tracking-[0.2em]">Emoji</span>
+                            <button onClick={() => setShowEmoji(false)} className="text-white/30 hover:text-white transition-colors">
                               <X size={14} />
                             </button>
                           </div>
-                          <ScrollArea className="h-[280px]">
-                            <div className="p-6 space-y-8">
-                              {EMOJI_CATEGORIES.map((cat) => (
-                                <div key={cat.label}>
-                                  <h5 className="text-[9px] font-black text-white/10 uppercase tracking-widest mb-4">{cat.label}</h5>
-                                  <div className="grid grid-cols-8 gap-2">
-                                    {Array.from(new Set(cat.emojis)).map((emoji) => (
-                                      <button
-                                        key={emoji}
-                                        onClick={() => setChatInput(prev => prev + emoji)}
-                                        className="size-10 flex items-center justify-center text-2xl hover:bg-white/5 rounded-2xl transition-all hover:scale-125 active:scale-90"
-                                      >
-                                        {emoji}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
+                          <div className="p-3 grid grid-cols-8 gap-1">
+                            {QUICK_EMOJIS.map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => {
+                                  setChatInput(prev => prev + emoji);
+                                  inputRef.current?.focus();
+                                }}
+                                className="size-10 flex items-center justify-center text-xl hover:bg-white/[0.06] rounded-xl transition-all active:scale-90"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
                         </motion.div>
                       )}
 
@@ -468,7 +543,7 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
 
                       <form 
                         onSubmit={handleSend} 
-                        className="flex items-end gap-2"
+                        className="flex items-center gap-2"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault();
@@ -497,7 +572,7 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
                             placeholder={isUploading ? "Mengunggah..." : "Tulis pesan..."}
                             rows={1}
                             disabled={isUploading}
-                            className="w-full bg-transparent py-3 text-[14px] text-white/90 placeholder:text-white/20 outline-none resize-none max-h-[120px]"
+                            className="w-full bg-transparent py-3 text-[14px] text-white/90 placeholder:text-white/20 outline-none resize-none max-h-[120px] leading-tight"
                             style={{ height: 'auto' }}
                             onInput={(e) => {
                               const target = e.target as HTMLTextAreaElement;
@@ -513,7 +588,7 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
                             type="button" 
                             onClick={() => setShowEmoji(!showEmoji)}
                             className={cn(
-                              "px-3 transition-colors",
+                              "px-3 transition-colors shrink-0",
                               showEmoji ? "text-white" : "text-white/30"
                             )}
                           >
@@ -522,6 +597,7 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
                         </div>
 
                         <motion.div
+                          className="shrink-0"
                           animate={{ 
                             scale: (chatInput || attachments.length > 0) ? 1 : 0.8,
                             opacity: (chatInput || attachments.length > 0) ? 1 : 0.3 
@@ -530,10 +606,10 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
                           <Button 
                             type="submit"
                             disabled={(!chatInput.trim() && attachments.length === 0) || isUploading}
-                            className="size-11 rounded-full bg-white text-black hover:bg-white/90 transition-all shrink-0 p-0 shadow-xl overflow-hidden"
+                            className="size-11 rounded-full bg-white text-black hover:bg-white/90 transition-all p-0 shadow-lg overflow-hidden flex items-center justify-center"
                           >
-                            <motion.div whileTap={{ x: 20, opacity: 0 }}>
-                              <Send size={18} fill="currentColor" className="ml-0.5" />
+                            <motion.div whileTap={{ x: 20, opacity: 0 }} className="flex items-center justify-center">
+                              <Send size={18} fill="currentColor" />
                             </motion.div>
                           </Button>
                         </motion.div>
@@ -555,7 +631,10 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
             )}
           </div>
         </div>
-      </DialogContent>
+        </motion.div>
+          </DialogContent>
+        )}
+      </AnimatePresence>
     </Dialog>
   );
 }

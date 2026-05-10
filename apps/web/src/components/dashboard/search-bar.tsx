@@ -93,11 +93,11 @@ export function SearchBar() {
   return (
     <>
       {focused && createPortal(
-        <div className="fixed inset-0 z-[9998] bg-black/50 backdrop-blur-md" onClick={close} />,
+        <div className="fixed inset-0 z-20 bg-black/50 backdrop-blur-md" onClick={close} />,
         document.body
       )}
 
-      <div className="relative z-[9999] transition-all duration-500 ease-out" style={{ width: focused ? "100%" : "50%" }}>
+      <div className="relative z-30 transition-all duration-500 ease-out" style={{ width: focused ? "100%" : "50%" }}>
         <div className="relative">
           <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
           <input

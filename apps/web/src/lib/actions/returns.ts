@@ -4,6 +4,7 @@ import { createClient } from "@sneakervault/supabase/server";
 import { initiateReturnSchema, processReturnSchema } from "@sneakervault/shared";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
+import { notifyEvent } from "./notify";
 
 export async function initiateReturn(input: unknown) {
   const profile = await requireRole(["owner", "admin_online"]);
@@ -58,6 +59,20 @@ export async function initiateReturn(input: unknown) {
   }
 
   await logActivity({ user_id: profile.id, action: "initiate_return", entity_type: "return", entity_id: data.id, new_data: { type: parsed.data.type, reason: parsed.data.reason, packing_item_id: parsed.data.packing_item_id } });
+
+  const productLabel = item.products
+    ? `${item.products.brand} ${item.products.model} size ${item.products.size}`
+    : "Produk";
+  await notifyEvent(
+    {
+      type: "return.initiated",
+      returnId: data.id,
+      reason: parsed.data.reason,
+      productLabel,
+    },
+    { actorId: profile.id }
+  );
+
   return { data };
 }
 
@@ -75,6 +90,27 @@ export async function verifyReturn(returnId: string) {
   if (error) return { error: error.message };
 
   await logActivity({ user_id: profile.id, action: "verify_return", entity_type: "return", entity_id: returnId });
+
+  // Ambil product label untuk notif
+  const { data: retRow } = await supabase
+    .from("returns")
+    .select("original_product_id")
+    .eq("id", returnId)
+    .maybeSingle();
+  let productLabel = "Produk";
+  if (retRow?.original_product_id) {
+    const { data: p } = await supabase
+      .from("products")
+      .select("brand, model, size")
+      .eq("id", retRow.original_product_id)
+      .maybeSingle();
+    if (p) productLabel = `${p.brand} ${p.model} size ${p.size}`;
+  }
+  await notifyEvent(
+    { type: "return.verified", returnId, productLabel },
+    { actorId: profile.id }
+  );
+
   return { success: true };
 }
 
@@ -137,5 +173,25 @@ export async function processReturn(input: unknown) {
   return { success: true };
   }
   await logActivity({ user_id: profile.id, action: "process_return", entity_type: "return", entity_id: parsed.data.return_id, new_data: { type: ret.type, new_product_id: parsed.data.new_product_id } });
+
+  // Notif processed
+  const { data: prodOriginal } = await supabase
+    .from("products")
+    .select("brand, model, size")
+    .eq("id", ret.original_product_id)
+    .maybeSingle();
+  const processedLabel = prodOriginal
+    ? `${prodOriginal.brand} ${prodOriginal.model} size ${prodOriginal.size}`
+    : "Produk";
+  await notifyEvent(
+    {
+      type: "return.processed",
+      returnId: parsed.data.return_id,
+      returnType: ret.type,
+      productLabel: processedLabel,
+    },
+    { actorId: profile.id }
+  );
+
   return { success: true };
 }

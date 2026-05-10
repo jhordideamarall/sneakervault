@@ -66,9 +66,9 @@ export function Sidebar({ roles, fullName, userId }: { roles: Role[]; fullName?:
   return (
     <aside className="flex h-full w-full flex-col md:flex overflow-hidden @container">
       {/* Logo */}
-      <div className="px-6 @max-[150px]:px-0 pt-8 pb-10 overflow-hidden flex items-center @max-[150px]:justify-center min-h-[88px]">
-        <span className="text-[15px] font-semibold tracking-tight text-white/90 truncate block @max-[150px]:hidden">SneakerVault.</span>
-        <span className="text-[15px] font-bold tracking-tighter text-white/90 hidden @max-[150px]:block">SV.</span>
+      <div className="px-6 @max-[120px]:px-0 pt-8 pb-10 overflow-hidden flex items-center @max-[120px]:justify-center min-h-[88px]">
+        <span className="text-[15px] font-semibold tracking-tight text-white/90 truncate block @max-[120px]:hidden">SneakerVault.</span>
+        <span className="text-[15px] font-bold tracking-tighter text-white/90 hidden @max-[120px]:block">SV.</span>
       </div>
 
       {/* Primary nav */}
@@ -81,14 +81,14 @@ export function Sidebar({ roles, fullName, userId }: { roles: Role[]; fullName?:
                 <Link href={item.href}>
                   <div
                     className={cn(
-                      "flex items-center gap-5 px-6 @max-[150px]:px-0 @max-[150px]:justify-center py-3 text-[15px] transition-all duration-200 whitespace-nowrap",
+                      "flex items-center gap-5 px-6 @max-[120px]:px-0 @max-[120px]:justify-center py-3 text-[15px] transition-all duration-200 whitespace-nowrap",
                       active
                         ? "bg-[#1c1c1e] text-white font-medium"
                         : "text-white/40 hover:scale-[1.03]"
                     )}
                   >
                     <span className={cn("flex-shrink-0", active ? "text-white" : "text-white/30")}>{item.icon}</span>
-                    <span className="@max-[150px]:hidden">{item.label}</span>
+                    <span className="@max-[120px]:hidden">{item.label}</span>
                   </div>
                 </Link>
               </li>
@@ -101,13 +101,13 @@ export function Sidebar({ roles, fullName, userId }: { roles: Role[]; fullName?:
           <div className="mt-10 overflow-hidden">
             <button
               onClick={() => setMoreOpen(!moreOpen)}
-              className="flex w-full items-center gap-5 px-6 @max-[150px]:px-0 @max-[150px]:justify-center py-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/20 hover:text-white/40 transition-colors whitespace-nowrap"
+              className="flex w-full items-center gap-5 px-6 @max-[120px]:px-0 @max-[120px]:justify-center py-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/20 hover:text-white/40 transition-colors whitespace-nowrap"
             >
-              <span className="@max-[150px]:hidden">Lainnya</span>
-              <motion.div animate={{ rotate: moreOpen ? 180 : 0 }} transition={{ duration: 0.2 }} className="@max-[150px]:hidden flex-shrink-0">
+              <span className="@max-[120px]:hidden">Lainnya</span>
+              <motion.div animate={{ rotate: moreOpen ? 180 : 0 }} transition={{ duration: 0.2 }} className="@max-[120px]:hidden flex-shrink-0">
                 <ChevronDown size={10} />
               </motion.div>
-              <div className="hidden @max-[150px]:block flex-shrink-0">
+              <div className="hidden @max-[120px]:block flex-shrink-0">
                 <ChevronDown size={16} className="text-white/30" />
               </div>
             </button>
@@ -127,14 +127,14 @@ export function Sidebar({ roles, fullName, userId }: { roles: Role[]; fullName?:
                         <Link href={item.href}>
                           <div
                             className={cn(
-                              "flex items-center gap-5 px-6 @max-[150px]:px-0 @max-[150px]:justify-center py-3 text-[15px] transition-all duration-200 whitespace-nowrap",
+                              "flex items-center gap-5 px-6 @max-[120px]:px-0 @max-[120px]:justify-center py-3 text-[15px] transition-all duration-200 whitespace-nowrap",
                               active
                                 ? "bg-[#1c1c1e] text-white font-medium"
                                 : "text-white/30 hover:scale-[1.03]"
                             )}
                           >
                             <span className="flex-shrink-0">{item.icon}</span>
-                            <span className="@max-[150px]:hidden">{item.label}</span>
+                            <span className="@max-[120px]:hidden">{item.label}</span>
                           </div>
                         </Link>
                       </li>
@@ -149,17 +149,17 @@ export function Sidebar({ roles, fullName, userId }: { roles: Role[]; fullName?:
 
       {/* Logout & Mail */}
       <div className="border-t border-white/[0.04] px-4 py-5 overflow-hidden">
-        <div className="flex items-center gap-2 @max-[150px]:flex-col @max-[150px]:gap-4">
-          <form action={logout} className="flex-1 @max-[150px]:w-full">
+        <div className="flex items-center gap-2 @max-[120px]:flex-col @max-[120px]:gap-4">
+          <form action={logout} className="flex-1 @max-[120px]:w-full">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button type="submit" className="flex items-center gap-4 px-3 @max-[150px]:px-0 @max-[150px]:justify-center py-2.5 text-[13px] text-white/30 hover:text-white/60 transition-colors whitespace-nowrap w-full group">
+                  <button type="submit" className="flex items-center gap-4 px-3 @max-[120px]:px-0 @max-[120px]:justify-center py-2.5 text-[13px] text-white/30 hover:text-white/60 transition-colors whitespace-nowrap w-full group">
                     <LogOut size={18} strokeWidth={1.7} className="flex-shrink-0" />
-                    <span className="@max-[150px]:hidden">Keluar</span>
+                    <span className="@max-[120px]:hidden">Keluar</span>
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right" className="hidden @max-[150px]:block">Keluar</TooltipContent>
+                <TooltipContent side="right" className="hidden @max-[120px]:block">Keluar</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </form>
@@ -172,7 +172,7 @@ export function Sidebar({ roles, fullName, userId }: { roles: Role[]; fullName?:
                     <MailInbox userId={userId} />
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="right" className="hidden @max-[150px]:block">Pesan Internal (M)</TooltipContent>
+                <TooltipContent side="right" className="hidden @max-[120px]:block">Pesan Internal (M)</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>

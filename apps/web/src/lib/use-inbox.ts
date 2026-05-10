@@ -69,10 +69,12 @@ export function useInbox(userId?: string) {
         )
       `)
       .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false })
+      .limit(200);
 
     if (!error && data) {
-      setMessages(data as any);
+      // Reverse back to ascending for display
+      setMessages((data as any).reverse());
       setUnreadCount(data.filter((m) => m.receiver_id === userId && !m.is_read).length);
     } else if (error) {
       console.error("Error fetching messages:", error);
@@ -140,15 +142,24 @@ export function useInbox(userId?: string) {
   }, [userId, fetchMessages]);
 
   const markAsRead = async (senderId: string) => {
+    // Optimistic: update local state immediately
+    setMessages(prev => prev.map(m => 
+      m.receiver_id === userId && m.sender_id === senderId && !m.is_read
+        ? { ...m, is_read: true }
+        : m
+    ));
+    setUnreadCount(prev => {
+      const readCount = messages.filter(m => m.receiver_id === userId && m.sender_id === senderId && !m.is_read).length;
+      return Math.max(0, prev - readCount);
+    });
+
     const supabase = createClient();
     await supabase
       .from("internal_messages")
       .update({ is_read: true })
       .eq("receiver_id", userId)
       .eq("sender_id", senderId)
-      .eq("is_read", false); // Only update unread ones
-    
-    fetchMessages();
+      .eq("is_read", false);
   };
 
   const sendMessage = async (receiverId: string, content: string, options?: { subject?: string, parentId?: string, attachments?: string[] }) => {
@@ -166,11 +177,11 @@ export function useInbox(userId?: string) {
       parent_id: options?.parentId || null,
       attachment_urls: options?.attachments || [],
       is_read: false,
+      is_system: false,
       created_at: new Date().toISOString(),
       metadata: {},
       related_entity_id: null,
       related_entity_type: null,
-      // We don't have full profile info here yet, but usually it's 'me'
     };
 
     setMessages(prev => [...prev, optimisticMessage]);

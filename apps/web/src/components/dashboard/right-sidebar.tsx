@@ -123,16 +123,21 @@ export function RightSidebar({
       </div>
 
       {/* Apple-style Calendar */}
-      <div className="mx-3 my-4 rounded-2xl bg-[#1C1C1E] border border-white/[0.04] px-4 py-4 shadow-xl text-white">
+      <div className="mx-3 my-4 rounded-2xl bg-[#1C1C1E] border border-white/[0.04] px-4 py-4 shadow-xl text-white flex-shrink-0">
         <p className="text-[12px] font-bold text-white/80 mb-4 px-1 italic opacity-70">
           {today.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}
         </p>
         <MiniCalendar today={today} />
       </div>
 
+      {/* Separator */}
+      <div className="mx-5 border-t border-white/[0.06] flex-shrink-0" />
+
+      {/* Activity Log Header - fixed above scroll */}
+      <p className="flex-shrink-0 text-[11px] font-bold uppercase tracking-widest text-white/30 px-6 pt-4 pb-2">Aktivitas Terbaru</p>
+
       {/* Activity Log Timeline */}
-      <div className="flex-1 overflow-y-auto px-4 py-5">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-white/30 mb-6 px-2">Aktivitas Terbaru</p>
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-5">
         
         <div className="relative">
           {activities.length > 1 && (
