@@ -62,10 +62,11 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
   const secondaryItems = visibleItems.filter((i) => !primaryHrefs.includes(i.href));
 
   return (
-    <aside className="flex h-full w-full flex-col md:flex overflow-hidden">
+    <aside className="flex h-full w-full flex-col md:flex overflow-hidden @container">
       {/* Logo */}
-      <div className="px-6 pt-8 pb-10 overflow-hidden">
-        <span className="text-[15px] font-semibold tracking-tight text-white/90 truncate block">SneakerVault.</span>
+      <div className="px-6 pt-8 pb-10 overflow-hidden flex items-center min-h-[88px]">
+        <span className="text-[15px] font-semibold tracking-tight text-white/90 truncate block @max-[150px]:hidden">SneakerVault.</span>
+        <span className="text-[15px] font-bold tracking-tighter text-white/90 hidden @max-[150px]:block mx-auto">SV.</span>
       </div>
 
       {/* Primary nav */}
@@ -78,14 +79,14 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
                 <Link href={item.href}>
                   <div
                     className={cn(
-                      "flex items-center gap-5 px-6 py-3 text-[15px] transition-all duration-200 whitespace-nowrap",
+                      "flex items-center gap-5 px-6 @max-[150px]:px-0 @max-[150px]:justify-center py-3 text-[15px] transition-all duration-200 whitespace-nowrap",
                       active
                         ? "bg-[#1c1c1e] text-white font-medium"
                         : "text-white/40 hover:scale-[1.03]"
                     )}
                   >
                     <span className={cn("flex-shrink-0", active ? "text-white" : "text-white/30")}>{item.icon}</span>
-                    <span>{item.label}</span>
+                    <span className="@max-[150px]:hidden">{item.label}</span>
                   </div>
                 </Link>
               </li>
@@ -98,12 +99,15 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
           <div className="mt-10 overflow-hidden">
             <button
               onClick={() => setMoreOpen(!moreOpen)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/20 hover:text-white/40 transition-colors whitespace-nowrap"
+              className="flex w-full items-center gap-5 px-6 @max-[150px]:px-0 @max-[150px]:justify-center py-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/20 hover:text-white/40 transition-colors whitespace-nowrap"
             >
-              <span>Lainnya</span>
-              <motion.div animate={{ rotate: moreOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+              <span className="@max-[150px]:hidden">Lainnya</span>
+              <motion.div animate={{ rotate: moreOpen ? 180 : 0 }} transition={{ duration: 0.2 }} className="@max-[150px]:hidden flex-shrink-0">
                 <ChevronDown size={10} />
               </motion.div>
+              <div className="hidden @max-[150px]:block flex-shrink-0">
+                <ChevronDown size={16} className="text-white/30" />
+              </div>
             </button>
             <AnimatePresence>
               {moreOpen && (
@@ -121,14 +125,14 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
                         <Link href={item.href}>
                           <div
                             className={cn(
-                              "flex items-center gap-5 px-6 py-3 text-[15px] transition-all duration-200 whitespace-nowrap",
+                              "flex items-center gap-5 px-6 @max-[150px]:px-0 @max-[150px]:justify-center py-3 text-[15px] transition-all duration-200 whitespace-nowrap",
                               active
                                 ? "bg-[#1c1c1e] text-white font-medium"
                                 : "text-white/30 hover:scale-[1.03]"
                             )}
                           >
                             <span className="flex-shrink-0">{item.icon}</span>
-                            <span>{item.label}</span>
+                            <span className="@max-[150px]:hidden">{item.label}</span>
                           </div>
                         </Link>
                       </li>
@@ -144,9 +148,9 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
       {/* Logout */}
       <div className="border-t border-white/[0.04] px-4 py-5 overflow-hidden">
         <form action={logout}>
-          <button type="submit" className="flex items-center gap-4 px-3 py-2.5 text-[13px] text-white/30 hover:text-white/60 transition-colors whitespace-nowrap">
+          <button type="submit" className="flex items-center gap-4 px-3 @max-[150px]:px-0 @max-[150px]:justify-center py-2.5 text-[13px] text-white/30 hover:text-white/60 transition-colors whitespace-nowrap w-full">
             <LogOut size={18} strokeWidth={1.7} className="flex-shrink-0" />
-            <span>Keluar</span>
+            <span className="@max-[150px]:hidden">Keluar</span>
           </button>
         </form>
       </div>
