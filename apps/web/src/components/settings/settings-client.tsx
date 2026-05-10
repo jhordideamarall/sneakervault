@@ -215,9 +215,10 @@ function CreateEmployeeModal({ onClose }: { onClose: () => void }) {
             <input
               type="email"
               required
+              autoComplete="off"
               value={form.email}
               onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))}
-              className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-2.5 text-sm text-white/90 placeholder:text-white/20 focus:border-white/[0.15] focus:outline-none transition-colors"
+              className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-2.5 text-sm text-white/90 placeholder:text-white/20 focus:border-white/[0.15] focus:outline-none transition-colors [&:-webkit-autofill]:[-webkit-text-fill-color:rgba(255,255,255,0.9)] [&:-webkit-autofill]:[box-shadow:0_0_0_1000px_rgba(255,255,255,0.03)_inset]"
             />
           </div>
           <div>
