@@ -80,7 +80,7 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
                     className={cn(
                       "flex items-center gap-5 px-6 py-3 text-[15px] transition-all duration-200",
                       active
-                        ? "bg-black text-white font-medium"
+                        ? "bg-[#1c1c1e] text-white font-medium"
                         : "text-white/40 hover:scale-[1.03]"
                     )}
                   >
@@ -123,7 +123,7 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
                             className={cn(
                               "flex items-center gap-5 px-6 py-3 text-[15px] transition-all duration-200",
                               active
-                                ? "bg-black text-white font-medium"
+                                ? "bg-[#1c1c1e] text-white font-medium"
                                 : "text-white/30 hover:scale-[1.03]"
                             )}
                           >

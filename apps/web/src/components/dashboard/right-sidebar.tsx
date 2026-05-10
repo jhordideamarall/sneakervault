@@ -77,8 +77,8 @@ export function RightSidebar({ fullName, roles }: { fullName: string; roles: str
       </div>
 
       {/* Calendar */}
-      <div className="px-5 py-5 border-b border-white/[0.04]">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-white/25 mb-3">
+      <div className="mx-3 my-4 rounded-2xl bg-[#1c1c1e] px-4 py-4">
+        <p className="text-[13px] font-semibold text-white/70 mb-4">
           {today.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}
         </p>
         <MiniCalendar today={today} />
@@ -119,17 +119,19 @@ function MiniCalendar({ today }: { today: Date }) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const todayDate = today.getDate();
 
-  const days = ["Mn", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+  const days = ["S", "S", "R", "K", "J", "S", "M"];
   const offset = firstDay === 0 ? 6 : firstDay - 1;
 
   return (
-    <div>
-      <div className="grid grid-cols-7 gap-0.5 mb-1.5">
-        {days.map((d) => (
-          <span key={d} className="text-center text-[10px] font-medium text-white/20">{d}</span>
+    <div className="select-none">
+      {/* Day headers */}
+      <div className="grid grid-cols-7 mb-2">
+        {days.map((d, i) => (
+          <span key={i} className="text-center text-[10px] font-medium text-white/30">{d}</span>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-0.5">
+      {/* Day grid */}
+      <div className="grid grid-cols-7 gap-y-1">
         {Array.from({ length: offset }).map((_, i) => (
           <span key={`e-${i}`} />
         ))}
@@ -137,16 +139,17 @@ function MiniCalendar({ today }: { today: Date }) {
           const day = i + 1;
           const isToday = day === todayDate;
           return (
-            <span
-              key={day}
-              className={`flex h-7 w-7 items-center justify-center rounded-lg text-[11px] ${
-                isToday
-                  ? "bg-white/[0.12] font-semibold text-white"
-                  : "text-white/40"
-              }`}
-            >
-              {day}
-            </span>
+            <div key={day} className="flex items-center justify-center">
+              <span
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-[12px] transition-colors ${
+                  isToday
+                    ? "bg-red-500 font-semibold text-white"
+                    : "text-white/50 hover:bg-white/[0.06]"
+                }`}
+              >
+                {day}
+              </span>
+            </div>
           );
         })}
       </div>

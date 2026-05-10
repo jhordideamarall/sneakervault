@@ -28,19 +28,19 @@ export default async function DashboardLayout({
   return (
     <div className="grid h-screen grid-cols-[240px_1fr_300px] overflow-hidden">
       {/* Left Sidebar */}
-      <div className="h-full bg-gradient-to-b from-[var(--color-sidebar-dark)] to-[var(--color-sidebar)]">
+      <div className="h-full bg-[#262626]">
         <Sidebar roles={roles} fullName={profile.full_name} />
       </div>
 
       {/* Main Content */}
-      <main className="overflow-y-auto bg-[var(--color-page-bg)] px-8 pt-16 pb-8">
+      <main className="overflow-y-auto bg-[#1F1F1E] px-8 pt-16 pb-8">
         <div className="mx-auto max-w-4xl">
           {children}
         </div>
       </main>
 
       {/* Right Sidebar */}
-      <div className="border-l border-white/[0.04] bg-gradient-to-b from-[var(--color-sidebar-dark)] to-[var(--color-sidebar)] overflow-y-auto">
+      <div className="border-l border-white/[0.04] bg-[#262626] overflow-y-auto">
         <RightSidebar fullName={profile.full_name} roles={profile.roles as string[]} />
       </div>
     </div>

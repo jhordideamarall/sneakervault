@@ -235,6 +235,55 @@ function getMonthStart() {
   return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 }
 
+export async function getMonthlySales() {
+  await requireOwner();
+  const supabase = await createClient();
+
+  const now = new Date();
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString();
+
+  const { data } = await supabase
+    .from("packing_items")
+    .select("created_at, products(brand)")
+    .gte("created_at", sixMonthsAgo);
+
+  if (!data) return [];
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+
+  const getWeekLabel = (date: Date) => {
+    const weekNum = Math.ceil(date.getDate() / 7);
+    return `${monthNames[date.getMonth()]} W${weekNum}`;
+  };
+
+  // Group by week + brand
+  const weeks: Record<string, { terjual: number; nike: number; adidas: number; nb: number }> = {};
+  for (const item of data) {
+    const date = new Date(item.created_at);
+    const key = getWeekLabel(date);
+    if (!weeks[key]) weeks[key] = { terjual: 0, nike: 0, adidas: 0, nb: 0 };
+    weeks[key].terjual++;
+    const brand = ((item.products as { brand: string } | null)?.brand ?? "").toLowerCase();
+    if (brand.includes("nike")) weeks[key].nike++;
+    else if (brand.includes("adidas")) weeks[key].adidas++;
+    else if (brand.includes("new balance")) weeks[key].nb++;
+  }
+
+  // Build all weeks for last 6 months
+  const result = [];
+  for (let m = 5; m >= 0; m--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const totalWeeks = Math.ceil(daysInMonth / 7);
+    for (let w = 1; w <= totalWeeks; w++) {
+      const key = `${monthNames[d.getMonth()]} W${w}`;
+      const entry = weeks[key] || { terjual: 0, nike: 0, adidas: 0, nb: 0 };
+      result.push({ week: key, ...entry });
+    }
+  }
+  return result;
+}
+
 // ─── Reports ───────────────────────────────────────────────
 export async function getStockValue(): Promise<{ items: number; cost: number; retail: number }> {
   await requireOwner();
