@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { hasRouteAccess } from "@/config/permissions";
 import type { Role } from "@sneakervault/shared";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@sneakervault/ui";
 
 export default async function DashboardLayout({
   children,
@@ -17,8 +18,6 @@ export default async function DashboardLayout({
 
   const roles = (profile.roles ?? []) as Role[];
 
-  // Enforce per-route role access using the current pathname.
-  // next/headers exposes x-invoke-path / referer; use the matched pathname.
   const hdrs = await headers();
   const pathname = hdrs.get("x-pathname") ?? hdrs.get("x-invoke-path") ?? "";
   if (pathname && !hasRouteAccess(pathname, roles)) {
@@ -26,21 +25,29 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="grid h-screen grid-cols-[240px_1fr_300px] overflow-hidden bg-[#1F1F1E]">
-      {/* Left Sidebar */}
-      <div className="h-full bg-[#262626] border-r border-white/[0.04]">
-        <Sidebar roles={roles} fullName={profile.full_name} />
+    <div className="flex h-screen w-full overflow-hidden bg-[#1F1F1E]">
+      <div className="flex-1 flex min-w-0">
+        <ResizablePanelGroup direction="horizontal">
+          {/* Left Sidebar */}
+          <ResizablePanel defaultSize={15} minSize={10} maxSize={25} className="bg-[#262626] border-r border-white/[0.04]">
+            <Sidebar roles={roles} fullName={profile.full_name} />
+          </ResizablePanel>
+          
+          <ResizableHandle withHandle />
+
+          {/* Main Content */}
+          <ResizablePanel defaultSize={85}>
+            <main className="h-full overflow-y-auto bg-[#1F1F1E] px-8 pt-16 pb-8">
+              <div className="mx-auto max-w-4xl">
+                {children}
+              </div>
+            </main>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
 
-      {/* Main Content */}
-      <main className="overflow-y-auto bg-[#1F1F1E] px-8 pt-16 pb-8">
-        <div className="mx-auto max-w-4xl">
-          {children}
-        </div>
-      </main>
-
-      {/* Right Sidebar */}
-      <div className="border-l border-white/[0.04] bg-[#262626] overflow-y-auto">
+      {/* Right Sidebar - FIXED Width */}
+      <div className="w-[300px] flex-shrink-0 border-l border-white/[0.04] bg-[#262626] overflow-y-auto">
         <RightSidebar 
           fullName={profile.full_name} 
           roles={profile.roles as string[]} 
@@ -49,4 +56,4 @@ export default async function DashboardLayout({
       </div>
     </div>
   );
-  }
+}

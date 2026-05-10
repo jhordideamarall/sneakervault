@@ -6,3 +6,4 @@ export { Select } from "./select";
 export { Card, CardHeader, CardTitle } from "./card";
 export { Badge } from "./badge";
 export { Alert } from "./alert";
+export { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "./resizable";
