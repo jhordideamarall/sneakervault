@@ -26,25 +26,23 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#1F1F1E]">
-      <div className="flex-1 flex min-w-0">
-        <ResizablePanelGroup direction="horizontal">
-          {/* Left Sidebar */}
-          <ResizablePanel defaultSize={20} minSize={15} maxSize={35} className="bg-[#262626] border-r border-white/[0.04]">
-            <Sidebar roles={roles} fullName={profile.full_name} />
-          </ResizablePanel>
+      <ResizablePanelGroup direction="horizontal" className="flex-1">
+        {/* Left Sidebar */}
+        <ResizablePanel defaultSize={15} minSize={5} maxSize={50} className="bg-[#262626] border-r border-white/[0.04]">
+          <Sidebar roles={roles} fullName={profile.full_name} />
+        </ResizablePanel>
 
-          <ResizableHandle withHandle />
+        <ResizableHandle withHandle />
 
-          {/* Main Content */}
-          <ResizablePanel defaultSize={80}>
-            <main className="h-full overflow-y-auto bg-[#1F1F1E] px-8 pt-16 pb-8">
-              <div className="mx-auto max-w-4xl">
-                {children}
-              </div>
-            </main>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      </div>
+        {/* Main Content */}
+        <ResizablePanel defaultSize={85}>
+          <main className="h-full overflow-y-auto bg-[#1F1F1E] px-8 pt-16 pb-8">
+            <div className="mx-auto max-w-4xl">
+              {children}
+            </div>
+          </main>
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       {/* Right Sidebar - FIXED Width */}
       <div className="w-[300px] flex-shrink-0 border-l border-white/[0.04] bg-[#262626] overflow-y-auto">
@@ -56,4 +54,4 @@ export default async function DashboardLayout({
       </div>
     </div>
   );
-}
+  }
