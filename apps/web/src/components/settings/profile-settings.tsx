@@ -31,10 +31,10 @@ export function ProfileSettings({ profile }: Props) {
 
     setUploading(true);
     const supabase = createClient();
-    const ext = file.name.split(".").pop();
-    const path = `${profile.id}/avatar.${ext}`;
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const path = `${profile.id}/avatar-${Date.now()}.${ext}`;
 
-    const { error } = await supabase.storage.from("chat-attachments").upload(path, file, { upsert: true });
+    const { error } = await supabase.storage.from("chat-attachments").upload(path, file);
     if (error) {
       toast.push("Gagal upload foto", "error");
       setUploading(false);
