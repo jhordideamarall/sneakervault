@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { assignRoles, setUserActive, createEmployee } from "@/lib/actions/users";
-import { Badge, Button, Card } from "@sneakervault/ui";
+import { Button } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
 import { ROLES } from "@sneakervault/shared";
@@ -143,18 +143,18 @@ function RolesModal({ user, onClose }: { user: User; onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <Card className="w-full max-w-md !bg-[#262626] !border-white/[0.08]">
-        <h2 className="mb-2 text-lg font-semibold text-white/90">Kelola Role</h2>
-        <p className="mb-4 text-sm text-white/40">{user.full_name} · {user.email}</p>
+      <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#262626] p-6">
+        <h2 className="mb-1 text-base font-semibold text-white/90">Kelola Role</h2>
+        <p className="mb-5 text-[12px] text-white/40">{user.full_name} · {user.email}</p>
 
         <div className="space-y-2">
           {ROLES.map((role) => (
-            <label key={role} className="flex items-center gap-3 rounded-lg border border-white/[0.08] px-3 py-2 cursor-pointer hover:bg-white/[0.04]">
+            <label key={role} className="flex items-center gap-3 rounded-xl border border-white/[0.06] px-4 py-3 cursor-pointer hover:bg-white/[0.03] transition-colors">
               <input
                 type="checkbox"
                 checked={selected.has(role)}
                 onChange={() => toggle(role)}
-                className="h-4 w-4"
+                className="h-4 w-4 rounded border-white/20 bg-white/[0.05] accent-blue-500"
               />
               <span className="text-sm capitalize text-white/70">{role.replace("_", " ")}</span>
             </label>
@@ -167,7 +167,7 @@ function RolesModal({ user, onClose }: { user: User; onClose: () => void }) {
             {pending ? "Menyimpan..." : "Simpan"}
           </Button>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
@@ -194,9 +194,9 @@ function CreateEmployeeModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <Card className="w-full max-w-md !bg-[#262626] !border-white/[0.08]">
-        <h2 className="mb-2 text-lg font-semibold text-white/90">Tambah Karyawan</h2>
-        <p className="mb-4 text-sm text-white/40">Karyawan bisa langsung login setelah ditambahkan.</p>
+      <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#262626] p-6">
+        <h2 className="mb-1 text-base font-semibold text-white/90">Tambah Karyawan</h2>
+        <p className="mb-5 text-[12px] text-white/40">Karyawan bisa langsung login setelah ditambahkan.</p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <input
@@ -241,7 +241,7 @@ function CreateEmployeeModal({ onClose }: { onClose: () => void }) {
             </Button>
           </div>
         </form>
-      </Card>
+      </div>
     </div>
   );
 }
