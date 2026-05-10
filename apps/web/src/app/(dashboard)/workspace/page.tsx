@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { primaryRole } from "@/lib/auth-helpers";
 import { Greeting } from "@/components/dashboard/greeting";
+import { WorkspaceSubtitle } from "@/components/dashboard/workspace-subtitle";
 import type { Role } from "@sneakervault/shared";
 
 const quickActions: Record<Role, { href: string; label: string; icon: string }[]> = {
@@ -38,16 +39,11 @@ export default async function WorkspacePage() {
   const role = primaryRole(profile.roles);
   const actions = quickActions[role];
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Selamat pagi" : hour < 17 ? "Selamat siang" : "Selamat malam";
-
   return (
     <div className="space-y-8">
       <div>
         <Greeting name={profile.full_name} />
-        <p className="mt-1 text-sm text-white/40">
-          <span className="capitalize">{role.replace("_", " ")}</span> · Apa yang mau dikerjakan hari ini?
-        </p>
+        <WorkspaceSubtitle role={role} userId={profile.id} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
