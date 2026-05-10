@@ -49,8 +49,8 @@ export function ProfileSettings({ profile }: Props) {
   function handleSaveProfile() {
     startTransition(async () => {
       const result = await updateProfile({ full_name: name, avatar_url: avatarUrl });
-      if ("error" in result) {
-        toast.push(String(result.error), "error");
+      if (!result.success) {
+        toast.push(result.error ?? "Gagal", "error");
         return;
       }
       toast.push("Profil diperbarui", "success");
@@ -69,8 +69,8 @@ export function ProfileSettings({ profile }: Props) {
     }
     startTransition(async () => {
       const result = await updatePassword(pw.new);
-      if ("error" in result) {
-        toast.push(String(result.error), "error");
+      if (!result.success) {
+        toast.push(result.error ?? "Gagal", "error");
         return;
       }
       toast.push("Password berhasil diubah", "success");

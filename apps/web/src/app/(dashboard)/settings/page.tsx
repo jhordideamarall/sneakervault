@@ -13,7 +13,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-10">
-      <ProfileSettings profile={{ id: profile.id, full_name: profile.full_name, email: profile.email, avatar_url: profile.avatar_url }} />
+      <ProfileSettings profile={{ id: profile.id, full_name: profile.full_name ?? "", email: profile.email ?? "", avatar_url: profile.avatar_url ?? null }} />
       {isOwner && <SettingsClient users={users as Parameters<typeof SettingsClient>[0]["users"]} />}
     </div>
   );
