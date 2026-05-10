@@ -3,6 +3,8 @@ import { getAvailableMonths } from "@/lib/queries";
 import { SearchBar } from "@/components/dashboard/search-bar";
 import { MonthFilter } from "@/components/dashboard/month-filter";
 import { 
+  WarehouseConditionSection,
+  ConditionSkeleton,
   BestsellerSection, 
   BestsellerSkeleton, 
   AlertSection, 
@@ -36,6 +38,11 @@ export default async function OverviewPage({
           : "Ringkasan kondisi gudang dan penjualan"
         }
       </p>
+
+      {/* Warehouse Condition - Streamed */}
+      <Suspense fallback={<ConditionSkeleton />}>
+        <WarehouseConditionSection />
+      </Suspense>
 
       {/* Best Seller Cards - Streamed */}
       <Suspense fallback={<BestsellerSkeleton />}>

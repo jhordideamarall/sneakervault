@@ -2,9 +2,33 @@ import { getBestsellers, getFinancialSummaryByModel, getMonthlySales, getDashboa
 import { TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { SalesChart } from "./sales-chart";
 
+export async function WarehouseConditionSection() {
+  const stats = await getDashboardStats();
+  
+  return (
+    <div className="grid gap-5 grid-cols-2">
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold text-white/70">Total Stok Fisik</h3>
+          <p className="text-[10px] text-white/30 uppercase tracking-widest mt-0.5">Real-time Gudang</p>
+        </div>
+        <p className="text-3xl font-black text-white tabular-nums">{stats.totalItems.toLocaleString('id-ID')} <span className="text-sm font-semibold text-white/40">unit</span></p>
+      </div>
+      
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold text-white/70">Nilai Aset (HPP)</h3>
+          <p className="text-[10px] text-white/30 uppercase tracking-widest mt-0.5">Total Modal Mengendap</p>
+        </div>
+        <p className="text-3xl font-black text-white tabular-nums"><span className="text-xl font-semibold text-white/40 mr-1">Rp</span>{stats.totalValue.toLocaleString('id-ID')}</p>
+      </div>
+    </div>
+  );
+}
+
 export async function BestsellerSection() {
-  const bestsellers = await getBestsellers(3);
-  const top3 = (bestsellers as { id: string; count: number; brand?: string; model?: string; image_url?: string }[]).slice(0, 3);
+  const bestsellers = await getBestsellers(3); // Revert to only 3
+  const top3 = bestsellers as { id: string; count: number; brand?: string; model?: string; image_url?: string }[];
   const fallback = "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=600&q=80";
 
   if (top3.length === 0) return <div className="col-span-3 py-10 text-center text-white/20">Belum ada data penjualan</div>;
@@ -67,11 +91,14 @@ export async function FinancialTableSection({ selectedMonth }: { selectedMonth?:
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
       <div className="px-6 py-4 border-b border-white/[0.04] flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-white/70 italic uppercase tracking-widest">Ringkasan Laba Rugi per Model</h2>
-        <span className="text-[10px] text-white/20 font-bold uppercase tracking-widest">Live Audit</span>
+        <div>
+          <h2 className="text-sm font-semibold text-white/70">Ringkasan Laba Rugi per Model</h2>
+          <p className="text-xs text-white/30 mt-0.5">Analisis keuntungan bersih berdasarkan unit yang terjual</p>
+        </div>
+        <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Live Audit</span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-[11px] text-white/60">
+        <table className="w-full text-left text-xs text-white/60">
           <thead>
             <tr className="bg-white/[0.01] text-white/25 uppercase tracking-tighter font-bold">
               <th className="px-6 py-3 border-r border-white/[0.02]">Brand / Model</th>
@@ -85,7 +112,7 @@ export async function FinancialTableSection({ selectedMonth }: { selectedMonth?:
           <tbody className="divide-y divide-white/[0.03]">
             {financialSummary.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-10 text-center text-white/20 italic font-medium">
+                <td colSpan={6} className="px-6 py-10 text-center text-white/20 font-medium">
                   Belum ada data penjualan tercatat untuk periode ini.
                 </td>
               </tr>
@@ -94,10 +121,10 @@ export async function FinancialTableSection({ selectedMonth }: { selectedMonth?:
                 <tr key={i} className="hover:bg-white/[0.02] transition-colors group">
                   <td className="px-6 py-4 border-r border-white/[0.01]">
                     <div className="font-bold text-white/90 group-hover:text-white transition-colors">{row.brand}</div>
-                    <div className="text-[10px] text-white/30">{row.model}</div>
+                    <div className="text-[11px] text-white/30">{row.model}</div>
                   </td>
                   <td className="px-6 py-4 text-center font-bold text-white/70 border-r border-white/[0.01]">
-                    {row.units_sold} <span className="text-[9px] font-normal opacity-40">unit</span>
+                    {row.units_sold} <span className="text-[10px] font-normal opacity-40">unit</span>
                   </td>
                   <td className="px-6 py-4 text-right tabular-nums border-r border-white/[0.01]">
                     Rp {row.revenue.toLocaleString('id-ID')}
@@ -109,7 +136,7 @@ export async function FinancialTableSection({ selectedMonth }: { selectedMonth?:
                     Rp {row.profit.toLocaleString('id-ID')}
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <div className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-black text-[10px] ${row.margin > 20 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                    <div className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-black text-[11px] ${row.margin > 20 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
                       {row.margin > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                       {row.margin.toFixed(1)}%
                     </div>
@@ -125,6 +152,15 @@ export async function FinancialTableSection({ selectedMonth }: { selectedMonth?:
 }
 
 // SKELETONS
+export function ConditionSkeleton() {
+  return (
+    <div className="grid gap-5 grid-cols-2">
+      <div className="h-32 rounded-2xl bg-white/[0.02] animate-pulse border border-white/[0.04]" />
+      <div className="h-32 rounded-2xl bg-white/[0.02] animate-pulse border border-white/[0.04]" />
+    </div>
+  );
+}
+
 export function BestsellerSkeleton() {
   return (
     <div className="grid gap-5 grid-cols-3">

@@ -42,3 +42,14 @@ body {
   color: rgba(255, 255, 255, 0.9);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Hide Scrollbar Globally */
+::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+

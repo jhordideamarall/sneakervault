@@ -58,14 +58,15 @@ export function SalesChart({
     totalSales: data.reduce((s, d) => s + (Number(d[m]) || 0), 0) 
   })).filter(m => m.totalSales > 0).sort((a, b) => b.totalSales - a.totalSales);
   
-  const topModels = modelTotals.slice(0, 10).map(m => m.name);
+  // Show ALL models that have sales, no more limit
+  const activeModels = modelTotals.map(m => m.name);
 
   const cumData = (() => {
     const cum: Record<string, number> = {};
-    topModels.forEach(m => { cum[m] = 0; });
+    activeModels.forEach(m => { cum[m] = 0; });
     return data.map(d => {
       const row: Record<string, number | string> = { ...d };
-      topModels.forEach(m => {
+      activeModels.forEach(m => {
         cum[m] = (cum[m] ?? 0) + (Number(d[m]) || 0);
         row[`cum_${m}`] = cum[m]!;
       });
@@ -80,11 +81,11 @@ export function SalesChart({
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-sm font-semibold text-white/70">Distribusi Penjualan {granularity === "day" ? "Harian" : "Mingguan"}</h2>
-            <p className="text-xs text-white/30 mt-0.5">Total unit terjual per brand di setiap {granularity === "day" ? "hari" : "minggu"}</p>
+            <p className="text-xs text-white/30 mt-0.5">Volume unit keluar per brand di setiap {granularity === "day" ? "hari" : "minggu"}</p>
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold text-white/90">{total}</p>
-            <p className="text-[10px] text-white/30">total terjual</p>
+            <p className="text-[10px] text-white/30">unit terjual</p>
           </div>
         </div>
 
@@ -97,14 +98,14 @@ export function SalesChart({
           ))}
         </div>
 
-        <ResponsiveContainer width="100%" height={240}>
+        <ResponsiveContainer width="100%" height={300}>
           <ReBarChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.04)" />
             <XAxis dataKey="week" tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 9 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fill: "rgba(255,255,255,0.2)", fontSize: 9 }} axisLine={false} tickLine={false} allowDecimals={false} />
             <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
             {activeBrands.map((b, i) => (
-              <Bar key={b} dataKey={b} name={b} stackId="a" fill={BAR_COLORS[i % BAR_COLORS.length]} barSize={20} />
+              <Bar key={b} dataKey={b} name={b} stackId="a" fill={BAR_COLORS[i % BAR_COLORS.length]} radius={i === activeBrands.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} barSize={20} />
             ))}
           </ReBarChart>
         </ResponsiveContainer>
@@ -113,12 +114,12 @@ export function SalesChart({
       {/* Line Chart: Cumulative Trends per Model */}
       <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
         <div className="mb-4">
-          <h2 className="text-sm font-semibold text-white/70">Tren Kumulatif per Model</h2>
-          <p className="text-xs text-white/30 mt-0.5">Pertumbuhan total penjualan untuk model paling populer (Top 10)</p>
+          <h2 className="text-sm font-semibold text-white/70">Akumulasi Penjualan per Model</h2>
+          <p className="text-xs text-white/30 mt-0.5">Tren pertumbuhan total unit terjual seluruh model</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-5">
-          {topModels.map((m, i) => (
+          {activeModels.map((m, i) => (
             <div key={m} className="flex items-center gap-1.5">
               <span className="h-0.5 w-3 rounded" style={{ backgroundColor: LINE_COLORS[i % LINE_COLORS.length] }} />
               <span className="text-[10px] text-white/35">{m}</span>
@@ -131,8 +132,8 @@ export function SalesChart({
             <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.04)" />
             <XAxis dataKey="week" tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 9 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fill: "rgba(255,255,255,0.2)", fontSize: 9 }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-            {topModels.map((m, i) => (
+            <Tooltip content={<ChartTooltip />} cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 1 }} />
+            {activeModels.map((m, i) => (
               <Line key={m} dataKey={`cum_${m}`} name={m} type="monotone" stroke={LINE_COLORS[i % LINE_COLORS.length]} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
             ))}
           </ReLineChart>

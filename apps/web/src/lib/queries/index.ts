@@ -105,7 +105,7 @@ export async function getDashboardStats() {
 
   const [stockRes, soldRes, returnsRes] = await Promise.all([
     supabase.from("products").select("quantity, hpp").eq("is_active", true),
-    supabase.from("packing_items").select("sell_price, unit_hpp").gte("created_at", getMonthStart()),
+    supabase.from("packing_items").select("sell_price, unit_hpp, packing_sessions!inner(status)").in("packing_sessions.status", ["shipped", "completed", "has_return"]).gte("created_at", getMonthStart()),
     supabase.from("returns").select("id").eq("status", "pending"),
   ]);
 
@@ -126,12 +126,13 @@ export async function getDashboardStats() {
   };
 }
 
-export async function getBestsellers(limit = 5) {
+export async function getBestsellers(limit?: number) {
   await requireOwner();
   const supabase = await createClient();
   const { data } = await supabase
     .from("packing_items")
-    .select("product_id, products(brand, model, size, image_url)");
+    .select("product_id, products(brand, model, size, image_url), packing_sessions!inner(status)")
+    .in("packing_sessions.status", ["shipped", "completed", "has_return"]);
 
   if (!data) return [];
 
@@ -145,10 +146,11 @@ export async function getBestsellers(limit = 5) {
     counts[key].count++;
   }
 
-  return Object.entries(counts)
+  const result = Object.entries(counts)
     .sort((a, b) => b[1].count - a[1].count)
-    .slice(0, limit)
     .map(([key, { count, brand, model, image_url }]) => ({ id: key, count, brand, model, image_url }));
+
+  return limit ? result.slice(0, limit) : result;
 }
 
 // ─── Suppliers ─────────────────────────────────────────────
@@ -240,7 +242,8 @@ export async function getMonthlySales(selectedMonth?: string) {
 
   let query = supabase
     .from("packing_items")
-    .select("created_at, products(brand, model)");
+    .select("created_at, products(brand, model), packing_sessions!inner(status)")
+    .in("packing_sessions.status", ["shipped", "completed", "has_return"]);
 
   if (selectedMonth) {
     const [year, month] = selectedMonth.split("-").map(Number);
@@ -328,6 +331,10 @@ export async function getMonthlySales(selectedMonth?: string) {
       const totalWeeks = Math.ceil(daysInMonth / 7);
       for (let w = 1; w <= totalWeeks; w++) {
         const d = new Date(current.getFullYear(), current.getMonth(), (w - 1) * 7 + 1);
+        
+        // GUARD: Stop if the generated week is in the future
+        if (d > now) break;
+
         const key = getWeekKey(d);
         const entry = weeks[key] || {};
         const row: Record<string, number | string> = { 
@@ -428,7 +435,7 @@ export async function getFinancialSummaryByModel(selectedMonth?: string): Promis
   let query = supabase
     .from("packing_items")
     .select("sell_price, unit_hpp, products(brand, model), packing_sessions!inner(status, completed_at)")
-    .eq("packing_sessions.status", "completed");
+    .in("packing_sessions.status", ["shipped", "completed", "has_return"]);
 
   if (selectedMonth) {
     const [year, month] = selectedMonth.split("-").map(Number);
