@@ -1,12 +1,7 @@
 import { getBestsellers, getFinancialSummaryByModel, getMonthlySales, getDashboardStats } from "@/lib/queries";
 import { TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
-import dynamic from "next/dynamic";
 import Image from "next/image";
-
-const SalesChart = dynamic(() => import("./sales-chart").then(m => ({ default: m.SalesChart })), {
-  ssr: false,
-  loading: () => <div className="h-[300px] animate-pulse rounded-2xl bg-white/[0.02]" />,
-});
+import { SalesChart } from "./sales-chart";
 
 export async function WarehouseConditionSection() {
   const stats = await getDashboardStats();
