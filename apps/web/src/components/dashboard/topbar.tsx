@@ -1,15 +1,7 @@
 "use client";
 
-import { logout } from "@/lib/actions/auth";
 import { Search, Bell, Mail } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@sneakervault/ui";
-
-const roleBadgeColors: Record<string, string> = {
-  owner: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  admin_gudang: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  admin_online: "bg-purple-500/10 text-purple-400 border-purple-500/20",
-  shopkeeper: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-};
 
 export function Topbar({ fullName, roles }: { fullName?: string; roles?: string[] }) {
   const primaryRole = roles?.[0] ?? "user";

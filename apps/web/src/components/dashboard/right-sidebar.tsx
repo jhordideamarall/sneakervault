@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import { createClient } from "@sneakervault/supabase/client";
-import { User, Package, ShoppingBag, RotateCcw, ArrowRight } from "lucide-react";
+import { User, ArrowRight } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const actionLabels: Record<string, string> = {
