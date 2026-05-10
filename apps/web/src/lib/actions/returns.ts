@@ -119,8 +119,6 @@ export async function processReturn(input: unknown) {
       product_id: newProductId, type: "return_out", quantity: 1, unit_cost: 0,
       reference_type: "return", reference_id: ret.id, performed_by: profile.id,
     });
-  }
-
   // Update return status
   const { error: updateErr } = await supabase.from("returns").update({
     status: "processed", processed_by: profile.id, processed_at: new Date().toISOString(),
@@ -128,6 +126,16 @@ export async function processReturn(input: unknown) {
   }).eq("id", parsed.data.return_id);
   if (updateErr) return { error: { _form: [updateErr.message] } };
 
+  await logActivity({
+    user_id: profile.id,
+    action: "process_return",
+    entity_type: "return",
+    entity_id: parsed.data.return_id,
+    new_data: { type: ret.type, new_product_id: parsed.data.new_product_id },
+  });
+
+  return { success: true };
+  }
   await logActivity({ user_id: profile.id, action: "process_return", entity_type: "return", entity_id: parsed.data.return_id, new_data: { type: ret.type, new_product_id: parsed.data.new_product_id } });
   return { success: true };
 }

@@ -4,10 +4,10 @@ import { cn } from "./cn";
 type Tone = "info" | "warning" | "error" | "success";
 
 const tones: Record<Tone, string> = {
-  info: "border-blue-200 bg-blue-50 text-blue-800",
-  warning: "border-yellow-200 bg-yellow-50 text-yellow-800",
-  error: "border-red-200 bg-red-50 text-red-800",
-  success: "border-green-200 bg-green-50 text-green-800",
+  info: "border-blue-500/20 bg-blue-500/5 text-blue-400",
+  warning: "border-amber-500/20 bg-amber-500/5 text-amber-400",
+  error: "border-red-500/20 bg-red-500/5 text-red-400",
+  success: "border-emerald-500/20 bg-emerald-500/5 text-emerald-400",
 };
 
 export function Alert({

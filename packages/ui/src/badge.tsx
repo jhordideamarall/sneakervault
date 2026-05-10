@@ -4,12 +4,12 @@ import { cn } from "./cn";
 type Tone = "default" | "warning" | "info" | "success" | "danger" | "neutral";
 
 const tones: Record<Tone, string> = {
-  default: "bg-gray-100 text-gray-700",
-  warning: "bg-yellow-100 text-yellow-800",
-  info: "bg-blue-100 text-blue-800",
-  success: "bg-green-100 text-green-800",
-  danger: "bg-red-100 text-red-800",
-  neutral: "bg-gray-100 text-gray-600",
+  default: "bg-white/[0.08] text-white/70",
+  warning: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
+  info: "bg-blue-500/10 text-blue-400 border border-blue-500/20",
+  success: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
+  danger: "bg-red-500/10 text-red-400 border border-red-500/20",
+  neutral: "bg-white/[0.04] text-white/40",
 };
 
 export function Badge({

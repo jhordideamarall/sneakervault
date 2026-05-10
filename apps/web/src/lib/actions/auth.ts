@@ -67,3 +67,7 @@ export async function requireRole(allowedRoles: Role[]) {
 
   return profile;
 }
+
+export async function requireOwner() {
+  return requireRole(["owner"]);
+}

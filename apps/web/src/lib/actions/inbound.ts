@@ -17,7 +17,7 @@ export async function scanInbound(barcode: string) {
 }
 
 export async function registerProduct(input: unknown) {
-  await requireRole(["owner", "admin_gudang"]);
+  const profile = await requireRole(["owner", "admin_gudang"]);
   const parsed = productInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
@@ -29,6 +29,13 @@ export async function registerProduct(input: unknown) {
     .single();
 
   if (error) return { error: { _form: [error.message] } };
+  await logActivity({
+    user_id: profile.id,
+    action: "create",
+    entity_type: "product",
+    entity_id: data.id,
+    new_data: data,
+  });
   return { data };
 }
 
@@ -81,7 +88,15 @@ export async function confirmInbound(input: unknown) {
     action: "scan_in",
     entity_type: "product",
     entity_id: product_id,
-    new_data: { quantity, unit_cost: batch_data.unit_cost, batch_id: batch.id },
+    new_data: { 
+      quantity, 
+      unit_cost: batch_data.unit_cost, 
+      batch_id: batch.id,
+      brand: product.brand,
+      model: product.model,
+      size: (product as any).size, // Adding size if available
+      sku: (product as any).sku,   // Adding SKU if available
+    },
   });
 
   return { success: true };

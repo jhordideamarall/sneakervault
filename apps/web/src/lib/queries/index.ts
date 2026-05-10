@@ -131,15 +131,14 @@ export async function getBestsellers(limit = 5) {
   const supabase = await createClient();
   const { data } = await supabase
     .from("packing_items")
-    .select("product_id, products(brand, model, size, image_url)")
-    .gte("created_at", getMonthStart());
+    .select("product_id, products(brand, model, size, image_url)");
 
   if (!data) return [];
 
   // Group by brand+model (not per size)
   const counts: Record<string, { count: number; brand: string; model: string; image_url: string | null }> = {};
   for (const item of data) {
-    const p = item.products as { brand: string; model: string; size: number; image_url: string | null } | null;
+    const p = item.products as unknown as { brand: string; model: string; size: number; image_url: string | null } | null;
     if (!p) continue;
     const key = `${p.brand}::${p.model}`;
     if (!counts[key]) counts[key] = { count: 0, brand: p.brand, model: p.model, image_url: p.image_url };
@@ -235,53 +234,145 @@ function getMonthStart() {
   return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 }
 
-export async function getMonthlySales() {
+export async function getMonthlySales(selectedMonth?: string) {
   await requireOwner();
   const supabase = await createClient();
 
-  const now = new Date();
-  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString();
+  let query = supabase
+    .from("packing_items")
+    .select("created_at, products(brand, model)");
+
+  if (selectedMonth) {
+    const [year, month] = selectedMonth.split("-").map(Number);
+    const start = new Date(year!, month! - 1, 1).toISOString();
+    const end = new Date(year!, month!, 1).toISOString();
+    query = query.gte("created_at", start).lt("created_at", end);
+  }
+
+  const { data } = await query;
+
+  if (!data || data.length === 0) return { weeks: [], brands: [] as string[], models: [] as string[] };
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+  const allBrands = new Set<string>();
+  const allModels = new Set<string>();
+
+  if (selectedMonth) {
+    // DAILY VIEW
+    const [year, month] = selectedMonth.split("-").map(Number);
+    const daysInMonth = new Date(year!, month!, 0).getDate();
+    const dayData: Record<string, Record<string, number>> = {};
+
+    for (const item of data) {
+      const date = new Date(item.created_at);
+      const day = date.getDate();
+      if (!dayData[day]) dayData[day] = { terjual: 0 };
+      dayData[day]!["terjual"]!++;
+
+      const p = (item as unknown as { products: { brand: string; model: string } | null }).products;
+      if (p) {
+        allBrands.add(p.brand);
+        allModels.add(p.model);
+        dayData[day]![p.brand] = (dayData[day]![p.brand] || 0) + 1;
+        dayData[day]![p.model] = (dayData[day]![p.model] || 0) + 1;
+      }
+    }
+
+    const brands = Array.from(allBrands).sort();
+    const models = Array.from(allModels).sort();
+    const result = [];
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const entry = dayData[d] || {};
+      const row: Record<string, number | string> = { week: `Tgl ${d}`, terjual: entry.terjual || 0 };
+      brands.forEach(b => { row[b] = entry[b] || 0; });
+      models.forEach(m => { row[m] = entry[m] || 0; });
+      result.push(row);
+    }
+    return { weeks: result, brands, models };
+  } else {
+    // ALL-TIME WEEKLY VIEW (Existing Logic)
+    const getWeekKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}-${Math.ceil(date.getDate() / 7)}`;
+    const getWeekLabel = (date: Date) => `${monthNames[date.getMonth()]} W${Math.ceil(date.getDate() / 7)}`;
+
+    const weeks: Record<string, Record<string, number>> = {};
+
+    for (const item of data) {
+      const date = new Date(item.created_at);
+      const key = getWeekKey(date);
+      if (!weeks[key]) weeks[key] = { terjual: 0 };
+      const w = weeks[key]!;
+      w["terjual"] = ((w["terjual"] as number) || 0) + 1;
+      
+      const p = (item as unknown as { products: { brand: string; model: string } | null }).products;
+      if (p) {
+        allBrands.add(p.brand);
+        allModels.add(p.model);
+        w[p.brand] = (w[p.brand] || 0) + 1;
+        w[p.model] = (w[p.model] || 0) + 1;
+      }
+    }
+
+    const brands = Array.from(allBrands).sort();
+    const models = Array.from(allModels).sort();
+
+    const oldestDate = new Date(Math.min(...data.map(d => new Date(d.created_at).getTime())));
+    const now = new Date();
+    
+    const result = [];
+    let current = new Date(oldestDate.getFullYear(), oldestDate.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    while (current <= end) {
+      const daysInMonth = new Date(current.getFullYear(), current.getMonth() + 1, 0).getDate();
+      const totalWeeks = Math.ceil(daysInMonth / 7);
+      for (let w = 1; w <= totalWeeks; w++) {
+        const d = new Date(current.getFullYear(), current.getMonth(), (w - 1) * 7 + 1);
+        const key = getWeekKey(d);
+        const entry = weeks[key] || {};
+        const row: Record<string, number | string> = { 
+          week: getWeekLabel(d), 
+          terjual: entry.terjual || 0 
+        };
+        brands.forEach(b => { row[b] = entry[b] || 0; });
+        models.forEach(m => { row[m] = entry[m] || 0; });
+        result.push(row);
+      }
+      current = new Date(current.getFullYear(), current.getMonth() + 1, 1);
+    }
+
+    return { weeks: result, brands, models };
+  }
+}
+
+export async function getAvailableMonths() {
+  await requireOwner();
+  const supabase = await createClient();
 
   const { data } = await supabase
     .from("packing_items")
-    .select("created_at, products(brand)")
-    .gte("created_at", sixMonthsAgo);
+    .select("created_at")
+    .order("created_at", { ascending: false });
 
   if (!data) return [];
 
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+  const seen = new Set<string>();
+  const months: { label: string; value: string }[] = [];
 
-  const getWeekLabel = (date: Date) => {
-    const weekNum = Math.ceil(date.getDate() / 7);
-    return `${monthNames[date.getMonth()]} W${weekNum}`;
-  };
-
-  // Group by week + brand
-  const weeks: Record<string, { terjual: number; nike: number; adidas: number; nb: number }> = {};
   for (const item of data) {
-    const date = new Date(item.created_at);
-    const key = getWeekLabel(date);
-    if (!weeks[key]) weeks[key] = { terjual: 0, nike: 0, adidas: 0, nb: 0 };
-    weeks[key].terjual++;
-    const brand = ((item.products as { brand: string } | null)?.brand ?? "").toLowerCase();
-    if (brand.includes("nike")) weeks[key].nike++;
-    else if (brand.includes("adidas")) weeks[key].adidas++;
-    else if (brand.includes("new balance")) weeks[key].nb++;
-  }
-
-  // Build all weeks for last 6 months
-  const result = [];
-  for (let m = 5; m >= 0; m--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
-    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-    const totalWeeks = Math.ceil(daysInMonth / 7);
-    for (let w = 1; w <= totalWeeks; w++) {
-      const key = `${monthNames[d.getMonth()]} W${w}`;
-      const entry = weeks[key] || { terjual: 0, nike: 0, adidas: 0, nb: 0 };
-      result.push({ week: key, ...entry });
+    const d = new Date(item.created_at);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (!seen.has(value)) {
+      seen.add(value);
+      months.push({
+        label: `${monthNames[d.getMonth()]} ${d.getFullYear()}`,
+        value
+      });
     }
   }
-  return result;
+
+  return months;
 }
 
 // ─── Reports ───────────────────────────────────────────────
@@ -319,6 +410,77 @@ export async function getProfitReport(
   const revenue = rows.reduce((s, r) => s + Number(r.sell_price ?? 0), 0);
   const cost = rows.reduce((s, r) => s + Number(r.unit_hpp ?? 0), 0);
   return { revenue, cost, profit: revenue - cost, items: rows.length };
+}
+
+export type FinancialSummaryModel = {
+  brand: string;
+  model: string;
+  units_sold: number;
+  revenue: number;
+  cost: number;
+  profit: number;
+  margin: number;
+};
+
+export async function getFinancialSummaryByModel(selectedMonth?: string): Promise<FinancialSummaryModel[]> {
+  await requireOwner();
+  const supabase = await createClient();
+  let query = supabase
+    .from("packing_items")
+    .select("sell_price, unit_hpp, products(brand, model), packing_sessions!inner(status, completed_at)")
+    .eq("packing_sessions.status", "completed");
+
+  if (selectedMonth) {
+    const [year, month] = selectedMonth.split("-").map(Number);
+    const start = new Date(year!, month! - 1, 1).toISOString();
+    const end = new Date(year!, month!, 1).toISOString();
+    query = query.gte("packing_sessions.completed_at", start).lt("packing_sessions.completed_at", end);
+  }
+
+  const { data } = await query;
+  if (!data) return [];
+
+  const summaryMap: Record<string, FinancialSummaryModel> = {};
+
+  for (const item of data) {
+    const p = (item as any).products;
+    if (!p) continue;
+    
+    // Sanitize brand & model for consistent grouping
+    const brandRaw = (p.brand || 'Unknown').trim();
+    const modelRaw = (p.model || 'Unknown').trim();
+    const key = `${brandRaw.toLowerCase()}::${modelRaw.toLowerCase()}`;
+    
+    if (!summaryMap[key]) {
+      summaryMap[key] = {
+        brand: brandRaw, // Keep original casing of first found for display
+        model: modelRaw,
+        units_sold: 0,
+        revenue: 0,
+        cost: 0,
+        profit: 0,
+        margin: 0,
+      };
+    }
+    
+    const revenue = Number(item.sell_price || 0);
+    const cost = Number(item.unit_hpp || 0);
+    const profit = revenue - cost;
+
+    summaryMap[key].units_sold += 1;
+    summaryMap[key].revenue += revenue;
+    summaryMap[key].cost += cost;
+    summaryMap[key].profit += profit;
+  }
+
+  // Calculate margins and convert to array
+  const result = Object.values(summaryMap).map(row => {
+    row.margin = row.revenue > 0 ? (row.profit / row.revenue) * 100 : 0;
+    return row;
+  });
+
+  // Sort by profit descending
+  return result.sort((a, b) => b.profit - a.profit);
 }
 
 export async function getAgingReport(): Promise<unknown[]> {

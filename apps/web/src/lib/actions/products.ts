@@ -114,6 +114,29 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
   return { inserted, skipped, errors };
 }
 
+export async function updateModelHpp(brand: string, model: string, newHpp: number) {
+  const profile = await requireRole(["owner"]);
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("products")
+    .update({ hpp: newHpp, updated_at: new Date().toISOString() })
+    .eq("brand", brand)
+    .eq("model", model)
+    .eq("is_active", true);
+
+  if (error) return { error: error.message };
+
+  await logActivity({
+    user_id: profile.id,
+    action: "update",
+    entity_type: "product",
+    new_data: { brand, model, manual_hpp: newHpp, note: "Manual HPP override by owner" },
+  });
+
+  return { success: true };
+}
+
 export async function updateProduct(input: unknown) {
   const profile = await requireRole(["owner", "admin_gudang"]);
   const parsed = productUpdateSchema.safeParse(input);

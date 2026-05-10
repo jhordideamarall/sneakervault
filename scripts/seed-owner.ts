@@ -13,7 +13,7 @@ async function seed() {
     email: "owner@sneakervault.com",
     password: "owner123456",
     email_confirm: true,
-    user_metadata: { full_name: "Mas Radit (Owner)" },
+    user_metadata: { full_name: "Radit" },
   });
 
   if (error) {

@@ -26,9 +26,9 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="grid h-screen grid-cols-[240px_1fr_300px] overflow-hidden">
+    <div className="grid h-screen grid-cols-[240px_1fr_300px] overflow-hidden bg-[#1F1F1E]">
       {/* Left Sidebar */}
-      <div className="h-full bg-[#262626]">
+      <div className="h-full bg-[#262626] border-r border-white/[0.04]">
         <Sidebar roles={roles} fullName={profile.full_name} />
       </div>
 
@@ -41,8 +41,12 @@ export default async function DashboardLayout({
 
       {/* Right Sidebar */}
       <div className="border-l border-white/[0.04] bg-[#262626] overflow-y-auto">
-        <RightSidebar fullName={profile.full_name} roles={profile.roles as string[]} />
+        <RightSidebar 
+          fullName={profile.full_name} 
+          roles={profile.roles as string[]} 
+          avatarUrl={profile.avatar_url}
+        />
       </div>
     </div>
   );
-}
+  }

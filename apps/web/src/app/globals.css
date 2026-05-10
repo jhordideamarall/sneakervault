@@ -2,11 +2,11 @@
 
 @theme {
   /* Sidebar */
-  --color-sidebar: #211F29;
-  --color-sidebar-dark: #1a1820;
+  --color-sidebar: #262626;
+  --color-sidebar-dark: #1E1E1E;
 
   /* Content */
-  --color-page-bg: #131119;
+  --color-page-bg: #1F1F1E;
   --color-surface: #ffffff;
   --color-surface-hover: #fafbfc;
 

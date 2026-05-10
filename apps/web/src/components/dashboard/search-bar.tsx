@@ -17,7 +17,7 @@ export function SearchBar() {
   const [selected, setSelected] = useState(-1);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const timerRef = useRef<NodeJS.Timeout>();
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
   const router = useRouter();
 
   const totalResults = products.length + orders.length;
@@ -36,19 +36,25 @@ export function SearchBar() {
         .limit(6),
       supabase
         .from("packing_sessions")
-        .select("id, order_number, platform, status, created_at")
-        .ilike("order_number", pattern)
+        .select("id, platform_order_id, platform, status, created_at")
+        .ilike("platform_order_id", pattern)
         .limit(4),
     ]).then(([prodRes, orderRes]) => {
       setProducts((prodRes.data ?? []) as Product[]);
-      setOrders((orderRes.data ?? []) as Order[]);
+      setOrders((orderRes.data ?? []).map(o => ({
+        id: o.id,
+        order_number: o.platform_order_id,
+        platform: o.platform,
+        status: o.status,
+        created_at: o.created_at
+      })) as Order[]);
       setSelected(-1);
     }).finally(() => setLoading(false));
   }, []);
 
   const handleChange = (val: string) => {
     setQuery(val);
-    clearTimeout(timerRef.current);
+    if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => search(val), 100);
   };
 

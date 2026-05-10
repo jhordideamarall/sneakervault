@@ -2,10 +2,10 @@ import { logout } from "@/lib/actions/auth";
 import { Search, Bell } from "lucide-react";
 
 const roleBadgeColors: Record<string, string> = {
-  owner: "bg-emerald-50 text-emerald-600 border-emerald-200",
-  admin_gudang: "bg-blue-50 text-blue-600 border-blue-200",
-  admin_online: "bg-purple-50 text-purple-600 border-purple-200",
-  shopkeeper: "bg-amber-50 text-amber-600 border-amber-200",
+  owner: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  admin_gudang: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  admin_online: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  shopkeeper: "bg-amber-500/10 text-amber-400 border-amber-500/20",
 };
 
 export function Topbar({ fullName, roles }: { fullName?: string; roles?: string[] }) {
@@ -13,7 +13,7 @@ export function Topbar({ fullName, roles }: { fullName?: string; roles?: string[
   const roleLabel = primaryRole.replace("_", " ");
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-white/[0.06] bg-[#0a0a14] px-8">
+    <header className="flex h-16 items-center justify-between border-b border-white/[0.04] bg-[#1F1F1E] px-8">
       {/* Search */}
       <div className="relative w-72">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
