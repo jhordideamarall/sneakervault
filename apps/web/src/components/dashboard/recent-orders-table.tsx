@@ -64,7 +64,7 @@ export async function RecentOrdersTable() {
                 <td className="px-6 py-3 text-[13px] text-white/70 font-medium">
                   {s.platform_order_id ? `#${s.platform_order_id}` : "—"}
                 </td>
-                <td className="px-6 py-3 text-[12px] text-white/50">{s.platform ?? "—"}</td>
+                <td className="px-6 py-3 text-[12px] text-white/50 capitalize">{s.platform ?? "—"}</td>
                 <td className="px-6 py-3 text-[12px] text-white/40">{profile?.full_name ?? "—"}</td>
                 <td className="px-6 py-3 text-[12px] text-white/40">{itemCount} pcs</td>
                 <td className="px-6 py-3 text-right">
