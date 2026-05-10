@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/actions/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { primaryRole } from "@/lib/auth-helpers";
+import { Greeting } from "@/components/dashboard/greeting";
 import type { Role } from "@sneakervault/shared";
 
 const quickActions: Record<Role, { href: string; label: string; icon: string }[]> = {
@@ -43,9 +44,7 @@ export default async function WorkspacePage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-white/90">
-          {greeting}, {profile.full_name} 👋
-        </h1>
+        <Greeting name={profile.full_name} />
         <p className="mt-1 text-sm text-white/40">
           <span className="capitalize">{role.replace("_", " ")}</span> · Apa yang mau dikerjakan hari ini?
         </p>
