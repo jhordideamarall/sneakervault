@@ -54,7 +54,7 @@ export default async function WorkspacePage() {
           <Link
             key={action.href}
             href={action.href}
-            className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 text-sm font-medium text-white/70 transition-all hover:bg-white/[0.05] hover:border-white/[0.12] hover:text-white/90"
+            className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-5 py-4 text-sm font-medium text-white/70 shadow-[0_2px_8px_rgba(0,0,0,0.3)] transition-all hover:bg-white/[0.06] hover:border-white/[0.14] hover:text-white/90 hover:shadow-[0_4px_12px_rgba(0,0,0,0.4)] active:scale-[0.98]"
           >
             {action.label}
           </Link>
