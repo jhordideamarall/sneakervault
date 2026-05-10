@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { assignRoles, setUserActive } from "@/lib/actions/users";
+import { assignRoles, setUserActive, createEmployee } from "@/lib/actions/users";
 import { Badge, Button, Card } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
@@ -22,6 +22,7 @@ export function SettingsClient({ users }: { users: User[] }) {
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState<User | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   function handleToggleActive(u: User) {
     if (!confirm(u.is_active ? "Nonaktifkan user ini?" : "Aktifkan kembali user ini?")) return;
@@ -38,7 +39,10 @@ export function SettingsClient({ users }: { users: User[] }) {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-[#1a1a2e]">⚙️ Pengaturan — User Management</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-[#1a1a2e]">⚙️ Pengaturan — User Management</h1>
+        <Button onClick={() => setShowCreate(true)}>+ Tambah Karyawan</Button>
+      </div>
 
       <div className="rounded-xl border border-[#e5e7eb] bg-white">
         <table className="w-full text-sm">
@@ -100,6 +104,7 @@ export function SettingsClient({ users }: { users: User[] }) {
       </div>
 
       {editing && <RolesModal user={editing} onClose={() => setEditing(null)} />}
+      {showCreate && <CreateEmployeeModal onClose={() => setShowCreate(false)} />}
     </div>
   );
 }
@@ -158,6 +163,80 @@ function RolesModal({ user, onClose }: { user: User; onClose: () => void }) {
             {pending ? "Menyimpan..." : "Simpan"}
           </Button>
         </div>
+      </Card>
+    </div>
+  );
+}
+
+function CreateEmployeeModal({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [pending, startTransition] = useTransition();
+  const [form, setForm] = useState({ email: "", password: "", full_name: "", role: "shopkeeper" as Role });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    startTransition(async () => {
+      const result = await createEmployee(form);
+      if ("error" in result && result.error) {
+        toast.push(String(result.error), "error");
+        return;
+      }
+      toast.push(`${form.full_name} berhasil ditambahkan`, "success");
+      router.refresh();
+      onClose();
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
+      <Card className="w-full max-w-md">
+        <h2 className="mb-2 text-lg font-semibold">Tambah Karyawan</h2>
+        <p className="mb-4 text-sm text-[#6b7280]">Karyawan bisa langsung login setelah ditambahkan.</p>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <input
+            type="text"
+            placeholder="Nama lengkap"
+            required
+            value={form.full_name}
+            onChange={(e) => setForm(f => ({ ...f, full_name: e.target.value }))}
+            className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm focus:border-[#1a1a2e] focus:outline-none"
+          />
+          <input
+            type="email"
+            placeholder="Email"
+            required
+            value={form.email}
+            onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))}
+            className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm focus:border-[#1a1a2e] focus:outline-none"
+          />
+          <input
+            type="password"
+            placeholder="Password (min 6 karakter)"
+            required
+            minLength={6}
+            value={form.password}
+            onChange={(e) => setForm(f => ({ ...f, password: e.target.value }))}
+            className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm focus:border-[#1a1a2e] focus:outline-none"
+          />
+          <select
+            value={form.role}
+            onChange={(e) => setForm(f => ({ ...f, role: e.target.value as Role }))}
+            className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm focus:border-[#1a1a2e] focus:outline-none"
+          >
+            {ROLES.filter(r => r !== "owner").map((role) => (
+              <option key={role} value={role}>{role.replace("_", " ")}</option>
+            ))}
+          </select>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="ghost" type="button" onClick={onClose}>Batal</Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Menyimpan..." : "Tambah"}
+            </Button>
+          </div>
+        </form>
       </Card>
     </div>
   );

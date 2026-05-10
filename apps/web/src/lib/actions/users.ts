@@ -1,10 +1,53 @@
 "use server";
 
 import { createClient } from "@sneakervault/supabase/server";
+import { createServiceClient } from "@sneakervault/supabase";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { ROLES } from "@sneakervault/shared";
 import type { Role } from "@sneakervault/shared";
+
+export async function createEmployee(params: {
+  email: string;
+  password: string;
+  full_name: string;
+  role: Role;
+}) {
+  const profile = await requireRole(["owner"]);
+
+  if (!ROLES.includes(params.role)) return { error: "Role tidak valid" };
+  if (params.password.length < 6) return { error: "Password minimal 6 karakter" };
+
+  const supabase = createServiceClient();
+
+  // Create user in Supabase Auth
+  const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+    email: params.email,
+    password: params.password,
+    email_confirm: true,
+    user_metadata: { full_name: params.full_name },
+  });
+
+  if (authError) return { error: authError.message };
+
+  // Update profile with role (trigger handle_new_user already created the profile row)
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ roles: [params.role], full_name: params.full_name })
+    .eq("id", authUser.user.id);
+
+  if (profileError) return { error: profileError.message };
+
+  await logActivity({
+    user_id: profile.id,
+    action: "create",
+    entity_type: "user",
+    entity_id: authUser.user.id,
+    new_data: { email: params.email, full_name: params.full_name, role: params.role },
+  });
+
+  return { success: true };
+}
 
 export async function listUsers() {
   await requireRole(["owner"]);
