@@ -84,3 +84,14 @@ export async function rejectDelete(requestId: string, notes: string) {
   await logActivity({ user_id: profile.id, action: "reject_delete", entity_type: "delete_request", entity_id: requestId, new_data: { notes } });
   return { success: true };
 }
+
+export async function getAllProfiles() {
+  await requireRole(["owner", "admin_gudang", "admin_online", "shopkeeper"]);
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, avatar_url, roles")
+    .eq("is_active", true)
+    .order("full_name");
+  return { data, error };
+}

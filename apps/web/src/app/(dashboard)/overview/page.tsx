@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { getAvailableMonths } from "@/lib/queries";
 import { SearchBar } from "@/components/dashboard/search-bar";
 import { MonthFilter } from "@/components/dashboard/month-filter";
+import { OnlineUsers } from "@/components/dashboard/overview/online-users";
+import { getCurrentUser } from "@/lib/actions/auth";
 import { 
   WarehouseConditionSection,
   ConditionSkeleton,
@@ -21,6 +23,7 @@ export default async function OverviewPage({
 }) {
   const { month: selectedMonth } = await searchParams;
   const availableMonths = await getAvailableMonths();
+  const profile = await getCurrentUser();
 
   return (
     <div className="space-y-8">
@@ -29,6 +32,7 @@ export default async function OverviewPage({
         <div className="flex-1">
           <SearchBar />
         </div>
+        {profile && <OnlineUsers userId={profile.id} />}
         <MonthFilter availableMonths={availableMonths} currentValue={selectedMonth} />
       </div>
 

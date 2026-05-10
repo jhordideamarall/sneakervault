@@ -15,7 +15,6 @@ export function CameraScanner({ onScan }: { onScan: (code: string) => void }) {
         height: { ideal: 720 },
       },
     },
-    timeBetweenDecodingPeriods: 150, // Scan faster
   });
 
   return (

@@ -81,6 +81,9 @@ export function SearchBar() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Don't trigger if a modal is open (checking for data-state="open" on any radix dialog content)
+      if (document.querySelector('[data-state="open"]')) return;
+      
       if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); inputRef.current?.focus(); }
     };
     window.addEventListener("keydown", handler);

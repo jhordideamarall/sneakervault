@@ -13,6 +13,8 @@ import {
   PackagePlus, PackageMinus, DollarSign, RotateCcw, Truck,
   QrCode, Trash2, Settings, LogOut, ChevronDown,
 } from "lucide-react";
+import { MailInbox } from "./mail/mail-inbox";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@sneakervault/ui";
 
 type NavItem = { href: string; label: string; icon: React.ReactNode };
 
@@ -47,7 +49,7 @@ function getPrimaryHrefs(roles: Role[]): string[] {
   return Array.from(set);
 }
 
-export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string }) {
+export function Sidebar({ roles, fullName, userId }: { roles: Role[]; fullName?: string; userId: string }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -64,9 +66,9 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
   return (
     <aside className="flex h-full w-full flex-col md:flex overflow-hidden @container">
       {/* Logo */}
-      <div className="px-6 pt-8 pb-10 overflow-hidden flex items-center min-h-[88px]">
+      <div className="px-6 @max-[150px]:px-0 pt-8 pb-10 overflow-hidden flex items-center @max-[150px]:justify-center min-h-[88px]">
         <span className="text-[15px] font-semibold tracking-tight text-white/90 truncate block @max-[150px]:hidden">SneakerVault.</span>
-        <span className="text-[15px] font-bold tracking-tighter text-white/90 hidden @max-[150px]:block mx-auto">SV.</span>
+        <span className="text-[15px] font-bold tracking-tighter text-white/90 hidden @max-[150px]:block">SV.</span>
       </div>
 
       {/* Primary nav */}
@@ -145,14 +147,36 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
         )}
       </nav>
 
-      {/* Logout */}
+      {/* Logout & Mail */}
       <div className="border-t border-white/[0.04] px-4 py-5 overflow-hidden">
-        <form action={logout}>
-          <button type="submit" className="flex items-center gap-4 px-3 @max-[150px]:px-0 @max-[150px]:justify-center py-2.5 text-[13px] text-white/30 hover:text-white/60 transition-colors whitespace-nowrap w-full">
-            <LogOut size={18} strokeWidth={1.7} className="flex-shrink-0" />
-            <span className="@max-[150px]:hidden">Keluar</span>
-          </button>
-        </form>
+        <div className="flex items-center gap-2 @max-[150px]:flex-col @max-[150px]:gap-4">
+          <form action={logout} className="flex-1 @max-[150px]:w-full">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button type="submit" className="flex items-center gap-4 px-3 @max-[150px]:px-0 @max-[150px]:justify-center py-2.5 text-[13px] text-white/30 hover:text-white/60 transition-colors whitespace-nowrap w-full group">
+                    <LogOut size={18} strokeWidth={1.7} className="flex-shrink-0" />
+                    <span className="@max-[150px]:hidden">Keluar</span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="hidden @max-[150px]:block">Keluar</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </form>
+
+          <div className="flex-shrink-0">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div>
+                    <MailInbox userId={userId} />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="hidden @max-[150px]:block">Pesan Internal (M)</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
       </div>
     </aside>
   );

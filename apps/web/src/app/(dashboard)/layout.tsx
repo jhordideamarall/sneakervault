@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { hasRouteAccess } from "@/config/permissions";
 import type { Role } from "@sneakervault/shared";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@sneakervault/ui";
+import { MailGlobalDialog } from "@/components/dashboard/mail/mail-global-dialog";
 
 export default async function DashboardLayout({
   children,
@@ -26,10 +27,11 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#1F1F1E]">
+      <MailGlobalDialog userId={profile.id} />
       <ResizablePanelGroup direction="horizontal" className="flex-1">
         {/* Left Sidebar */}
         <ResizablePanel defaultSize={20} className="bg-[#262626] border-r border-white/[0.04]">
-          <Sidebar roles={roles} fullName={profile.full_name} />
+          <Sidebar roles={roles} fullName={profile.full_name} userId={profile.id} />
         </ResizablePanel>
         
         <ResizableHandle withHandle />

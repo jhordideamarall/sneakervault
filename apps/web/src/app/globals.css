@@ -34,6 +34,53 @@
 
   /* Font */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* Custom Animations */
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+  @keyframes scale-in {
+    from { transform: translate(-50%, -48%) scale(0.95); opacity: 0; }
+    to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+  @keyframes scale-out {
+    from { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    to { transform: translate(-50%, -48%) scale(0.95); opacity: 0; }
+  }
+
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-fade-out: fade-out 0.15s ease-in;
+  --animate-scale-in: scale-in 0.2s ease-out;
+  --animate-scale-out: scale-out 0.15s ease-in;
+}
+
+.animate-in {
+  animation-fill-mode: forwards;
+}
+
+.data-\[state\=open\]\:animate-in[data-state="open"] {
+  animation: var(--animate-fade-in);
+}
+
+.dialog-content-animate[data-state="open"] {
+  animation: var(--animate-scale-in);
+}
+
+.dialog-content-animate[data-state="closed"] {
+  animation: var(--animate-scale-out);
+}
+
+.dialog-overlay-animate[data-state="open"] {
+  animation: var(--animate-fade-in);
+}
+
+.dialog-overlay-animate[data-state="closed"] {
+  animation: var(--animate-fade-out);
 }
 
 body {
