@@ -37,14 +37,17 @@ export default async function WorkspacePage() {
   const role = primaryRole(profile.roles);
   const actions = quickActions[role];
 
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Selamat pagi" : hour < 17 ? "Selamat siang" : "Selamat malam";
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-primary">
-          Selamat datang, {profile.full_name} 👋
+        <h1 className="text-2xl font-bold text-white/90">
+          {greeting}, {profile.full_name} 👋
         </h1>
-        <p className="mt-1 text-sm text-muted">
-          Role: <span className="font-medium capitalize">{role.replace("_", " ")}</span>
+        <p className="mt-1 text-sm text-white/40">
+          <span className="capitalize">{role.replace("_", " ")}</span> · Apa yang mau dikerjakan hari ini?
         </p>
       </div>
 
@@ -53,10 +56,10 @@ export default async function WorkspacePage() {
           <Link
             key={action.href}
             href={action.href}
-            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-white p-6 text-center transition-shadow hover:shadow-md"
+            className="flex flex-col items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 text-center transition-all hover:bg-white/[0.05] hover:border-white/[0.12]"
           >
             <span className="text-3xl">{action.icon}</span>
-            <span className="text-sm font-medium text-primary">{action.label}</span>
+            <span className="text-sm font-medium text-white/80">{action.label}</span>
           </Link>
         ))}
       </div>
