@@ -62,7 +62,7 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
   const secondaryItems = visibleItems.filter((i) => !primaryHrefs.includes(i.href));
 
   return (
-    <aside className="flex h-full w-60 flex-col md:flex">
+    <aside className="flex h-full w-full flex-col md:flex">
       {/* Logo */}
       <div className="px-6 pt-8 pb-10">
         <span className="text-[15px] font-semibold tracking-tight text-white/90">SneakerVault.</span>
