@@ -62,14 +62,14 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
   const secondaryItems = visibleItems.filter((i) => !primaryHrefs.includes(i.href));
 
   return (
-    <aside className="flex h-full w-full flex-col md:flex">
+    <aside className="flex h-full w-full flex-col md:flex overflow-hidden">
       {/* Logo */}
-      <div className="px-6 pt-8 pb-10">
-        <span className="text-[15px] font-semibold tracking-tight text-white/90">SneakerVault.</span>
+      <div className="px-6 pt-8 pb-10 overflow-hidden">
+        <span className="text-[15px] font-semibold tracking-tight text-white/90 truncate block">SneakerVault.</span>
       </div>
 
       {/* Primary nav */}
-      <nav className="flex-1 overflow-y-auto">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden">
         <ul className="space-y-2">
           {primaryItems.map((item) => {
             const active = pathname.startsWith(item.href);
@@ -78,7 +78,7 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
                 <Link href={item.href}>
                   <div
                     className={cn(
-                      "flex items-center gap-5 px-6 py-3 text-[15px] transition-all duration-200",
+                      "flex items-center gap-5 px-6 py-3 text-[15px] transition-all duration-200 whitespace-nowrap",
                       active
                         ? "bg-[#1c1c1e] text-white font-medium"
                         : "text-white/40 hover:scale-[1.03]"
@@ -95,10 +95,10 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
 
         {/* Secondary */}
         {secondaryItems.length > 0 && (
-          <div className="mt-10">
+          <div className="mt-10 overflow-hidden">
             <button
               onClick={() => setMoreOpen(!moreOpen)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/20 hover:text-white/40 transition-colors"
+              className="flex w-full items-center gap-2 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/20 hover:text-white/40 transition-colors whitespace-nowrap"
             >
               <span>Lainnya</span>
               <motion.div animate={{ rotate: moreOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
@@ -121,13 +121,13 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
                         <Link href={item.href}>
                           <div
                             className={cn(
-                              "flex items-center gap-5 px-6 py-3 text-[15px] transition-all duration-200",
+                              "flex items-center gap-5 px-6 py-3 text-[15px] transition-all duration-200 whitespace-nowrap",
                               active
                                 ? "bg-[#1c1c1e] text-white font-medium"
                                 : "text-white/30 hover:scale-[1.03]"
                             )}
                           >
-                            <span>{item.icon}</span>
+                            <span className="flex-shrink-0">{item.icon}</span>
                             <span>{item.label}</span>
                           </div>
                         </Link>
@@ -142,10 +142,10 @@ export function Sidebar({ roles, fullName }: { roles: Role[]; fullName?: string 
       </nav>
 
       {/* Logout */}
-      <div className="border-t border-white/[0.04] px-4 py-5">
+      <div className="border-t border-white/[0.04] px-4 py-5 overflow-hidden">
         <form action={logout}>
-          <button type="submit" className="flex items-center gap-4 px-3 py-2.5 text-[13px] text-white/30 hover:text-white/60 transition-colors">
-            <LogOut size={18} strokeWidth={1.7} />
+          <button type="submit" className="flex items-center gap-4 px-3 py-2.5 text-[13px] text-white/30 hover:text-white/60 transition-colors whitespace-nowrap">
+            <LogOut size={18} strokeWidth={1.7} className="flex-shrink-0" />
             <span>Keluar</span>
           </button>
         </form>
