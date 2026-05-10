@@ -19,7 +19,8 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@sneak
 type NavItem = { href: string; label: string; icon: React.ReactNode };
 
 const allItems: NavItem[] = [
-  { href: "/overview", label: "Dashboard", icon: <LayoutDashboard size={19} strokeWidth={1.7} /> },
+  { href: "/workspace", label: "Workspace", icon: <LayoutDashboard size={19} strokeWidth={1.7} /> },
+  { href: "/overview", label: "Overview", icon: <BarChart3 size={19} strokeWidth={1.7} /> },
   { href: "/orders", label: "Orders", icon: <ShoppingCart size={19} strokeWidth={1.7} /> },
   { href: "/inventory", label: "Inventori", icon: <Package size={19} strokeWidth={1.7} /> },
   { href: "/activity-log", label: "Activity Log", icon: <ScrollText size={19} strokeWidth={1.7} /> },
@@ -35,10 +36,10 @@ const allItems: NavItem[] = [
 ];
 
 const primaryMenuByRole: Record<Role, string[]> = {
-  owner: ["/overview", "/orders", "/inventory", "/activity-log", "/reports"],
-  admin_gudang: ["/inbound", "/inventory", "/suppliers"],
-  admin_online: ["/orders", "/returns", "/sold"],
-  shopkeeper: ["/outbound", "/orders"],
+  owner: ["/workspace", "/overview", "/orders", "/inventory", "/activity-log", "/reports"],
+  admin_gudang: ["/workspace", "/inbound", "/inventory", "/suppliers"],
+  admin_online: ["/workspace", "/orders", "/returns", "/sold"],
+  shopkeeper: ["/workspace", "/outbound", "/orders"],
 };
 
 function getPrimaryHrefs(roles: Role[]): string[] {
