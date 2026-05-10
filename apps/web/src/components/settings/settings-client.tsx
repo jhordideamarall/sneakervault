@@ -40,62 +40,66 @@ export function SettingsClient({ users }: { users: User[] }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[#1a1a2e]">⚙️ Pengaturan — User Management</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-white/90">User Management</h1>
+          <p className="text-sm text-white/40 mt-1">{users.length} user terdaftar</p>
+        </div>
         <Button onClick={() => setShowCreate(true)}>+ Tambah Karyawan</Button>
       </div>
 
-      <div className="rounded-xl border border-[#e5e7eb] bg-white">
-        <table className="w-full text-sm">
-          <thead className="border-b border-[#e5e7eb] bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left font-medium text-[#6b7280]">Nama</th>
-              <th className="px-4 py-3 text-left font-medium text-[#6b7280]">Email</th>
-              <th className="px-4 py-3 text-left font-medium text-[#6b7280]">Roles</th>
-              <th className="px-4 py-3 text-left font-medium text-[#6b7280]">Status</th>
-              <th className="px-4 py-3 text-right font-medium text-[#6b7280]">Aksi</th>
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-white/[0.04] text-[11px] uppercase tracking-wider text-white/30">
+              <th className="px-6 py-3 text-left font-medium">Nama</th>
+              <th className="px-6 py-3 text-left font-medium">Email</th>
+              <th className="px-6 py-3 text-left font-medium">Role</th>
+              <th className="px-6 py-3 text-left font-medium">Status</th>
+              <th className="px-6 py-3 text-right font-medium">Aksi</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#e5e7eb]">
+          <tbody>
             {users.map((u) => (
-              <tr key={u.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium">{u.full_name}</td>
-                <td className="px-4 py-3 text-[#6b7280]">{u.email}</td>
-                <td className="px-4 py-3">
+              <tr key={u.id} className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
+                <td className="px-6 py-3 text-[13px] font-medium text-white/80">{u.full_name}</td>
+                <td className="px-6 py-3 text-[12px] text-white/40">{u.email}</td>
+                <td className="px-6 py-3">
                   <div className="flex flex-wrap gap-1">
                     {(u.roles ?? []).length === 0 && (
-                      <span className="text-xs text-[#9ca3af]">belum ada role</span>
+                      <span className="text-[11px] text-white/20">—</span>
                     )}
                     {(u.roles ?? []).map((r) => (
-                      <Badge key={r} tone="info">{r.replace("_", " ")}</Badge>
+                      <span key={r} className="inline-block rounded-md px-2 py-0.5 text-[10px] font-bold uppercase bg-white/[0.06] text-white/60 border border-white/[0.08]">
+                        {r.replace("_", " ")}
+                      </span>
                     ))}
                   </div>
                 </td>
-                <td className="px-4 py-3">
-                  <Badge tone={u.is_active ? "success" : "neutral"}>
+                <td className="px-6 py-3">
+                  <span className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${u.is_active ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}>
                     {u.is_active ? "Aktif" : "Nonaktif"}
-                  </Badge>
+                  </span>
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-6 py-3 text-right">
                   <div className="flex justify-end gap-2">
-                    <Button size="sm" variant="secondary" onClick={() => setEditing(u)}>
-                      Kelola Role
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={u.is_active ? "danger" : "success"}
+                    <button onClick={() => setEditing(u)} className="text-[11px] font-medium text-blue-400 hover:text-blue-300 transition-colors">
+                      Role
+                    </button>
+                    <button
                       onClick={() => handleToggleActive(u)}
                       disabled={pending}
+                      className={`text-[11px] font-medium transition-colors ${u.is_active ? "text-red-400 hover:text-red-300" : "text-emerald-400 hover:text-emerald-300"}`}
                     >
                       {u.is_active ? "Nonaktifkan" : "Aktifkan"}
-                    </Button>
+                    </button>
                   </div>
                 </td>
               </tr>
             ))}
             {users.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-[#6b7280]">
-                  Belum ada user.
+                <td colSpan={5} className="px-6 py-12 text-center text-white/20 text-sm">
+                  Belum ada user terdaftar
                 </td>
               </tr>
             )}
@@ -138,21 +142,21 @@ function RolesModal({ user, onClose }: { user: User; onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
-      <Card className="w-full max-w-md">
-        <h2 className="mb-2 text-lg font-semibold">Kelola Role</h2>
-        <p className="mb-4 text-sm text-[#6b7280]">{user.full_name} · {user.email}</p>
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+      <Card className="w-full max-w-md !bg-[#262626] !border-white/[0.08]">
+        <h2 className="mb-2 text-lg font-semibold text-white/90">Kelola Role</h2>
+        <p className="mb-4 text-sm text-white/40">{user.full_name} · {user.email}</p>
 
         <div className="space-y-2">
           {ROLES.map((role) => (
-            <label key={role} className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] px-3 py-2 cursor-pointer hover:bg-gray-50">
+            <label key={role} className="flex items-center gap-3 rounded-lg border border-white/[0.08] px-3 py-2 cursor-pointer hover:bg-white/[0.04]">
               <input
                 type="checkbox"
                 checked={selected.has(role)}
                 onChange={() => toggle(role)}
                 className="h-4 w-4"
               />
-              <span className="text-sm capitalize">{role.replace("_", " ")}</span>
+              <span className="text-sm capitalize text-white/70">{role.replace("_", " ")}</span>
             </label>
           ))}
         </div>
@@ -189,10 +193,10 @@ function CreateEmployeeModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
-      <Card className="w-full max-w-md">
-        <h2 className="mb-2 text-lg font-semibold">Tambah Karyawan</h2>
-        <p className="mb-4 text-sm text-[#6b7280]">Karyawan bisa langsung login setelah ditambahkan.</p>
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+      <Card className="w-full max-w-md !bg-[#262626] !border-white/[0.08]">
+        <h2 className="mb-2 text-lg font-semibold text-white/90">Tambah Karyawan</h2>
+        <p className="mb-4 text-sm text-white/40">Karyawan bisa langsung login setelah ditambahkan.</p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <input
@@ -201,7 +205,7 @@ function CreateEmployeeModal({ onClose }: { onClose: () => void }) {
             required
             value={form.full_name}
             onChange={(e) => setForm(f => ({ ...f, full_name: e.target.value }))}
-            className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm focus:border-[#1a1a2e] focus:outline-none"
+            className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 placeholder:text-white/30 focus:border-white/20 focus:outline-none"
           />
           <input
             type="email"
@@ -209,7 +213,7 @@ function CreateEmployeeModal({ onClose }: { onClose: () => void }) {
             required
             value={form.email}
             onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))}
-            className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm focus:border-[#1a1a2e] focus:outline-none"
+            className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 placeholder:text-white/30 focus:border-white/20 focus:outline-none"
           />
           <input
             type="password"
@@ -218,12 +222,12 @@ function CreateEmployeeModal({ onClose }: { onClose: () => void }) {
             minLength={6}
             value={form.password}
             onChange={(e) => setForm(f => ({ ...f, password: e.target.value }))}
-            className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm focus:border-[#1a1a2e] focus:outline-none"
+            className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 placeholder:text-white/30 focus:border-white/20 focus:outline-none"
           />
           <select
             value={form.role}
             onChange={(e) => setForm(f => ({ ...f, role: e.target.value as Role }))}
-            className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm focus:border-[#1a1a2e] focus:outline-none"
+            className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 focus:border-white/20 focus:outline-none"
           >
             {ROLES.filter(r => r !== "owner").map((role) => (
               <option key={role} value={role}>{role.replace("_", " ")}</option>
