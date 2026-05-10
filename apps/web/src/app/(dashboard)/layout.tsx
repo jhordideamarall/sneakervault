@@ -28,14 +28,14 @@ export default async function DashboardLayout({
     <div className="flex h-screen w-full overflow-hidden bg-[#1F1F1E]">
       <ResizablePanelGroup direction="horizontal" className="flex-1">
         {/* Left Sidebar */}
-        <ResizablePanel defaultSize={15} minSize={5} maxSize={50} className="bg-[#262626] border-r border-white/[0.04]">
+        <ResizablePanel defaultSize={20} className="bg-[#262626] border-r border-white/[0.04]">
           <Sidebar roles={roles} fullName={profile.full_name} />
         </ResizablePanel>
-
+        
         <ResizableHandle withHandle />
 
         {/* Main Content */}
-        <ResizablePanel defaultSize={85}>
+        <ResizablePanel defaultSize={80}>
           <main className="h-full overflow-y-auto bg-[#1F1F1E] px-8 pt-16 pb-8">
             <div className="mx-auto max-w-4xl">
               {children}
