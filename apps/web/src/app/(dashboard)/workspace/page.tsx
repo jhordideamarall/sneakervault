@@ -1,34 +1,37 @@
 import { getCurrentUser } from "@/lib/actions/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { Suspense } from "react";
 import { primaryRole } from "@/lib/auth-helpers";
 import { Greeting } from "@/components/dashboard/greeting";
 import { WorkspaceSubtitle } from "@/components/dashboard/workspace-subtitle";
+import { getBestsellers, getMonthlySales, getStockByBrand, getProfitReport } from "@/lib/queries";
+import { RevenueChart, StockPieChart, TopProductsChart, WeeklySalesChart } from "@/components/dashboard/workspace-charts";
 import type { Role } from "@sneakervault/shared";
 
-const quickActions: Record<Role, { href: string; label: string; icon: string }[]> = {
+const quickActions: Record<Role, { href: string; label: string }[]> = {
   owner: [
-    { href: "/overview", label: "Lihat Dashboard", icon: "📊" },
-    { href: "/inventory", label: "Cek Stok", icon: "📦" },
-    { href: "/reports", label: "Laporan", icon: "📈" },
-    { href: "/settings", label: "Kelola User", icon: "⚙️" },
+    { href: "/overview", label: "Dashboard" },
+    { href: "/inventory", label: "Cek Stok" },
+    { href: "/reports", label: "Laporan" },
+    { href: "/settings", label: "Kelola User" },
   ],
   admin_gudang: [
-    { href: "/inbound", label: "Scan Barang Masuk", icon: "📥" },
-    { href: "/inventory", label: "Cek Stok", icon: "📦" },
-    { href: "/suppliers", label: "Supplier", icon: "🏭" },
-    { href: "/returns", label: "Verifikasi Retur", icon: "🔄" },
+    { href: "/inbound", label: "Scan Barang Masuk" },
+    { href: "/inventory", label: "Cek Stok" },
+    { href: "/suppliers", label: "Supplier" },
+    { href: "/returns", label: "Verifikasi Retur" },
   ],
   admin_online: [
-    { href: "/orders", label: "Update Status Order", icon: "🛒" },
-    { href: "/returns", label: "Proses Retur", icon: "🔄" },
-    { href: "/sold", label: "Riwayat Terjual", icon: "💰" },
-    { href: "/inventory", label: "Cek Stok", icon: "📦" },
+    { href: "/orders", label: "Update Status Order" },
+    { href: "/returns", label: "Proses Retur" },
+    { href: "/sold", label: "Riwayat Terjual" },
+    { href: "/inventory", label: "Cek Stok" },
   ],
   shopkeeper: [
-    { href: "/outbound", label: "Buat Sesi Packing", icon: "📤" },
-    { href: "/orders", label: "Lihat Orders", icon: "🛒" },
-    { href: "/inventory", label: "Cek Stok", icon: "📦" },
+    { href: "/outbound", label: "Buat Sesi Packing" },
+    { href: "/orders", label: "Lihat Orders" },
+    { href: "/inventory", label: "Cek Stok" },
   ],
 };
 
@@ -46,18 +49,66 @@ export default async function WorkspacePage() {
         <WorkspaceSubtitle role={role} userId={profile.id} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {actions.map((action) => (
           <Link
             key={action.href}
             href={action.href}
-            className="flex flex-col items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 text-center transition-all hover:bg-white/[0.05] hover:border-white/[0.12]"
+            className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 text-sm font-medium text-white/70 transition-all hover:bg-white/[0.05] hover:border-white/[0.12] hover:text-white/90"
           >
-            <span className="text-3xl">{action.icon}</span>
-            <span className="text-sm font-medium text-white/80">{action.label}</span>
+            {action.label}
           </Link>
         ))}
       </div>
+
+      {role === "owner" && (
+        <Suspense fallback={<ChartsSkeleton />}>
+          <OwnerCharts />
+        </Suspense>
+      )}
+    </div>
+  );
+}
+
+async function OwnerCharts() {
+  const [stockByBrand, bestsellers, salesData] = await Promise.all([
+    getStockByBrand(),
+    getBestsellers(5),
+    getMonthlySales(),
+  ]);
+
+  // Build monthly revenue/profit from last 6 months
+  const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+  const now = new Date();
+  const revenueData: { month: string; revenue: number; profit: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const from = d.toISOString();
+    const to = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString();
+    const report = await getProfitReport(from, to);
+    revenueData.push({ month: months[d.getMonth()]!, revenue: report.revenue, profit: report.profit });
+  }
+
+  const topProducts = bestsellers.map((b) => ({ name: `${b.brand} ${b.model}`, count: b.count }));
+  const weeklySales = (salesData.weeks as { week: string; terjual: number }[]).slice(-12);
+
+  return (
+    <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+      <RevenueChart data={revenueData} />
+      <StockPieChart data={stockByBrand} />
+      <WeeklySalesChart data={weeklySales} />
+      <TopProductsChart data={topProducts} />
+    </div>
+  );
+}
+
+function ChartsSkeleton() {
+  return (
+    <div className="grid gap-4 grid-cols-1 lg:grid-cols-2 animate-pulse">
+      <div className="h-[300px] rounded-2xl bg-white/[0.03]" />
+      <div className="h-[300px] rounded-2xl bg-white/[0.03]" />
+      <div className="h-[300px] rounded-2xl bg-white/[0.03]" />
+      <div className="h-[300px] rounded-2xl bg-white/[0.03]" />
     </div>
   );
 }

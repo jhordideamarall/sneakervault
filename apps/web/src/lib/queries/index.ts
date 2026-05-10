@@ -230,6 +230,31 @@ export async function getSoldHistory(filters?: {
   return { data: data ?? [], total: count ?? 0 };
 }
 
+// ─── Stock Distribution ────────────────────────────────────
+export async function getStockByBrand(): Promise<{ brand: string; value: number; units: number }[]> {
+  await requireOwner();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("products")
+    .select("brand, quantity, hpp")
+    .eq("is_active", true)
+    .gt("quantity", 0);
+
+  if (!data) return [];
+
+  const map: Record<string, { value: number; units: number }> = {};
+  for (const p of data) {
+    const brand = p.brand || "Lainnya";
+    if (!map[brand]) map[brand] = { value: 0, units: 0 };
+    map[brand].value += p.quantity * Number(p.hpp || 0);
+    map[brand].units += p.quantity;
+  }
+
+  return Object.entries(map)
+    .map(([brand, d]) => ({ brand, ...d }))
+    .sort((a, b) => b.value - a.value);
+}
+
 // ─── Helpers ───────────────────────────────────────────────
 function getMonthStart() {
   const now = new Date();
