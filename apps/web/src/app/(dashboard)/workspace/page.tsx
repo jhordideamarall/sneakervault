@@ -8,6 +8,7 @@ import { WorkspaceSubtitle } from "@/components/dashboard/workspace-subtitle";
 import { getBestsellers, getMonthlySales, getStockByBrand, getProfitReport } from "@/lib/queries";
 import { RevenueChart, StockPieChart, TopProductsChart, WeeklySalesChart } from "@/components/dashboard/workspace-charts";
 import { PendingActionsTable } from "@/components/dashboard/pending-actions-table";
+import { RecentOrdersTable } from "@/components/dashboard/recent-orders-table";
 import type { Role } from "@sneakervault/shared";
 
 const quickActions: Record<Role, { href: string; label: string }[]> = {
@@ -71,6 +72,12 @@ export default async function WorkspacePage() {
       {role === "owner" && (
         <Suspense fallback={<div className="h-48 animate-pulse rounded-2xl bg-white/[0.03]" />}>
           <PendingActionsTable />
+        </Suspense>
+      )}
+
+      {role === "owner" && (
+        <Suspense fallback={<div className="h-48 animate-pulse rounded-2xl bg-white/[0.03]" />}>
+          <RecentOrdersTable />
         </Suspense>
       )}
     </div>
