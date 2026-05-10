@@ -111,6 +111,7 @@ export function RightSidebar({
               alt={fullName}
               width={48}
               height={48}
+              priority
               className="h-12 w-12 rounded-lg object-cover ring-1 ring-white/10"
             />
           ) : (
