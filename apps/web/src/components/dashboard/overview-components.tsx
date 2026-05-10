@@ -1,6 +1,12 @@
 import { getBestsellers, getFinancialSummaryByModel, getMonthlySales, getDashboardStats } from "@/lib/queries";
 import { TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
-import { SalesChart } from "./sales-chart";
+import dynamic from "next/dynamic";
+import Image from "next/image";
+
+const SalesChart = dynamic(() => import("./sales-chart").then(m => ({ default: m.SalesChart })), {
+  ssr: false,
+  loading: () => <div className="h-[300px] animate-pulse rounded-2xl bg-white/[0.02]" />,
+});
 
 export async function WarehouseConditionSection() {
   const stats = await getDashboardStats();
@@ -37,7 +43,7 @@ export async function BestsellerSection() {
     <div className="grid gap-5 grid-cols-3">
       {top3.map((item, idx) => (
         <div key={item.id} className="relative h-[calc(100vh/3)] rounded-2xl overflow-hidden border border-white/[0.06] group">
-          <img src={item.image_url || fallback} alt={item.brand} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <Image src={item.image_url ?? fallback} alt={item.brand ?? ""} fill className="object-cover transition-transform duration-500 group-hover:scale-105" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
           <div className="absolute top-4 left-4 rounded-lg bg-white/[0.15] backdrop-blur-sm px-3 py-1.5 border border-white/[0.1]">
             <span className="text-xs font-bold text-white">TOP {idx + 1}</span>

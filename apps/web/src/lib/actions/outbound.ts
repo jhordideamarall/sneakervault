@@ -54,7 +54,7 @@ export async function scanPackingItem(sessionId: string, barcode: string) {
   // Find product by barcode
   const { data: product } = await supabase
     .from("products")
-    .select("*")
+    .select("id, brand, model, sku, size, color, barcode, quantity, hpp, sell_price")
     .eq("barcode", barcode)
     .maybeSingle();
   if (!product) return { error: "Produk tidak ditemukan" };

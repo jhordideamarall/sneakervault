@@ -7,6 +7,22 @@ const nextConfig: NextConfig = {
     "@sneakervault/shared",
     "@sneakervault/barcode",
   ],
+  experimental: {
+    optimizePackageImports: [
+      "lucide-react",
+      "recharts",
+      "framer-motion",
+      "date-fns",
+    ],
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "**.supabase.co",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

@@ -11,7 +11,7 @@ export async function scanInbound(barcode: string) {
   const supabase = await createClient();
   const { data } = await supabase
     .from("products")
-    .select("*")
+    .select("id, brand, model, sku, size, color, barcode, quantity, hpp, sell_price")
     .eq("barcode", barcode)
     .maybeSingle();
   return data;

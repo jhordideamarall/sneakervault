@@ -22,7 +22,7 @@ export async function getProducts(filters?: {
 
   let query = supabase
     .from("products")
-    .select("*, suppliers:default_supplier_id(name)", { count: "exact" })
+    .select("id, brand, model, sku, size, color, barcode, quantity, hpp, sell_price, image_url, is_active, created_at, suppliers:default_supplier_id(name)", { count: "exact" })
     .eq("is_active", true)
     .order("created_at", { ascending: false })
     .range(from, from + limit - 1);
@@ -39,7 +39,7 @@ export async function getProductByBarcode(barcode: string): Promise<unknown> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("products")
-    .select("*")
+    .select("id, brand, model, sku, size, color, barcode, quantity, hpp, sell_price, image_url")
     .eq("barcode", barcode)
     .maybeSingle();
   return data;
@@ -158,7 +158,7 @@ export async function getSuppliers() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("suppliers")
-    .select("*")
+    .select("id, name, contact_person, phone, email")
     .eq("is_active", true)
     .order("name");
   return data ?? [];

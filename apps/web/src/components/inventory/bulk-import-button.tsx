@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import * as XLSX from "xlsx";
 import { Button, Card, Alert } from "@sneakervault/ui";
 import { bulkImportProducts } from "@/lib/actions/products";
 import { useToast } from "@/components/toast";
@@ -20,7 +19,8 @@ export function BulkImportButton() {
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
 
-  function downloadTemplate() {
+  async function downloadTemplate() {
+    const XLSX = await import("xlsx");
     const ws = XLSX.utils.aoa_to_sheet([
       ["brand", "model", "sku", "size", "color", "barcode", "sell_price"],
       ["Adidas", "Samba White", "SMB-WHT-40", 40, "White", "104100", 1800000],
@@ -36,11 +36,12 @@ export function BulkImportButton() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const data = ev.target?.result;
       if (!data) return;
 
       try {
+        const XLSX = await import("xlsx");
         const wb = XLSX.read(data, { type: "array" });
         const sheetName = wb.SheetNames[0];
         if (!sheetName) {

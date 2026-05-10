@@ -39,7 +39,7 @@ export async function approveDelete(requestId: string) {
 
   const { data: req } = await supabase
     .from("delete_requests")
-    .select("*")
+    .select("id, entity_type, entity_id, status, requested_by, reason")
     .eq("id", requestId)
     .maybeSingle();
   if (!req) return { error: "Request tidak ditemukan" };

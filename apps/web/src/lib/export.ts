@@ -1,18 +1,17 @@
 "use client";
 
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
-
 export type ExportRow = (string | number | null | undefined)[];
 
-export function exportToPDF(params: {
+export async function exportToPDF(params: {
   title: string;
   columns: string[];
   rows: ExportRow[];
   filename?: string;
   subtitle?: string;
 }) {
+  const { default: jsPDF } = await import("jspdf");
+  const { default: autoTable } = await import("jspdf-autotable");
+
   const doc = new jsPDF();
   doc.setFontSize(16);
   doc.text(params.title, 14, 20);
@@ -37,12 +36,14 @@ export function exportToPDF(params: {
   doc.save(filename);
 }
 
-export function exportToExcel(params: {
+export async function exportToExcel(params: {
   sheetName: string;
   columns: string[];
   rows: ExportRow[];
   filename?: string;
 }) {
+  const XLSX = await import("xlsx");
+
   const aoa = [params.columns, ...params.rows.map((r) => r.map((c) => (c == null ? "" : c)))];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const wb = XLSX.utils.book_new();

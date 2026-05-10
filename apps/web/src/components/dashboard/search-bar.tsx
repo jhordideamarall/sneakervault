@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Search, Package, ShoppingBag } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { createClient } from "@sneakervault/supabase/client";
 
 type Product = { id: string; brand: string; model: string; size: number; barcode: string; image_url: string | null; quantity: number };
@@ -132,7 +133,7 @@ export function SearchBar() {
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${selected === i ? "bg-white/[0.06]" : ""}`}
                   >
                     {p.image_url ? (
-                      <img src={p.image_url} className="h-9 w-9 rounded-lg object-cover" alt="" />
+                      <Image src={p.image_url} width={36} height={36} className="h-9 w-9 rounded-lg object-cover" alt="" />
                     ) : (
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.05]"><Package size={14} className="text-white/30" /></div>
                     )}

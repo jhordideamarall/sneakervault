@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
 import { createClient } from "@sneakervault/supabase/client";
 import { User, Package, ShoppingBag, RotateCcw, ArrowRight } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -105,9 +106,11 @@ export function RightSidebar({
       <div className="px-5 pt-6 pb-5 border-b border-white/[0.04]">
         <div className="flex items-center gap-3">
           {avatarUrl ? (
-            <img 
+            <Image 
               src={avatarUrl} 
               alt={fullName}
+              width={48}
+              height={48}
               className="h-12 w-12 rounded-lg object-cover ring-1 ring-white/10"
             />
           ) : (
