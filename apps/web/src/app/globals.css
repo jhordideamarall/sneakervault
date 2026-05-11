@@ -102,3 +102,9 @@ body {
   scrollbar-width: none;  /* Firefox */
 }
 
+
+/* Remove focus outline on chart elements */
+.recharts-surface:focus,
+.recharts-wrapper *:focus {
+  outline: none;
+}
