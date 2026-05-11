@@ -103,8 +103,12 @@ body {
 }
 
 
-/* Remove focus outline on chart elements */
+/* Remove focus outline and hover background on chart elements */
 .recharts-surface:focus,
 .recharts-wrapper *:focus {
   outline: none;
+}
+.recharts-tooltip-cursor {
+  fill: transparent !important;
+  stroke: transparent !important;
 }
