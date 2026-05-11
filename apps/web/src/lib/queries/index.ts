@@ -454,7 +454,7 @@ export type FinancialSummaryModel = {
   margin: number;
 };
 
-export async function getFinancialSummaryByModel(selectedMonth?: string): Promise<FinancialSummaryModel[]> {
+export async function getFinancialSummaryByModel(selectedMonth?: string, selectedDate?: string): Promise<FinancialSummaryModel[]> {
   await requireOwner();
   const supabase = await createClient();
   let query = supabase
@@ -462,7 +462,9 @@ export async function getFinancialSummaryByModel(selectedMonth?: string): Promis
     .select("sell_price, unit_hpp, products(brand, model), packing_sessions!inner(status, completed_at)")
     .in("packing_sessions.status", ["shipped", "completed", "has_return"]);
 
-  if (selectedMonth) {
+  if (selectedDate) {
+    query = query.gte("packing_sessions.completed_at", `${selectedDate}T00:00:00`).lt("packing_sessions.completed_at", `${selectedDate}T23:59:59`);
+  } else if (selectedMonth) {
     const [year, month] = selectedMonth.split("-").map(Number);
     const start = new Date(year!, month! - 1, 1).toISOString();
     const end = new Date(year!, month!, 1).toISOString();

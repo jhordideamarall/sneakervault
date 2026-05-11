@@ -86,8 +86,10 @@ export async function ChartSection({ selectedMonth }: { selectedMonth?: string }
   );
 }
 
-export async function FinancialTableSection({ selectedMonth }: { selectedMonth?: string }) {
-  const financialSummary = await getFinancialSummaryByModel(selectedMonth);
+export async function FinancialTableSection({ selectedMonth, selectedDate }: { selectedMonth?: string; selectedDate?: string }) {
+  // If specific date selected, use that date's range as month filter
+  const filterMonth = selectedDate ? selectedDate.slice(0, 7) : selectedMonth;
+  const financialSummary = await getFinancialSummaryByModel(filterMonth, selectedDate);
 
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">

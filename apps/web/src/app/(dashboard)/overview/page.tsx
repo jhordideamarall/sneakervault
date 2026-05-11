@@ -66,7 +66,7 @@ export default async function OverviewPage({
 
       {/* Financial Summary Table - Streamed */}
       <Suspense fallback={<TableSkeleton />}>
-        <FinancialTableSection selectedMonth={selectedMonth} />
+        <FinancialTableSection selectedMonth={selectedMonth} selectedDate={sp.date} />
       </Suspense>
     </div>
   );
