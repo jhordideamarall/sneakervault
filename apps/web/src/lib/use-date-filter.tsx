@@ -40,7 +40,7 @@ export function DateFilterProvider({ children }: { children: ReactNode }) {
     } else {
       params.set("month", `${f.year}-${String(f.month + 1).padStart(2, "0")}`);
     }
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }, [router, pathname]);
 
   const setDate = useCallback((date: string | null) => {
