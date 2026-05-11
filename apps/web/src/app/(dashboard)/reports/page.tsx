@@ -7,8 +7,8 @@ export default async function ReportsPage() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white/90">Laporan</h1>
-          <p className="text-sm text-white/40 mt-1">Ringkasan performa bisnis</p>
+          <h1 className="text-2xl font-bold text-white/90">Executive Summary</h1>
+          <p className="text-sm text-white/40 mt-1">Inventory, Financial, dan Operational Reporting</p>
         </div>
         <ReportsExport />
       </div>
@@ -93,8 +93,8 @@ async function ProfitByModelTable() {
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
       <div className="px-6 py-4 border-b border-white/[0.04]">
-        <p className="text-sm font-medium text-white/80">Profit per Model</p>
-        <p className="text-[11px] text-white/30">Produk mana yang paling menguntungkan</p>
+        <p className="text-sm font-medium text-white/80">Financial Reporting</p>
+        <p className="text-[11px] text-white/30">Profit per model — produk mana yang paling menguntungkan</p>
       </div>
       <table className="w-full">
         <thead>
@@ -150,8 +150,8 @@ async function AgingTable() {
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
       <div className="px-6 py-4 border-b border-white/[0.04] flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-white/80">Stok Aging</p>
-          <p className="text-[11px] text-white/30">Barang lama belum terjual — pertimbangkan diskon atau retur</p>
+          <p className="text-sm font-medium text-white/80">Inventory Reporting — Aging</p>
+          <p className="text-[11px] text-white/30">Barang lama belum terjual — pertimbangkan diskon atau retur ke supplier</p>
         </div>
       </div>
 
@@ -206,8 +206,6 @@ async function AgingTable() {
 
 // Helpers
 function formatNum(n: number) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(".0", "")} jt`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)} rb`;
   return n.toLocaleString("id-ID");
 }
 
