@@ -2,23 +2,49 @@ import { Suspense } from "react";
 import { getStockValue, getProfitReport, getAgingReport, getFinancialSummaryByModel } from "@/lib/queries";
 import { ReportsExport } from "@/components/reports/reports-export";
 
-export default async function ReportsPage() {
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string; month?: string }>;
+}) {
+  const sp = await searchParams;
+
+  // Compute date range from calendar filter
+  let from: string;
+  let to: string;
+  let periodLabel: string;
+
+  if (sp.date) {
+    from = `${sp.date}T00:00:00`;
+    to = `${sp.date}T23:59:59`;
+    periodLabel = new Date(sp.date).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+  } else if (sp.month) {
+    const [y, m] = sp.month.split("-").map(Number);
+    from = new Date(y!, m! - 1, 1).toISOString();
+    to = new Date(y!, m!, 0, 23, 59, 59).toISOString();
+    periodLabel = new Date(y!, m! - 1).toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+  } else {
+    from = getMonthStart(0);
+    to = getMonthEnd(0);
+    periodLabel = "Bulan ini";
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white/90">Executive Summary</h1>
-          <p className="text-sm text-white/40 mt-1">Inventory, Financial, dan Operational Reporting</p>
+          <p className="text-sm text-white/40 mt-1">{periodLabel}</p>
         </div>
         <ReportsExport />
       </div>
 
       <Suspense fallback={<CardsSkeleton />}>
-        <SummaryCards />
+        <SummaryCards from={from} to={to} />
       </Suspense>
 
       <Suspense fallback={<TableSkeleton />}>
-        <ProfitByModelTable />
+        <ProfitByModelTable from={from} to={to} />
       </Suspense>
 
       <Suspense fallback={<TableSkeleton />}>
@@ -28,29 +54,22 @@ export default async function ReportsPage() {
   );
 }
 
-async function SummaryCards() {
-  const [stock, profit, prevProfit] = await Promise.all([
+async function SummaryCards({ from, to }: { from: string; to: string }) {
+  const [stock, profit] = await Promise.all([
     getStockValue(),
-    getProfitReport(getMonthStart(0), undefined),
-    getProfitReport(getMonthStart(-1), getMonthEnd(-1)),
+    getProfitReport(from, to),
   ]);
-
-  const revenueChange = prevProfit.revenue > 0
-    ? ((profit.revenue - prevProfit.revenue) / prevProfit.revenue * 100).toFixed(0)
-    : null;
 
   const margin = profit.revenue > 0 ? (profit.profit / profit.revenue * 100).toFixed(1) : "0";
 
   return (
     <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
       <SummaryCard
-        label="Revenue Bulan Ini"
+        label="Revenue"
         value={`Rp ${formatNum(profit.revenue)}`}
-        sub={revenueChange ? `${Number(revenueChange) >= 0 ? "▲" : "▼"} ${Math.abs(Number(revenueChange))}% vs bulan lalu` : undefined}
-        subColor={Number(revenueChange ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}
       />
       <SummaryCard
-        label="Profit Bulan Ini"
+        label="Profit"
         value={`Rp ${formatNum(profit.profit)}`}
         sub={`Margin: ${margin}%`}
         subColor="text-white/40"
@@ -58,7 +77,6 @@ async function SummaryCards() {
       <SummaryCard
         label="Unit Terjual"
         value={`${profit.items} pcs`}
-        sub="Bulan ini"
       />
       <SummaryCard
         label="Nilai Stok Tersisa"
@@ -79,8 +97,13 @@ function SummaryCard({ label, value, sub, subColor }: { label: string; value: st
   );
 }
 
-async function ProfitByModelTable() {
-  const data = await getFinancialSummaryByModel();
+async function ProfitByModelTable({ from, to }: { from: string; to: string }) {
+  // Check if it's a single day filter
+  const fromDate = from.slice(0, 10); // "2026-05-11"
+  const toDate = to.slice(0, 10);
+  const isSingleDay = fromDate === toDate;
+  const selectedMonth = from.slice(0, 7); // "2026-05"
+  const data = await getFinancialSummaryByModel(selectedMonth, isSingleDay ? fromDate : undefined);
 
   if (data.length === 0) {
     return (
