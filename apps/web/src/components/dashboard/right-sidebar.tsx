@@ -5,6 +5,7 @@ import Image from "next/image";
 import { createClient } from "@sneakervault/supabase/client";
 import { User, ArrowRight } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useDateFilter } from "@/lib/use-date-filter";
 
 const actionLabels: Record<string, string> = {
   scan_in: "Scan Masuk",
@@ -128,9 +129,6 @@ export function RightSidebar({
 
       {/* Apple-style Calendar */}
       <div className="mx-3 my-4 rounded-2xl bg-[#1C1C1E] border border-white/[0.04] px-4 py-4 shadow-xl text-white flex-shrink-0">
-        <p className="text-[12px] font-bold text-white/80 mb-4 px-1 italic opacity-70">
-          {today.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}
-        </p>
         <MiniCalendar today={today} />
       </div>
 
@@ -275,17 +273,60 @@ function renderSimpleContent(a: ActivityEntry) {
 }
 
 function MiniCalendar({ today }: { today: Date }) {
-  const year = today.getFullYear();
-  const month = today.getMonth();
+  const { filter, setDate, setMonth, prevMonth, nextMonth } = useDateFilter();
+  const year = filter.year;
+  const month = filter.month;
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const todayDate = today.getDate();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
 
+  const [activityDays, setActivityDays] = useState<Record<number, "sale" | "return" | "both">>({});
+
+  const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
   const days = ["S", "S", "R", "K", "J", "S", "M"];
   const offset = firstDay === 0 ? 6 : firstDay - 1;
 
+  // Fetch activity heatmap for current month
+  useEffect(() => {
+    async function fetchHeatmap() {
+      const supabase = createClient();
+      const from = new Date(year, month, 1).toISOString();
+      const to = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+
+      const [{ data: sales }, { data: returns }] = await Promise.all([
+        supabase.from("packing_items").select("created_at").gte("created_at", from).lte("created_at", to),
+        supabase.from("returns").select("created_at").gte("created_at", from).lte("created_at", to),
+      ]);
+
+      const map: Record<number, "sale" | "return" | "both"> = {};
+      for (const s of sales ?? []) {
+        const d = new Date(s.created_at).getDate();
+        map[d] = map[d] === "return" ? "both" : "sale";
+      }
+      for (const r of returns ?? []) {
+        const d = new Date(r.created_at).getDate();
+        map[d] = map[d] === "sale" ? "both" : "return";
+      }
+      setActivityDays(map);
+    }
+    fetchHeatmap();
+  }, [year, month]);
+
+  const selectedDay = filter.date ? new Date(filter.date).getDate() : null;
+  const isSelectedMonth = filter.date ? new Date(filter.date).getMonth() === month && new Date(filter.date).getFullYear() === year : false;
+
   return (
     <div className="select-none">
+      {/* Month navigation */}
+      <div className="flex items-center justify-between mb-4 px-1">
+        <button onClick={prevMonth} className="text-white/40 hover:text-white/80 transition-colors text-sm">‹</button>
+        <button onClick={() => setMonth(month, year)} className="text-[12px] font-bold text-white/80 hover:text-white transition-colors">
+          {monthNames[month]} {year}
+        </button>
+        <button onClick={nextMonth} className="text-white/40 hover:text-white/80 transition-colors text-sm">›</button>
+      </div>
+
       <div className="grid grid-cols-7 mb-2">
         {days.map((d, i) => (
           <span key={i} className="text-center text-[10px] font-bold text-white/40">{d}</span>
@@ -297,21 +338,46 @@ function MiniCalendar({ today }: { today: Date }) {
         ))}
         {Array.from({ length: daysInMonth }).map((_, i) => {
           const day = i + 1;
-          const isToday = day === todayDate;
+          const isToday = isCurrentMonth && day === todayDate;
+          const isSelected = isSelectedMonth && day === selectedDay;
+          const activity = activityDays[day];
+          const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
           return (
-            <div key={day} className="flex items-center justify-center">
-              <span
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-[12px] transition-colors ${
-                  isToday
+            <div key={day} className="flex flex-col items-center">
+              <button
+                onClick={() => setDate(isSelected ? null : dateStr)}
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-[12px] transition-all ${
+                  isSelected
+                    ? "bg-white font-black text-black shadow-lg"
+                    : isToday
                     ? "bg-red-500 font-black text-white shadow-lg shadow-red-500/20"
                     : "text-white/60 hover:bg-white/[0.08]"
                 }`}
               >
                 {day}
-              </span>
+              </button>
+              {activity && (
+                <div className="flex gap-0.5 mt-0.5">
+                  {(activity === "sale" || activity === "both") && <span className="h-1 w-1 rounded-full bg-emerald-500" />}
+                  {(activity === "return" || activity === "both") && <span className="h-1 w-1 rounded-full bg-red-500" />}
+                </div>
+              )}
             </div>
           );
         })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-3 mt-3 px-1">
+        <div className="flex items-center gap-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          <span className="text-[9px] text-white/30">Penjualan</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+          <span className="text-[9px] text-white/30">Retur</span>
+        </div>
       </div>
     </div>
   );

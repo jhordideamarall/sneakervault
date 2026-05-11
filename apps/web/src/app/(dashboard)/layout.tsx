@@ -8,6 +8,7 @@ import type { Role } from "@sneakervault/shared";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@sneakervault/ui";
 import { MailGlobalDialog } from "@/components/dashboard/mail/mail-global-dialog";
 import { RealtimeProvider } from "@/components/dashboard/realtime-provider";
+import { DateFilterProvider } from "@/lib/use-date-filter";
 
 export default async function DashboardLayout({
   children,
@@ -26,6 +27,7 @@ export default async function DashboardLayout({
   }
 
   return (
+    <DateFilterProvider>
     <div className="flex h-screen w-full overflow-hidden bg-[#1F1F1E] gap-2 p-2">
       <MailGlobalDialog userId={profile.id} />
       <RealtimeProvider />
@@ -62,5 +64,6 @@ export default async function DashboardLayout({
         />
       </div>
     </div>
+    </DateFilterProvider>
   );
   }

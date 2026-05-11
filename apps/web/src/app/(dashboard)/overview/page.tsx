@@ -14,8 +14,18 @@ import {
   TableSkeleton 
 } from "@/components/dashboard/overview-components";
 
-export default async function OverviewPage() {
+export default async function OverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string; month?: string }>;
+}) {
+  const sp = await searchParams;
   const profile = await getCurrentUser();
+
+  // Derive selected month from params for chart/table filtering
+  const selectedMonth = sp.date
+    ? sp.date.slice(0, 7) // "2026-05-11" → "2026-05"
+    : sp.month ?? undefined;
 
   return (
     <div className="space-y-8">
@@ -27,7 +37,12 @@ export default async function OverviewPage() {
         {profile && <OnlineUsers userId={profile.id} />}
       </div>
 
-      <p className="text-base text-white/50">Ringkasan kondisi gudang dan penjualan</p>
+      <p className="text-base text-white/50">
+        {sp.date
+          ? `Data tanggal ${new Date(sp.date).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`
+          : "Ringkasan kondisi gudang dan penjualan"
+        }
+      </p>
 
       {/* Warehouse Condition - Streamed */}
       <Suspense fallback={<ConditionSkeleton />}>
@@ -46,12 +61,12 @@ export default async function OverviewPage() {
 
       {/* Sales Chart - Streamed */}
       <Suspense fallback={<ChartSkeleton />}>
-        <ChartSection />
+        <ChartSection selectedMonth={selectedMonth} />
       </Suspense>
 
       {/* Financial Summary Table - Streamed */}
       <Suspense fallback={<TableSkeleton />}>
-        <FinancialTableSection />
+        <FinancialTableSection selectedMonth={selectedMonth} />
       </Suspense>
     </div>
   );
