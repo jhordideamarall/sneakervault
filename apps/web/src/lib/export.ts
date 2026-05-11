@@ -39,7 +39,7 @@ export async function exportToPDF(params: ExportParams) {
   const { default: jsPDF } = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
 
-  const doc = new jsPDF("landscape");
+  const doc = new jsPDF("portrait");
   const pageWidth = doc.internal.pageSize.getWidth();
   let y = 15;
 
