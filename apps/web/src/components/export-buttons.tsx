@@ -28,7 +28,7 @@ export function ExportButtons({
       <Button
         size="sm"
         variant="secondary"
-        onClick={() => exportToExcel({ sheetName, columns, rows })}
+        onClick={() => exportToExcel({ title: sheetName, sheetName, columns, rows })}
       >
         📊 Export Excel
       </Button>

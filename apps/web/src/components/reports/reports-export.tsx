@@ -21,29 +21,66 @@ export function ReportsExport() {
     }
 
     // Group by brand+model
-    const map: Record<string, { brand: string; model: string; units: number; revenue: number; profit: number }> = {};
+    const map: Record<string, { brand: string; model: string; units: number; revenue: number; cost: number; profit: number }> = {};
+    let totalRevenue = 0, totalCost = 0, totalUnits = 0;
+
     for (const item of data) {
       const p = (item as any).products;
       if (!p) continue;
       const key = `${p.brand}::${p.model}`;
-      if (!map[key]) map[key] = { brand: p.brand, model: p.model, units: 0, revenue: 0, profit: 0 };
+      if (!map[key]) map[key] = { brand: p.brand, model: p.model, units: 0, revenue: 0, cost: 0, profit: 0 };
+      const rev = Number(item.sell_price ?? 0);
+      const cost = Number(item.unit_hpp ?? 0);
       map[key].units++;
-      map[key].revenue += Number(item.sell_price ?? 0);
-      map[key].profit += Number(item.sell_price ?? 0) - Number(item.unit_hpp ?? 0);
+      map[key].revenue += rev;
+      map[key].cost += cost;
+      map[key].profit += rev - cost;
+      totalRevenue += rev;
+      totalCost += cost;
+      totalUnits++;
     }
 
     const rows = Object.values(map).sort((a, b) => b.profit - a.profit);
-    const columns = ["Brand", "Model", "Terjual", "Revenue", "Profit", "Margin %"];
-    const tableRows = rows.map(r => [
-      r.brand, r.model, r.units,
-      Math.round(r.revenue), Math.round(r.profit),
-      r.revenue > 0 ? `${((r.profit / r.revenue) * 100).toFixed(0)}%` : "0%"
+    const totalProfit = totalRevenue - totalCost;
+    const margin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : "0";
+
+    const columns = ["No", "Brand", "Model", "Unit Terjual", "Revenue (Rp)", "HPP (Rp)", "Profit (Rp)", "Margin (%)"];
+    const tableRows = rows.map((r, i) => [
+      i + 1,
+      r.brand,
+      r.model,
+      r.units,
+      Math.round(r.revenue),
+      Math.round(r.cost),
+      Math.round(r.profit),
+      r.revenue > 0 ? `${((r.profit / r.revenue) * 100).toFixed(1)}%` : "0%",
     ]);
 
+    // Add total row
+    tableRows.push([
+      "", "", "TOTAL", totalUnits,
+      Math.round(totalRevenue), Math.round(totalCost), Math.round(totalProfit), `${margin}%`,
+    ]);
+
+    const summary = [
+      { label: "Total Revenue", value: `Rp ${totalRevenue.toLocaleString("id-ID")}` },
+      { label: "Total Profit", value: `Rp ${totalProfit.toLocaleString("id-ID")}` },
+      { label: "Margin", value: `${margin}%` },
+      { label: "Unit Terjual", value: `${totalUnits} pcs` },
+    ];
+
+    const exportParams = {
+      title: "Laporan Profit per Model",
+      columns,
+      rows: tableRows,
+      summary,
+      period: new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" }),
+    };
+
     if (format === "pdf") {
-      await exportToPDF({ title: "Laporan Profit per Model", columns, rows: tableRows, subtitle: `Digenerate: ${new Date().toLocaleDateString("id-ID")}` });
+      await exportToPDF(exportParams);
     } else {
-      await exportToExcel({ sheetName: "Profit per Model", columns, rows: tableRows });
+      await exportToExcel(exportParams);
     }
     toast.push("Export berhasil", "success");
   }
