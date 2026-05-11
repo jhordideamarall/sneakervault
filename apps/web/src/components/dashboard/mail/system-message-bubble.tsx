@@ -42,7 +42,7 @@ export function SystemMessageBubble({ msg }: { msg: InternalMessage }) {
   const subjectColor = EVENT_COLOR[eventType ?? ""] ?? "text-white/70";
 
   return (
-    <div className="flex flex-col items-center my-4">
+    <div className="flex flex-col items-start my-4">
       <div className="max-w-[85%] px-4 py-3 rounded-2xl border border-white/[0.06] bg-white/[0.03]">
         {msg.subject && (
           <p className={`text-[12px] font-semibold mb-1 ${subjectColor}`}>{msg.subject}</p>
