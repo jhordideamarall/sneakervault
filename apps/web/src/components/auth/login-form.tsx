@@ -9,7 +9,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent disabled:opacity-50"
+      className="mt-2 w-full rounded-lg bg-white px-4 py-3 text-sm font-semibold text-[#171717] transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {pending ? "Memproses..." : "Masuk"}
     </button>
@@ -25,22 +25,36 @@ export function LoginForm({ action }: { action: (prev: unknown, formData: FormDa
   return (
     <form action={formAction} className="space-y-4">
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-primary">Email</label>
+        <label htmlFor="email" className="block text-sm font-medium text-white/75">
+          Email
+        </label>
         <input
-          id="email" name="email" type="email" required
-          className="mt-1 block w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+          id="email"
+          name="email"
+          type="email"
+          required
+          className="mt-2 block w-full rounded-lg border border-white/[0.08] bg-[#1F1F1E] px-3.5 py-3 text-sm text-white outline-none transition placeholder:text-white/22 focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/10"
           placeholder="admin@sneakervault.com"
         />
       </div>
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-primary">Password</label>
+        <label htmlFor="password" className="block text-sm font-medium text-white/75">
+          Password
+        </label>
         <input
-          id="password" name="password" type="password" required
-          className="mt-1 block w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
-          placeholder="••••••••"
+          id="password"
+          name="password"
+          type="password"
+          required
+          className="mt-2 block w-full rounded-lg border border-white/[0.08] bg-[#1F1F1E] px-3.5 py-3 text-sm text-white outline-none transition placeholder:text-white/22 focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/10"
+          placeholder="Password"
         />
       </div>
-      {error && <p className="text-xs text-highlight">{error}</p>}
+      {error && (
+        <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+          {error}
+        </p>
+      )}
       <SubmitButton />
     </form>
   );

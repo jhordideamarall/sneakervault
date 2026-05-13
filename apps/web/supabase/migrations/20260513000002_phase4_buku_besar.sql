@@ -1,0 +1,3 @@
+-- See MCP migration phase4_buku_besar (applied 2026-05-11)
+-- Tables: chart_of_accounts (32 SAK EMKM seed rows), journal_entries, journal_lines, fiscal_periods
+-- Functions: generate_journal_entry_number

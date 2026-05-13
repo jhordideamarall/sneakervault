@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { generateBarcodeSvg } from "@sneakervault/barcode";
 import { Button, Card, Input, FieldLabel } from "@sneakervault/ui";
+import { QrCode, Printer, RotateCcw, Package, Tag, Calendar, Hash } from "lucide-react";
 
 export default function BarcodeGeneratePage() {
   const [brand, setBrand] = useState("");
@@ -22,7 +23,6 @@ export default function BarcodeGeneratePage() {
     const newCode = generateCode();
     setCode(newCode);
     setGenerated(true);
-    // Generate preview SVG
     const svg = generateBarcodeSvg(newCode, { width: 1.5, height: 40 });
     setPreviewSvg(svg);
   }
@@ -60,54 +60,105 @@ export default function BarcodeGeneratePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-[#1a1a2e]">🔣 Generate Barcode</h1>
+    <div className="flex flex-col gap-6 p-6">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+          <QrCode className="text-white/40" size={28} />
+          Generate Barcode
+        </h1>
+        <p className="text-white/50 text-sm">
+          Cetak label barcode untuk ditempel pada produk baru.
+        </p>
+      </div>
 
-      <Card>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <FieldLabel htmlFor="brand">Brand</FieldLabel>
-            <Input id="brand" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Adidas" />
-          </div>
-          <div>
-            <FieldLabel htmlFor="model">Model / Tipe</FieldLabel>
-            <Input id="model" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Samba White" />
-          </div>
-          <div>
-            <FieldLabel htmlFor="size">Size</FieldLabel>
-            <Input id="size" value={size} onChange={(e) => setSize(e.target.value)} placeholder="42" />
-          </div>
-          <div>
-            <FieldLabel htmlFor="date">Tanggal</FieldLabel>
-            <Input id="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </div>
-          <div>
-            <FieldLabel htmlFor="qty">Jumlah Label</FieldLabel>
-            <Input id="qty" type="number" min={1} max={100} value={qty} onChange={(e) => setQty(Number(e.target.value))} />
-          </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="border-white/[0.06] bg-[#262626] p-6 shadow-xl">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-white/40 mb-6 flex items-center gap-2">
+               <Tag size={16} /> Detail Produk
+            </h3>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="space-y-2">
+                <FieldLabel>
+Brand</FieldLabel>
+                <div className="relative">
+                   <Package className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={16} />
+                   <Input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Contoh: Nike" className="pl-10" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <FieldLabel>
+Model / Tipe</FieldLabel>
+                <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="Contoh: Dunk Low Panda" />
+              </div>
+              <div className="space-y-2">
+                <FieldLabel>
+Size</FieldLabel>
+                <Input value={size} onChange={(e) => setSize(e.target.value)} placeholder="Contoh: 42" />
+              </div>
+              <div className="space-y-2">
+                <FieldLabel>
+Tanggal Cetak</FieldLabel>
+                <div className="relative">
+                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={16} />
+                   <Input value={date} onChange={(e) => setDate(e.target.value)} className="pl-10" />
+                </div>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <FieldLabel>
+Jumlah Label</FieldLabel>
+                <div className="relative">
+                   <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={16} />
+                   <Input type="number" min={1} max={100} value={qty} onChange={(e) => setQty(Number(e.target.value))} className="pl-10" />
+                </div>
+              </div>
+            </div>
+            <div className="mt-8">
+              <Button onClick={handleGenerate} disabled={!brand || !model || !size} className="w-full h-12 bg-white text-black font-bold shadow-lg shadow-white/5">
+                Generate Barcode Baru
+              </Button>
+            </div>
+          </Card>
         </div>
-        <div className="mt-6">
-          <Button onClick={handleGenerate} disabled={!brand || !model || !size}>
-            Generate Barcode
-          </Button>
-        </div>
-      </Card>
 
-      {generated && (
-        <Card>
-          <p className="mb-3 text-sm text-[#6b7280]">Preview label (ukuran cetak: 50mm × 25mm):</p>
-          <div className="mx-auto flex w-[50mm] h-[25mm] flex-col items-center justify-center border border-dashed border-[#d1d5db] bg-white p-1">
-            <span className="text-[7pt] text-[#374151]">{date}</span>
-            <div className="barcode" dangerouslySetInnerHTML={{ __html: previewSvg }} />
-            <span className="text-[7pt] font-bold text-[#374151]">{brand} {model} — Size {size}</span>
-          </div>
-          <div className="mt-4 flex gap-2 justify-center">
-            <Button size="sm" onClick={handlePrint}>🖨️ Print ({qty} label)</Button>
-            <Button size="sm" variant="secondary" onClick={handleGenerate}>🔄 Generate Ulang</Button>
-          </div>
-          <p className="mt-2 text-center text-xs text-[#6b7280]">Kode: <span className="font-mono">{code}</span></p>
-        </Card>
-      )}
+        <div className="lg:col-span-1 space-y-6">
+           <Card className="border-white/[0.06] bg-[#262626] p-6 shadow-xl min-h-[300px] flex flex-col items-center justify-center text-center">
+              {generated ? (
+                <div className="animate-in zoom-in-95 duration-300 w-full flex flex-col items-center">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-white/40 mb-6 w-full text-left">Preview Cetak</h3>
+                  
+                  {/* Realistic Sticker Simulation */}
+                  <div className="flex w-[50mm] h-[25mm] flex-col items-center justify-center rounded-sm bg-white p-2 shadow-2xl shadow-black/50">
+                    <span className="text-[7pt] text-gray-500 font-medium mb-1">{date}</span>
+                    <div className="barcode-preview flex items-center justify-center h-[12mm]" dangerouslySetInnerHTML={{ __html: previewSvg }} />
+                    <span className="text-[7pt] font-bold text-black mt-1 uppercase truncate w-full text-center">
+                       {brand} {model} — {size}
+                    </span>
+                  </div>
+
+                  <div className="mt-8 flex flex-col gap-2 w-full">
+                    <Button onClick={handlePrint} className="w-full h-11 bg-emerald-500 hover:bg-emerald-400 text-white font-bold">
+                      <Printer size={16} className="mr-2" /> Print {qty} Label
+                    </Button>
+                    <Button variant="ghost" onClick={handleGenerate} className="w-full h-11 text-white/40 hover:text-white/80">
+                      <RotateCcw size={14} className="mr-2" /> Generate Ulang
+                    </Button>
+                  </div>
+                  
+                  <div className="mt-6 flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
+                     <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">KODE:</span>
+                     <span className="text-xs font-mono font-bold text-amber-400/80 tracking-tighter">{code}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="opacity-20 flex flex-col items-center gap-4">
+                   <QrCode size={64} strokeWidth={1} />
+                   <p className="text-sm font-medium">Isi detail produk untuk melihat preview.</p>
+                </div>
+              )}
+           </Card>
+        </div>
+      </div>
     </div>
   );
 }

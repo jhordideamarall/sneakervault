@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Send, Reply, X, Check, CheckCheck, Paperclip, Smile, Bell, MessageCircle } from "lucide-react";
+import { Mail, Send, Reply, X, Check, CheckCheck, Paperclip, Smile, Bell, MessageCircle, Plus, Search } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { SystemMessageBubble } from "./system-message-bubble";
 import { 
@@ -29,9 +29,10 @@ const QUICK_EMOJIS = [
 ];
 
 export function MailGlobalDialog({ userId }: { userId: string }) {
-  const { messages, conversations, markAsRead, sendMessage } = useInbox(userId);
-  const { onlineUsers } = usePresence(userId);
   const [open, setOpen] = React.useState(false);
+  const activeUserId = open ? userId : undefined;
+  const { messages, conversations, contacts, markAsRead, sendMessage } = useInbox(activeUserId);
+  const { onlineUsers } = usePresence(activeUserId);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [chatInput, setChatInput] = React.useState("");
   const [replyingTo, setReplyingTo] = React.useState<InternalMessage | null>(null);
@@ -40,6 +41,8 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
   const [isFocused, setIsFocused] = React.useState(false);
   const [showEmoji, setShowEmoji] = React.useState(false);
   const [filter, setFilter] = React.useState<"all" | "notifications" | "chat">("all");
+  const [showNewChat, setShowNewChat] = React.useState(false);
+  const [contactSearch, setContactSearch] = React.useState("");
   
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -63,14 +66,23 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
 
   // Filter conversations based on tab
   const filteredConversations = React.useMemo(() => {
+    if (showNewChat) return conversations;
     if (filter === "all") return conversations;
     return conversations.filter(conv => {
       const hasSystem = conv.messages.some(m => m.is_system);
       const hasChat = conv.messages.some(m => !m.is_system);
       if (filter === "notifications") return hasSystem;
-      return hasChat;
+      return hasChat || conv.messages.length === 0;
     });
-  }, [conversations, filter]);
+  }, [conversations, filter, showNewChat]);
+
+  const filteredContacts = React.useMemo(() => {
+    const q = contactSearch.trim().toLowerCase();
+    return contacts.filter((contact) => {
+      if (!q) return true;
+      return contact.full_name.toLowerCase().includes(q);
+    });
+  }, [contactSearch, contacts]);
 
   // Autofocus when chat is selected or opened
   React.useEffect(() => {
@@ -208,14 +220,22 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
             selectedId && "hidden md:flex"
           )}>
             <div className="px-6 py-6 border-b border-white/[0.05] flex items-center justify-between">
-              <h2 className="text-lg font-bold text-white/90">Pesan</h2>
-              <div className="size-8 rounded-full bg-white/[0.05] flex items-center justify-center text-white/40">
-                <Mail size={16} />
-              </div>
+              <h2 className="text-lg font-bold text-white/90">{showNewChat ? "Chat Baru" : "Pesan"}</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNewChat((prev) => !prev);
+                  setContactSearch("");
+                }}
+                className="size-8 rounded-full bg-white/[0.05] flex items-center justify-center text-white/40 transition-colors hover:bg-white/[0.1] hover:text-white"
+                aria-label={showNewChat ? "Tutup chat baru" : "Mulai chat baru"}
+              >
+                {showNewChat ? <X size={16} /> : <Plus size={16} />}
+              </button>
             </div>
 
             {/* Tab Filter */}
-            <div className="flex items-center gap-1 px-4 py-3 border-b border-white/[0.05]">
+            {!showNewChat && <div className="flex items-center gap-1 px-4 py-3 border-b border-white/[0.05]">
               {([
                 { key: "all", label: "Semua" },
                 { key: "notifications", label: "Notifikasi", icon: Bell },
@@ -235,10 +255,64 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
                   {tab.label}
                 </button>
               ))}
-            </div>
+            </div>}
+
+            {showNewChat && (
+              <div className="border-b border-white/[0.05] p-4">
+                <div className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-[#1F1F1E] px-3 py-2">
+                  <Search size={14} className="text-white/25" />
+                  <input
+                    value={contactSearch}
+                    onChange={(e) => setContactSearch(e.target.value)}
+                    placeholder="Cari karyawan..."
+                    className="w-full bg-transparent text-sm text-white/80 outline-none placeholder:text-white/20"
+                  />
+                </div>
+              </div>
+            )}
             
             <ScrollArea className="flex-1">
-              {filteredConversations.length === 0 ? (
+              {showNewChat ? (
+                filteredContacts.length === 0 ? (
+                  <div className="p-12 text-center flex flex-col items-center gap-3">
+                    <p className="text-[11px] font-medium text-white/20 uppercase tracking-widest">Karyawan tidak ditemukan</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col py-2">
+                    {filteredContacts.map((contact) => {
+                      const isOnline = onlineUsers.includes(contact.id);
+                      return (
+                        <button
+                          key={contact.id}
+                          onClick={() => {
+                            setSelectedId(contact.id);
+                            setShowNewChat(false);
+                            setFilter("chat");
+                            markAsRead(contact.id);
+                          }}
+                          className="group relative flex items-center gap-4 px-6 py-4 text-left transition-all outline-none hover:bg-white/[0.02]"
+                        >
+                          <Avatar
+                            src={contact.avatar_url}
+                            fallback={contact.full_name?.slice(0, 2)}
+                            size="md"
+                            className="bg-white/[0.03]"
+                            isOnline={isOnline}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-white/75 group-hover:text-white">
+                              {contact.full_name}
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-white/25">
+                              {isOnline ? "Online" : "Offline"}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )
+              ) : filteredConversations.length === 0 ? (
                 <div className="p-12 text-center flex flex-col items-center gap-3">
                   <div className="size-12 rounded-2xl bg-white/[0.02] flex items-center justify-center text-white/10">
                     <Mail size={24} strokeWidth={1} />
@@ -278,15 +352,24 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
                             )}>
                               {conv.profile.full_name}
                             </span>
-                            <span className="text-[10px] text-white/20">
-                              {format(new Date(conv.lastMessage.created_at!), "HH:mm")}
-                            </span>
+                            {conv.lastMessage ? (
+                              <span className="text-[10px] text-white/20">
+                                {format(new Date(conv.lastMessage.created_at!), "HH:mm")}
+                              </span>
+                            ) : null}
                           </div>
                           <p className={cn(
                             "text-[12px] truncate",
                             conv.unreadCount > 0 ? "text-white/70 font-medium" : "text-white/30"
                           )}>
-                            {conv.lastMessage.sender_id === userId && "Anda: "}{conv.lastMessage.content}
+                            {conv.lastMessage ? (
+                              <>
+                                {conv.lastMessage.sender_id === userId && "Anda: "}
+                                {conv.lastMessage.content}
+                              </>
+                            ) : (
+                              "Mulai obrolan"
+                            )}
                           </p>
                         </div>
                         {conv.unreadCount > 0 && (
@@ -346,7 +429,14 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
                   }}
                 >
                   <div className="flex flex-col gap-3 px-8 pt-28 pb-40">
-                    {activeChat.messages.map((msg, idx) => {
+                    {activeChat.messages.length === 0 ? (
+                      <div className="flex flex-1 items-center justify-center py-24 text-center">
+                        <div>
+                          <p className="text-sm font-semibold text-white/35">Belum ada pesan</p>
+                          <p className="mt-1 text-xs text-white/18">Kirim pesan pertama ke {activeChat.profile.full_name}.</p>
+                        </div>
+                      </div>
+                    ) : activeChat.messages.map((msg, idx) => {
                       // System notification — render differently
                       if (msg.is_system) {
                         return <SystemMessageBubble key={msg.id} msg={msg} />;

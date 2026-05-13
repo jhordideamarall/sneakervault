@@ -83,12 +83,21 @@ export function MailInbox({ userId }: { userId: string }) {
                         <span className="text-[13px] font-medium text-white/90 truncate">
                           {otherProfile?.full_name}
                         </span>
-                        <span className="text-[10px] text-white/30 whitespace-nowrap">
-                          {formatDistanceToNow(new Date(msg.created_at!), { addSuffix: true, locale: id })}
-                        </span>
+                        {msg ? (
+                          <span className="text-[10px] text-white/30 whitespace-nowrap">
+                            {formatDistanceToNow(new Date(msg.created_at!), { addSuffix: true, locale: id })}
+                          </span>
+                        ) : null}
                       </div>
                       <p className="text-[12px] text-white/40 line-clamp-2 leading-relaxed">
-                        {msg.sender_id === userId && "Anda: "}{msg.content}
+                        {msg ? (
+                          <>
+                            {msg.sender_id === userId && "Anda: "}
+                            {msg.content}
+                          </>
+                        ) : (
+                          "Mulai obrolan"
+                        )}
                       </p>
                     </div>
                     {conv.unreadCount > 0 && (

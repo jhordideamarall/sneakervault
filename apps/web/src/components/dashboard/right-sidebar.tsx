@@ -6,6 +6,14 @@ import { createClient } from "@sneakervault/supabase/client";
 import { User, ArrowRight } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useDateFilter } from "@/lib/use-date-filter";
+import {
+  daysInWIBMonth,
+  firstWeekdayOfWIBMonth,
+  getWIBDay,
+  nowWIB,
+  wibStartOfMonth,
+  wibStartOfNextMonth,
+} from "@/lib/timezone";
 
 const actionLabels: Record<string, string> = {
   scan_in: "Scan Masuk",
@@ -18,6 +26,15 @@ const actionLabels: Record<string, string> = {
   initiate_return: "Ajukan Retur",
   verify_return: "Verifikasi Retur",
   process_return: "Proses Retur",
+  return_initiated: "Return Masuk",
+  return_verified: "Return Dicek",
+  receive_stock: "Terima Stok",
+  create_purchase_invoice: "Faktur Pembelian",
+  pay_vendor: "Bayar Vendor",
+  create_sales_invoice: "Invoice Penjualan",
+  receive_customer_payment: "Terima Kas",
+  notification_sent: "Kirim Notifikasi",
+  review_dashboard: "Review Dashboard",
   approve_delete: "Approve Hapus",
 };
 
@@ -30,6 +47,15 @@ const actionDots: Record<string, string> = {
   initiate_return: "bg-purple-500",
   process_return: "bg-emerald-600",
   update: "bg-sky-500",
+  return_initiated: "bg-purple-500",
+  return_verified: "bg-cyan-500",
+  receive_stock: "bg-blue-500",
+  create_purchase_invoice: "bg-amber-500",
+  pay_vendor: "bg-red-500",
+  create_sales_invoice: "bg-emerald-500",
+  receive_customer_payment: "bg-emerald-500",
+  notification_sent: "bg-sky-500",
+  review_dashboard: "bg-white",
 };
 
 type ActivityEntry = {
@@ -45,34 +71,48 @@ type ActivityEntry = {
 export function RightSidebar({ 
   fullName, 
   roles,
-  avatarUrl
+  avatarUrl,
+  userId,
 }: { 
   fullName: string; 
   roles: string[]; 
   avatarUrl?: string | null;
+  userId: string;
 }) {
   const [activities, setActivities] = useState<ActivityEntry[]>([]);
   const [mounted, setMounted] = useState(false);
-  const today = new Date();
-  
+  const { from: filterFrom, to: filterTo, filter } = useDateFilter();
+
+  // Realtime is only safe when the filter range includes "now" (current month,
+  // or today's date). Otherwise new inserts don't belong in the filtered view.
+  const filterIncludesNow = (() => {
+    const now = Date.now();
+    return new Date(filterFrom).getTime() <= now && new Date(filterTo).getTime() >= now;
+  })();
+
   const fetchActivities = useCallback(async () => {
     const supabase = createClient();
     const { data } = await supabase
       .from("activity_logs")
       .select("id, action, entity_type, entity_id, created_at, new_data, profiles:user_id(full_name, roles)")
+      .gte("created_at", filterFrom)
+      .lte("created_at", filterTo)
       .order("created_at", { ascending: false })
       .limit(10);
     
     if (data) setActivities(data as unknown as ActivityEntry[]);
-  }, []);
+  }, [filterFrom, filterTo]);
 
   useEffect(() => {
     setMounted(true);
     fetchActivities();
 
+    if (!filterIncludesNow) return;
+
     const supabase = createClient();
+    const channelName = `activity-realtime:${crypto.randomUUID()}`;
     const channel = supabase
-      .channel("activity-realtime")
+      .channel(channelName)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "activity_logs" }, async (payload) => {
         const { data: fullEntry } = await supabase
           .from("activity_logs")
@@ -87,7 +127,7 @@ export function RightSidebar({
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [fetchActivities]);
+  }, [fetchActivities, filterIncludesNow]);
 
   // Prevent hydration mismatch by showing skeleton or nothing until mounted
   if (!mounted) {
@@ -129,14 +169,16 @@ export function RightSidebar({
 
       {/* Apple-style Calendar */}
       <div className="mx-3 my-4 rounded-2xl bg-[#1C1C1E] border border-white/[0.04] px-4 py-4 shadow-xl text-white flex-shrink-0">
-        <MiniCalendar today={today} />
+        <MiniCalendar />
       </div>
 
       {/* Separator */}
       <div className="mx-5 border-t border-white/[0.06] flex-shrink-0" />
 
       {/* Activity Log Header - fixed above scroll */}
-      <p className="flex-shrink-0 text-[11px] font-bold uppercase tracking-widest text-white/30 px-6 pt-4 pb-2">Aktivitas Terbaru</p>
+      <p className="flex-shrink-0 text-[11px] font-bold uppercase tracking-widest text-white/30 px-6 pt-4 pb-2">
+        {filter.date ? "Aktivitas Hari Itu" : filterIncludesNow ? "Aktivitas Terbaru" : "Aktivitas Bulan Itu"}
+      </p>
 
       {/* Activity Log Timeline */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-5">
@@ -184,10 +226,14 @@ function ActivityItem({ activity: a }: { activity: ActivityEntry }) {
               <p className="text-[10px] text-white/30 font-medium">
                 {(() => {
                   const d = new Date(a.created_at);
-                  const isToday = d.toDateString() === new Date().toDateString();
-                  return isToday 
-                    ? d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
-                    : d.toLocaleDateString("id-ID", { day: "2-digit", month: "short" }) + " " + d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+                  // Compare calendar day in WIB — toDateString uses host TZ.
+                  const nowDayWIB = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+                  const activityDayWIB = new Date(d.getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+                  const isToday = nowDayWIB === activityDayWIB;
+                  const timeStr = d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
+                  return isToday
+                    ? timeStr
+                    : d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", timeZone: "Asia/Jakarta" }) + " " + timeStr;
                 })()}
               </p>
             </div>
@@ -272,14 +318,20 @@ function renderSimpleContent(a: ActivityEntry) {
   );
 }
 
-function MiniCalendar({ today }: { today: Date }) {
+function MiniCalendar() {
   const { filter, setDate, setMonth, prevMonth, nextMonth } = useDateFilter();
   const year = filter.year;
   const month = filter.month;
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const todayDate = today.getDate();
-  const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+  const firstDay = firstWeekdayOfWIBMonth(year, month);
+  const daysInMonth = daysInWIBMonth(year, month);
+
+  // "Today" must be computed in WIB — `new Date().getDate()` would use the host
+  // timezone (UTC on Vercel), so we derive from the WIB-shifted Date instead.
+  const todayWIBDate = nowWIB();
+  const todayDate = todayWIBDate.getUTCDate();
+  const todayMonth = todayWIBDate.getUTCMonth();
+  const todayYear = todayWIBDate.getUTCFullYear();
+  const isCurrentMonth = todayYear === year && todayMonth === month;
 
   const [activityDays, setActivityDays] = useState<Record<number, "sale" | "return" | "both">>({});
 
@@ -287,25 +339,39 @@ function MiniCalendar({ today }: { today: Date }) {
   const days = ["S", "S", "R", "K", "J", "S", "M"];
   const offset = firstDay === 0 ? 6 : firstDay - 1;
 
-  // Fetch activity heatmap for current month
+  // Fetch activity heatmap for current month (WIB)
+  // - Sales dot: based on packing_sessions.completed_at (barang keluar/terjual).
+  //   Only sessions that actually reached shipped/completed/has_return count.
+  // - Return dot: based on returns.created_at.
   useEffect(() => {
     async function fetchHeatmap() {
       const supabase = createClient();
-      const from = new Date(year, month, 1).toISOString();
-      const to = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+      const from = wibStartOfMonth(year, month);
+      const to = wibStartOfNextMonth(year, month);
 
       const [{ data: sales }, { data: returns }] = await Promise.all([
-        supabase.from("packing_items").select("created_at").gte("created_at", from).lte("created_at", to),
-        supabase.from("returns").select("created_at").gte("created_at", from).lte("created_at", to),
+        supabase
+          .from("packing_sessions")
+          .select("completed_at")
+          .in("status", ["shipped", "completed", "has_return"])
+          .not("completed_at", "is", null)
+          .gte("completed_at", from)
+          .lt("completed_at", to),
+        supabase
+          .from("returns")
+          .select("created_at")
+          .gte("created_at", from)
+          .lt("created_at", to),
       ]);
 
       const map: Record<number, "sale" | "return" | "both"> = {};
       for (const s of sales ?? []) {
-        const d = new Date(s.created_at).getDate();
+        if (!s.completed_at) continue;
+        const d = getWIBDay(s.completed_at);
         map[d] = map[d] === "return" ? "both" : "sale";
       }
       for (const r of returns ?? []) {
-        const d = new Date(r.created_at).getDate();
+        const d = getWIBDay(r.created_at);
         map[d] = map[d] === "sale" ? "both" : "return";
       }
       setActivityDays(map);
@@ -313,8 +379,11 @@ function MiniCalendar({ today }: { today: Date }) {
     fetchHeatmap();
   }, [year, month]);
 
-  const selectedDay = filter.date ? new Date(filter.date).getDate() : null;
-  const isSelectedMonth = filter.date ? new Date(filter.date).getMonth() === month && new Date(filter.date).getFullYear() === year : false;
+  // Parse selected date string manually (timezone-independent)
+  const selectedDay = filter.date ? Number(filter.date.split("-")[2]) : null;
+  const selectedMonth = filter.date ? Number(filter.date.split("-")[1]) - 1 : null;
+  const selectedYear = filter.date ? Number(filter.date.split("-")[0]) : null;
+  const isSelectedMonth = filter.date ? selectedMonth === month && selectedYear === year : false;
 
   return (
     <div className="select-none">

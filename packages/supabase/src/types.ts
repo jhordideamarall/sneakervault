@@ -369,14 +369,19 @@ export type Database = {
           barcode: string
           brand: string
           color: string | null
+          condition: Database["public"]["Enums"]["product_condition"]
+          condition_updated_at: string | null
+          condition_updated_by: string | null
           created_at: string
           default_supplier_id: string | null
+          defect_reason: string | null
           first_inbound_at: string | null
           hpp: number
           id: string
           image_url: string | null
           is_active: boolean
           model: string
+          price_offline: number
           quantity: number
           sell_price: number
           size: number
@@ -387,14 +392,19 @@ export type Database = {
           barcode: string
           brand: string
           color?: string | null
+          condition?: Database["public"]["Enums"]["product_condition"]
+          condition_updated_at?: string | null
+          condition_updated_by?: string | null
           created_at?: string
           default_supplier_id?: string | null
+          defect_reason?: string | null
           first_inbound_at?: string | null
           hpp?: number
           id?: string
           image_url?: string | null
           is_active?: boolean
           model: string
+          price_offline?: number
           quantity?: number
           sell_price?: number
           size: number
@@ -405,14 +415,19 @@ export type Database = {
           barcode?: string
           brand?: string
           color?: string | null
+          condition?: Database["public"]["Enums"]["product_condition"]
+          condition_updated_at?: string | null
+          condition_updated_by?: string | null
           created_at?: string
           default_supplier_id?: string | null
+          defect_reason?: string | null
           first_inbound_at?: string | null
           hpp?: number
           id?: string
           image_url?: string | null
           is_active?: boolean
           model?: string
+          price_offline?: number
           quantity?: number
           sell_price?: number
           size?: number
@@ -421,10 +436,68 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "products_condition_updated_by_fkey"
+            columns: ["condition_updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "products_default_supplier_id_fkey"
             columns: ["default_supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_condition_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: string
+          new_condition: Database["public"]["Enums"]["product_condition"]
+          previous_condition:
+            | Database["public"]["Enums"]["product_condition"]
+            | null
+          product_id: string
+          reason: string | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          new_condition: Database["public"]["Enums"]["product_condition"]
+          previous_condition?:
+            | Database["public"]["Enums"]["product_condition"]
+            | null
+          product_id: string
+          reason?: string | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          new_condition?: Database["public"]["Enums"]["product_condition"]
+          previous_condition?:
+            | Database["public"]["Enums"]["product_condition"]
+            | null
+          product_id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_condition_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_condition_history_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -773,6 +846,45 @@ export type Database = {
             }
             Returns: undefined
           }
+      recalculate_hpp_by_sku: {
+        Args: {
+          p_product_id: string
+          p_new_qty: number
+          p_new_unit_cost: number
+        }
+        Returns: undefined
+      }
+      search_products_fuzzy: {
+        Args: {
+          p_query: string
+          p_limit?: number
+          p_threshold?: number
+        }
+        Returns: {
+          id: string
+          brand: string
+          model: string
+          sku: string
+          size: number
+          color: string | null
+          barcode: string
+          quantity: number
+          hpp: number
+          sell_price: number
+          price_offline: number
+          image_url: string | null
+          condition: Database["public"]["Enums"]["product_condition"]
+          similarity: number
+        }[]
+      }
+      update_product_condition: {
+        Args: {
+          p_product_id: string
+          p_new_condition: Database["public"]["Enums"]["product_condition"]
+          p_reason?: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       delete_entity_type:
@@ -781,6 +893,7 @@ export type Database = {
         | "stock_movement"
         | "purchase_batch"
       delete_request_status: "pending" | "approved" | "rejected"
+      product_condition: "normal" | "defect" | "dormant"
       return_status: "pending" | "verified" | "processed" | "cancelled"
       return_type: "exchange_size" | "refund"
       session_status:
@@ -795,7 +908,7 @@ export type Database = {
         | "return_in"
         | "return_out"
         | "adjustment"
-      user_role: "owner" | "admin_gudang" | "admin_online" | "shopkeeper"
+      user_role: "owner" | "admin_gudang" | "admin_online" | "shopkeeper" | "finance"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -930,6 +1043,7 @@ export const Constants = {
         "purchase_batch",
       ],
       delete_request_status: ["pending", "approved", "rejected"],
+      product_condition: ["normal", "defect", "dormant"],
       return_status: ["pending", "verified", "processed", "cancelled"],
       return_type: ["exchange_size", "refund"],
       session_status: [
@@ -946,7 +1060,7 @@ export const Constants = {
         "return_out",
         "adjustment",
       ],
-      user_role: ["owner", "admin_gudang", "admin_online", "shopkeeper"],
+      user_role: ["owner", "admin_gudang", "admin_online", "shopkeeper", "finance"],
     },
   },
 } as const

@@ -7,8 +7,13 @@ import {
 
 const COLORS = ["#8b5cf6", "#22c55e", "#3b82f6", "#eab308", "#ef4444", "#f97316", "#06b6d4", "#ec4899"];
 
-function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
+function ChartTooltip({ active, payload, label, mode = "rupiah" }: { active?: boolean; payload?: any[]; label?: string; mode?: "rupiah" | "unit" }) {
   if (!active || !payload?.length) return null;
+  const formatValue = (v: unknown) => {
+    if (typeof v !== "number") return String(v ?? "");
+    if (mode === "unit") return `${v.toLocaleString("id-ID")} unit`;
+    return `Rp ${v.toLocaleString("id-ID")}`;
+  };
   return (
     <div className="rounded-xl border border-white/[0.08] bg-[#1c1c1e] px-4 py-3 shadow-2xl">
       {label && <p className="text-[11px] text-white/60 mb-2">{label}</p>}
@@ -19,7 +24,7 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
             <span className="text-[11px] text-white/70">{p.name}</span>
           </div>
           <span className="text-[11px] font-semibold text-white">
-            {typeof p.value === "number" ? `Rp ${p.value.toLocaleString("id-ID")}` : p.value}
+            {formatValue(p.value)}
           </span>
         </div>
       ))}
@@ -52,25 +57,66 @@ export function RevenueChart({ data }: { data: { month: string; revenue: number;
 export function StockPieChart({ data }: { data: { brand: string; value: number; units: number }[] }) {
   if (data.length === 0) return <EmptyChart />;
   const total = data.reduce((s, d) => s + d.value, 0);
+  const totalUnits = data.reduce((s, d) => s + d.units, 0);
+
+  const PieTooltip = ({ active, payload }: { active?: boolean; payload?: any[] }) => {
+    if (!active || !payload?.length) return null;
+    const p = payload[0]?.payload as { brand: string; value: number; units: number } | undefined;
+    if (!p) return null;
+    const pct = total > 0 ? ((p.value / total) * 100).toFixed(1) : "0";
+    const color = payload[0]?.color ?? payload[0]?.fill ?? "#fff";
+    return (
+      <div className="rounded-xl border border-white/[0.08] bg-[#1c1c1e] px-4 py-3 shadow-2xl">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+          <span className="text-[12px] font-semibold text-white">{p.brand}</span>
+        </div>
+        <div className="space-y-0.5 text-[11px]">
+          <div className="flex justify-between gap-6">
+            <span className="text-white/50">Unit</span>
+            <span className="text-white font-semibold tabular-nums">{p.units.toLocaleString("id-ID")}</span>
+          </div>
+          <div className="flex justify-between gap-6">
+            <span className="text-white/50">Modal</span>
+            <span className="text-white font-semibold tabular-nums">Rp {p.value.toLocaleString("id-ID")}</span>
+          </div>
+          <div className="flex justify-between gap-6">
+            <span className="text-white/50">Porsi</span>
+            <span className="text-white/70 tabular-nums">{pct}%</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
-      <div className="mb-4">
-        <p className="text-sm font-medium text-white/80">Distribusi Stok per Brand</p>
-        <p className="text-[11px] text-white/30">Proporsi modal terikat — bantu keputusan restock</p>
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-white/80">Distribusi Stok per Brand</p>
+          <p className="text-[11px] text-white/30">Proporsi modal terikat — bantu keputusan restock</p>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <p className="text-[11px] text-white/30">Total stok</p>
+          <p className="text-sm font-semibold text-white/80 tabular-nums">{totalUnits.toLocaleString("id-ID")} <span className="text-[10px] font-normal text-white/40">unit</span></p>
+        </div>
       </div>
       <ResponsiveContainer width="100%" height={220}>
         <PieChart>
           <Pie data={data} dataKey="value" nameKey="brand" cx="50%" cy="50%" outerRadius={80} strokeWidth={0}>
             {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
           </Pie>
-          <Tooltip content={<ChartTooltip />} />
+          <Tooltip content={<PieTooltip />} />
         </PieChart>
       </ResponsiveContainer>
-      <div className="flex flex-wrap gap-3 mt-2">
+      <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-2">
         {data.slice(0, 5).map((d, i) => (
           <div key={d.brand} className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-            <span className="text-[10px] text-white/50">{d.brand} ({((d.value / total) * 100).toFixed(0)}%)</span>
+            <span className="text-[10px] text-white/60 font-medium">{d.brand}</span>
+            <span className="text-[10px] text-white/35 tabular-nums">
+              {d.units.toLocaleString("id-ID")} unit · {((d.value / total) * 100).toFixed(0)}%
+            </span>
           </div>
         ))}
       </div>
@@ -91,7 +137,7 @@ export function TopProductsChart({ data }: { data: { name: string; count: number
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
           <XAxis type="number" tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }} axisLine={false} />
           <YAxis type="category" dataKey="name" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }} axisLine={false} width={100} />
-          <Tooltip content={<ChartTooltip />} />
+          <Tooltip content={<ChartTooltip mode="unit" />} />
           <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} name="Terjual" />
         </BarChart>
       </ResponsiveContainer>
@@ -112,7 +158,7 @@ export function WeeklySalesChart({ data }: { data: { week: string; terjual: numb
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
           <XAxis dataKey="week" tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }} axisLine={false} />
           <YAxis tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }} axisLine={false} />
-          <Tooltip content={<ChartTooltip />} />
+          <Tooltip content={<ChartTooltip mode="unit" />} />
           <Bar dataKey="terjual" fill="#22c55e" radius={[4, 4, 0, 0]} name="Unit terjual" />
         </BarChart>
       </ResponsiveContainer>

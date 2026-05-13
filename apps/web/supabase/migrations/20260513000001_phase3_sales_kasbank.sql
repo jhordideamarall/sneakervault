@@ -1,0 +1,3 @@
+-- See MCP migration phase3_sales_kasbank (applied 2026-05-11)
+-- Tables: bank_accounts, bank_transactions, sales_invoices, sales_invoice_lines, customer_payments, customer_payment_allocations, marketplace_imports
+-- Functions: generate_sales_invoice_number, generate_customer_payment_number

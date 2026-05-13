@@ -14,6 +14,8 @@ import {
   TableSkeleton 
 } from "@/components/dashboard/overview-components";
 
+export const dynamic = "force-dynamic";
+
 export default async function OverviewPage({
   searchParams,
 }: {
@@ -26,6 +28,9 @@ export default async function OverviewPage({
   const selectedMonth = sp.date
     ? sp.date.slice(0, 7) // "2026-05-11" → "2026-05"
     : sp.month ?? undefined;
+
+  // Key to force re-render when filter changes
+  const filterKey = sp.date || sp.month || "all";
 
   return (
     <div className="space-y-8">
@@ -60,12 +65,12 @@ export default async function OverviewPage({
       </Suspense>
 
       {/* Sales Chart - Streamed */}
-      <Suspense fallback={<ChartSkeleton />}>
-        <ChartSection selectedMonth={selectedMonth} />
+      <Suspense key={`chart-${filterKey}`} fallback={<ChartSkeleton />}>
+        <ChartSection selectedMonth={selectedMonth} selectedDate={sp.date} />
       </Suspense>
 
       {/* Financial Summary Table - Streamed */}
-      <Suspense fallback={<TableSkeleton />}>
+      <Suspense key={`table-${filterKey}`} fallback={<TableSkeleton />}>
         <FinancialTableSection selectedMonth={selectedMonth} selectedDate={sp.date} />
       </Suspense>
     </div>

@@ -1,3 +1,3 @@
 export default function Page() {
-  return <div>SneakerVault</div>;
+  return <div>Dewins.id</div>;
 }

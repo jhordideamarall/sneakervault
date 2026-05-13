@@ -74,14 +74,18 @@ export async function AlertSection() {
   );
 }
 
-export async function ChartSection({ selectedMonth }: { selectedMonth?: string }) {
-  const monthlySales = await getMonthlySales(selectedMonth);
+export async function ChartSection({ selectedMonth, selectedDate }: { selectedMonth?: string; selectedDate?: string }) {
+  const monthlySales = await getMonthlySales(selectedMonth, selectedDate);
+  const granularity: "hour" | "day" | "week" = selectedDate ? "hour" : selectedMonth ? "day" : "week";
+  // Trend comparison only meaningful when a specific period is selected.
+  const hasPreviousPeriod = Boolean(selectedDate || selectedMonth);
   return (
     <SalesChart 
       data={monthlySales.weeks as Record<string, number | string>[]} 
       brands={monthlySales.brands} 
       models={monthlySales.models}
-      granularity={selectedMonth ? "day" : "week"}
+      granularity={granularity}
+      previousTotals={hasPreviousPeriod ? monthlySales.previousTotals : undefined}
     />
   );
 }

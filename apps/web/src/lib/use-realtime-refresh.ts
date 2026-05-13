@@ -21,8 +21,9 @@ export function useRealtimeRefresh() {
       timeout = setTimeout(() => router.refresh(), 300);
     };
 
+    const channelName = `global-realtime:${crypto.randomUUID()}`;
     const channel = supabase
-      .channel("global-realtime")
+      .channel(channelName)
       .on("postgres_changes", { event: "*", schema: "public", table: "activity_logs" }, debouncedRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, debouncedRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "packing_sessions" }, debouncedRefresh)

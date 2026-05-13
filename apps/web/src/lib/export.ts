@@ -23,7 +23,7 @@ export interface ExportParams {
   period?: string;
 }
 
-const COMPANY = "SneakerVault";
+const COMPANY = "Dewins.id";
 
 function formatRp(n: number): string {
   return `Rp ${n.toLocaleString("id-ID")}`;

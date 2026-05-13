@@ -1,7 +1,10 @@
 "use server";
 
 import { createClient } from "@sneakervault/supabase/server";
-import { productInputSchema, confirmInboundSchema } from "@sneakervault/shared";
+import {
+  productInputSchema,
+  confirmInboundSchema,
+} from "@sneakervault/shared";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { notifyEvent } from "./notify";
@@ -11,7 +14,9 @@ export async function scanInbound(barcode: string) {
   const supabase = await createClient();
   const { data } = await supabase
     .from("products")
-    .select("id, brand, model, sku, size, color, barcode, quantity, hpp, sell_price")
+    .select(
+      "id, brand, model, sku, size, color, barcode, quantity, hpp, sell_price, price_offline, image_url, condition",
+    )
     .eq("barcode", barcode)
     .maybeSingle();
   return data;
@@ -23,9 +28,16 @@ export async function registerProduct(input: unknown) {
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const data = {
+    ...parsed.data,
+    // default price_offline = sell_price kalau belum di-set owner
+    price_offline: parsed.data.price_offline ?? parsed.data.sell_price,
+    first_inbound_at: new Date().toISOString(),
+  };
+
+  const { data: inserted, error } = await supabase
     .from("products")
-    .insert({ ...parsed.data, first_inbound_at: new Date().toISOString() })
+    .insert(data)
     .select()
     .single();
 
@@ -34,10 +46,10 @@ export async function registerProduct(input: unknown) {
     user_id: profile.id,
     action: "create",
     entity_type: "product",
-    entity_id: data.id,
-    new_data: data,
+    entity_id: inserted.id,
+    new_data: inserted,
   });
-  return { data };
+  return { data: inserted };
 }
 
 export async function confirmInbound(input: unknown) {
@@ -48,16 +60,19 @@ export async function confirmInbound(input: unknown) {
   const { product_id, quantity, batch_data } = parsed.data;
   const supabase = await createClient();
 
-  // Get product to derive brand/model (don't trust user input for HPP recalc)
+  // Fetch product metadata (used for notification + HPP calc context)
   const { data: product } = await supabase
     .from("products")
-    .select("brand, model, quantity, hpp")
+    .select("brand, model, size, sku, quantity, hpp")
     .eq("id", product_id)
     .maybeSingle();
   if (!product) return { error: { _form: ["Produk tidak ditemukan"] } };
 
   // Atomic stock increment (race-safe)
-  const { error: incErr } = await supabase.rpc("increment_product_quantity", { p_id: product_id, qty: quantity });
+  const { error: incErr } = await supabase.rpc("increment_product_quantity", {
+    p_id: product_id,
+    qty: quantity,
+  });
   if (incErr) return { error: { _form: [incErr.message] } };
 
   // Create the batch header
@@ -70,19 +85,27 @@ export async function confirmInbound(input: unknown) {
 
   // Record stock movement
   const { error: mvErr } = await supabase.from("stock_movements").insert({
-    product_id, type: "inbound", quantity, unit_cost: batch_data.unit_cost,
-    reference_type: "purchase_batch", reference_id: batch.id, performed_by: profile.id,
+    product_id,
+    type: "inbound",
+    quantity,
+    unit_cost: batch_data.unit_cost,
+    reference_type: "purchase_batch",
+    reference_id: batch.id,
+    performed_by: profile.id,
   });
   if (mvErr) return { error: { _form: [mvErr.message] } };
 
-  // Recompute model-wide HPP using product's actual brand/model (not user input)
-  const { error: hppErr } = await supabase.rpc("recalculate_hpp_by_model", {
-    p_brand: product.brand,
-    p_model: product.model,
+  // Recompute HPP per-SKU (meeting 2 decision — was per-model).
+  // Formula inside the RPC: weighted-avg of existing stock × old HPP + new.
+  const { error: hppErr } = await supabase.rpc("recalculate_hpp_by_sku", {
+    p_product_id: product_id,
     p_new_qty: quantity,
     p_new_unit_cost: batch_data.unit_cost,
   });
-  if (hppErr) return { error: { _form: [`HPP recalculation failed: ${hppErr.message}`] } };
+  if (hppErr)
+    return {
+      error: { _form: [`HPP recalculation failed: ${hppErr.message}`] },
+    };
 
   await logActivity({
     user_id: profile.id,
@@ -95,8 +118,8 @@ export async function confirmInbound(input: unknown) {
       batch_id: batch.id,
       brand: product.brand,
       model: product.model,
-      size: (product as any).size, // Adding size if available
-      sku: (product as any).sku,   // Adding SKU if available
+      size: product.size,
+      sku: product.sku,
     },
   });
 
@@ -104,11 +127,11 @@ export async function confirmInbound(input: unknown) {
     {
       type: "inbound.batch_received",
       batchId: batch.id,
-      productLabel: `${product.brand} ${product.model}`,
+      productLabel: `${product.brand} ${product.model} size ${product.size}`,
       quantity,
       unitCost: batch_data.unit_cost,
     },
-    { actorId: profile.id }
+    { actorId: profile.id },
   );
 
   return { success: true };

@@ -12,21 +12,39 @@ export type InternalMessage = Database["public"]["Tables"]["internal_messages"][
 
 export type Conversation = {
   profile: { id: string; full_name: string; avatar_url: string | null };
-  lastMessage: InternalMessage;
+  lastMessage: InternalMessage | null;
   messages: InternalMessage[];
   unreadCount: number;
 };
 
+type StaffContact = {
+  id: string;
+  full_name: string;
+  avatar_url: string | null;
+};
+
 export function useInbox(userId?: string) {
   const [messages, setMessages] = useState<InternalMessage[]>([]);
+  const [contacts, setContacts] = useState<StaffContact[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const conversations = useMemo(() => {
     if (!userId) return [];
     const groups: Record<string, Conversation> = {};
+
+    contacts.forEach((contact) => {
+      groups[contact.id] = {
+        profile: contact,
+        lastMessage: null,
+        messages: [],
+        unreadCount: 0,
+      };
+    });
     
     messages.forEach(msg => {
+      if (msg.sender_id === userId && msg.receiver_id === userId) return;
+
       const otherId = msg.sender_id === userId ? msg.receiver_id : msg.sender_id;
       const otherProfile = (msg.sender_id === userId ? msg.receiver : msg.sender) as any;
       
@@ -39,7 +57,7 @@ export function useInbox(userId?: string) {
         };
       }
       groups[otherId].messages.push(msg);
-      if (new Date(msg.created_at!) > new Date(groups[otherId].lastMessage.created_at!)) {
+      if (!groups[otherId].lastMessage || new Date(msg.created_at!) > new Date(groups[otherId].lastMessage.created_at!)) {
         groups[otherId].lastMessage = msg;
       }
       if (!msg.is_read && msg.receiver_id === userId) {
@@ -47,10 +65,32 @@ export function useInbox(userId?: string) {
       }
     });
 
-    return Object.values(groups).sort((a, b) => 
-      new Date(b.lastMessage.created_at!).getTime() - new Date(a.lastMessage.created_at!).getTime()
-    );
-  }, [messages, userId]);
+    return Object.values(groups).sort((a, b) => {
+      if (a.lastMessage && b.lastMessage) {
+        return new Date(b.lastMessage.created_at!).getTime() - new Date(a.lastMessage.created_at!).getTime();
+      }
+      if (a.lastMessage) return -1;
+      if (b.lastMessage) return 1;
+      return a.profile.full_name.localeCompare(b.profile.full_name);
+    });
+  }, [contacts, messages, userId]);
+
+  const fetchContacts = useCallback(async () => {
+    if (!userId) return;
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url")
+      .eq("is_active", true)
+      .neq("id", userId)
+      .order("full_name");
+
+    if (!error && data) {
+      setContacts(data as StaffContact[]);
+    } else if (error) {
+      console.error("Error fetching contacts:", error);
+    }
+  }, [userId]);
 
   const fetchMessages = useCallback(async () => {
     if (!userId) return;
@@ -84,11 +124,13 @@ export function useInbox(userId?: string) {
 
   useEffect(() => {
     if (!userId) return;
+    fetchContacts();
     fetchMessages();
 
     const supabase = createClient();
+    const channelName = `inbox:${userId}:${crypto.randomUUID()}`;
     const channel = supabase
-      .channel(`inbox:${userId}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -139,7 +181,7 @@ export function useInbox(userId?: string) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, fetchMessages]);
+  }, [userId, fetchContacts, fetchMessages]);
 
   const markAsRead = async (senderId: string) => {
     // Optimistic: update local state immediately
@@ -210,5 +252,5 @@ export function useInbox(userId?: string) {
     return { error: null };
   };
 
-  return { messages, conversations, unreadCount, loading, markAsRead, sendMessage, refresh: fetchMessages };
+  return { messages, conversations, contacts, unreadCount, loading, markAsRead, sendMessage, refresh: fetchMessages };
 }

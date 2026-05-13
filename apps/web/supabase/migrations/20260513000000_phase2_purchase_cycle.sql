@@ -1,0 +1,3 @@
+-- See MCP migration phase2_purchase_cycle (applied 2026-05-11)
+-- Tables: purchase_orders, purchase_order_lines, purchase_invoices, vendor_payments, vendor_payment_allocations
+-- Functions: generate_po_number, generate_purchase_invoice_number, generate_vendor_payment_number

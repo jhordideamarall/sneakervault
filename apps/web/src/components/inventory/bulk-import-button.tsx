@@ -5,6 +5,7 @@ import { Button, Card, Alert } from "@sneakervault/ui";
 import { bulkImportProducts } from "@/lib/actions/products";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
+import { Upload, Download, FileUp } from "lucide-react";
 
 type Result = {
   inserted: number;
@@ -22,9 +23,36 @@ export function BulkImportButton() {
   async function downloadTemplate() {
     const XLSX = await import("xlsx");
     const ws = XLSX.utils.aoa_to_sheet([
-      ["brand", "model", "sku", "size", "color", "barcode", "sell_price"],
-      ["Adidas", "Samba White", "SMB-WHT-40", 40, "White", "104100", 1800000],
-      ["Adidas", "Samba White", "SMB-WHT-41", 41, "White", "104101", 1800000],
+      [
+        "brand",
+        "model",
+        "sku",
+        "size",
+        "color",
+        "barcode",
+        "sell_price",
+        "price_offline",
+      ],
+      [
+        "Adidas",
+        "Samba White",
+        "SMB-WHT-40",
+        40,
+        "White",
+        "104100",
+        1800000,
+        1650000,
+      ],
+      [
+        "Adidas",
+        "Samba White",
+        "SMB-WHT-41",
+        41,
+        "White",
+        "104101",
+        1800000,
+        1650000,
+      ],
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Products");
@@ -62,11 +90,17 @@ export function BulkImportButton() {
         startTransition(async () => {
           const r = await bulkImportProducts(rows);
           setResult(r);
-          toast.push(`${r.inserted} produk diimport, ${r.skipped} dilewati`, r.errors.length > 0 ? "info" : "success");
+          toast.push(
+            `${r.inserted} produk diimport, ${r.skipped} dilewati`,
+            r.errors.length > 0 ? "info" : "success",
+          );
           router.refresh();
         });
       } catch (err) {
-        toast.push(err instanceof Error ? err.message : "Gagal membaca file", "error");
+        toast.push(
+          err instanceof Error ? err.message : "Gagal membaca file",
+          "error",
+        );
       }
     };
     reader.readAsArrayBuffer(file);
@@ -76,24 +110,41 @@ export function BulkImportButton() {
   return (
     <>
       <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
-        📂 Import CSV/Excel
+        <Upload size={14} className="mr-1" />
+        Import Excel
       </Button>
 
       {open && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setOpen(false);
+              setResult(null);
+            }
+          }}
+        >
           <Card className="w-full max-w-lg">
-            <h2 className="mb-2 text-lg font-semibold">Bulk Import Produk</h2>
-            <p className="mb-4 text-sm text-[#6b7280]">
-              Upload file Excel/CSV dengan kolom: brand, model, sku, size, color (opsional), barcode, sell_price.
-              Barcode harus unik — produk yang sudah ada akan dilewati.
+            <h2 className="mb-1 text-base font-semibold text-white">
+              Bulk Import Produk
+            </h2>
+            <p className="mb-4 text-xs leading-relaxed text-white/50">
+              Upload Excel/CSV dengan kolom:{" "}
+              <span className="font-mono text-white/70">
+                brand, model, sku, size, color, barcode, sell_price, price_offline
+              </span>
+              . Barcode harus unik — baris yang sudah ada akan dilewati (tidak
+              ditimpa).
             </p>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="ghost" onClick={downloadTemplate}>
-                📥 Download Template
+                <Download size={14} className="mr-1" />
+                Template
               </Button>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-[#1a1a2e] px-4 py-2 text-sm text-white hover:bg-[#16213e]">
-                {pending ? "Memproses..." : "📁 Pilih File"}
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-white/10 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-white/15">
+                <FileUp size={14} />
+                {pending ? "Memproses…" : "Pilih File"}
                 <input
                   type="file"
                   accept=".csv,.xlsx,.xls"
@@ -107,13 +158,15 @@ export function BulkImportButton() {
             {result && (
               <div className="mt-4 space-y-2">
                 <Alert tone={result.errors.length > 0 ? "warning" : "success"}>
-                  Berhasil: {result.inserted} · Dilewati: {result.skipped} · Error: {result.errors.length}
+                  Berhasil: {result.inserted} · Dilewati: {result.skipped} ·
+                  Error: {result.errors.length}
                 </Alert>
                 {result.errors.length > 0 && (
-                  <div className="max-h-40 overflow-y-auto rounded-lg border border-[#e5e7eb] p-3 text-xs">
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-white/[0.06] bg-black/20 p-3 text-[11px] text-white/70">
                     {result.errors.map((e, i) => (
-                      <div key={i}>
-                        <span className="font-mono">baris {e.row}:</span> {e.reason}
+                      <div key={i} className="font-mono">
+                        <span className="text-amber-400">baris {e.row}:</span>{" "}
+                        {e.reason}
                       </div>
                     ))}
                   </div>
@@ -121,8 +174,15 @@ export function BulkImportButton() {
               </div>
             )}
 
-            <div className="mt-6 flex justify-end">
-              <Button variant="ghost" onClick={() => { setOpen(false); setResult(null); }}>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setOpen(false);
+                  setResult(null);
+                }}
+              >
                 Tutup
               </Button>
             </div>

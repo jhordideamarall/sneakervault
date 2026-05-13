@@ -18,7 +18,7 @@ export function useLiveRefresh(tables: string[], debounceMs = 400) {
 
     const channels = tables.map((table) =>
       supabase
-        .channel(`live-${table}`)
+        .channel(`live-${table}:${crypto.randomUUID()}`)
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table },

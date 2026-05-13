@@ -61,6 +61,7 @@ export default async function DashboardLayout({
           fullName={profile.full_name}
           roles={profile.roles as string[]}
           avatarUrl={profile.avatar_url}
+          userId={profile.id}
         />
       </div>
     </div>

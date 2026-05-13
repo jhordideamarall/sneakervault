@@ -1,6 +1,15 @@
 import { Suspense } from "react";
 import { getStockValue, getProfitReport, getAgingReport, getFinancialSummaryByModel } from "@/lib/queries";
 import { ReportsExport } from "@/components/reports/reports-export";
+import {
+  nowWIB,
+  wibStartOfDay,
+  wibEndOfDay,
+  wibStartOfMonth,
+  wibEndOfMonth,
+} from "@/lib/timezone";
+
+export const dynamic = "force-dynamic";
 
 export default async function ReportsPage({
   searchParams,
@@ -9,25 +18,32 @@ export default async function ReportsPage({
 }) {
   const sp = await searchParams;
 
-  // Compute date range from calendar filter
+  // Compute WIB-aware date range from calendar filter.
+  // `to` is INCLUSIVE here because getProfitReport uses `.lte`.
   let from: string;
   let to: string;
   let periodLabel: string;
 
   if (sp.date) {
-    from = `${sp.date}T00:00:00`;
-    to = `${sp.date}T23:59:59`;
-    periodLabel = new Date(sp.date).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+    from = wibStartOfDay(sp.date);
+    to = wibEndOfDay(sp.date);
+    const [y, m, d] = sp.date.split("-").map(Number);
+    periodLabel = new Date(Date.UTC(y!, m! - 1, d!))
+      .toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   } else if (sp.month) {
     const [y, m] = sp.month.split("-").map(Number);
-    from = new Date(y!, m! - 1, 1).toISOString();
-    to = new Date(y!, m!, 0, 23, 59, 59).toISOString();
-    periodLabel = new Date(y!, m! - 1).toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+    from = wibStartOfMonth(y!, m! - 1);
+    to = wibEndOfMonth(y!, m! - 1);
+    periodLabel = new Date(Date.UTC(y!, m! - 1, 1))
+      .toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: "UTC" });
   } else {
-    from = getMonthStart(0);
-    to = getMonthEnd(0);
+    const n = nowWIB();
+    from = wibStartOfMonth(n.getUTCFullYear(), n.getUTCMonth());
+    to = wibEndOfMonth(n.getUTCFullYear(), n.getUTCMonth());
     periodLabel = "Bulan ini";
   }
+
+  const filterKey = sp.date || sp.month || "all";
 
   return (
     <div className="space-y-8">
@@ -39,12 +55,12 @@ export default async function ReportsPage({
         <ReportsExport />
       </div>
 
-      <Suspense fallback={<CardsSkeleton />}>
+      <Suspense key={`cards-${filterKey}`} fallback={<CardsSkeleton />}>
         <SummaryCards from={from} to={to} />
       </Suspense>
 
-      <Suspense fallback={<TableSkeleton />}>
-        <ProfitByModelTable from={from} to={to} />
+      <Suspense key={`profit-${filterKey}`} fallback={<TableSkeleton />}>
+        <ProfitByModelTable from={from} to={to} selectedDate={sp.date} selectedMonth={sp.month} />
       </Suspense>
 
       <Suspense fallback={<TableSkeleton />}>
@@ -97,13 +113,26 @@ function SummaryCard({ label, value, sub, subColor }: { label: string; value: st
   );
 }
 
-async function ProfitByModelTable({ from, to }: { from: string; to: string }) {
-  // Check if it's a single day filter
-  const fromDate = from.slice(0, 10); // "2026-05-11"
-  const toDate = to.slice(0, 10);
-  const isSingleDay = fromDate === toDate;
-  const selectedMonth = from.slice(0, 7); // "2026-05"
-  const data = await getFinancialSummaryByModel(selectedMonth, isSingleDay ? fromDate : undefined);
+async function ProfitByModelTable({
+  from,
+  to,
+  selectedDate,
+  selectedMonth,
+}: {
+  from: string;
+  to: string;
+  selectedDate?: string;
+  selectedMonth?: string;
+}) {
+  void from; void to; // kept for symmetry; inner query rebuilds range itself.
+  // If a specific date is selected, filter by that day. Otherwise filter by month.
+  // When neither is set, fallback to current WIB month.
+  let monthForQuery = selectedMonth;
+  if (!selectedDate && !selectedMonth) {
+    const n = nowWIB();
+    monthForQuery = `${n.getUTCFullYear()}-${String(n.getUTCMonth() + 1).padStart(2, "0")}`;
+  }
+  const data = await getFinancialSummaryByModel(monthForQuery, selectedDate);
 
   if (data.length === 0) {
     return (
@@ -230,20 +259,6 @@ async function AgingTable() {
 // Helpers
 function formatNum(n: number) {
   return n.toLocaleString("id-ID");
-}
-
-function getMonthStart(offset: number) {
-  const d = new Date();
-  d.setMonth(d.getMonth() + offset, 1);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
-}
-
-function getMonthEnd(offset: number) {
-  const d = new Date();
-  d.setMonth(d.getMonth() + offset + 1, 0);
-  d.setHours(23, 59, 59, 999);
-  return d.toISOString();
 }
 
 function CardsSkeleton() {

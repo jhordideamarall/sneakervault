@@ -24,3 +24,20 @@ Riwayatmeeting.md
 
 # Supabase
 supabase/.temp
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Local agent / vector DB files (binary, per-developer)
+*.rvf
+*.rvf.lock
+*.db
+.agents/
+.playwright-mcp/
+
+# MCP local config (per-developer URL)
+.mcp.json
+
+# Local notes / scratch
+meeting*.md
+inv.html

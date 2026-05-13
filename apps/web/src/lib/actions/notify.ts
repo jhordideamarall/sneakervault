@@ -19,6 +19,8 @@ export type NotifyEvent =
   | { type: "return.processed"; returnId: string; returnType: "exchange_size" | "refund"; productLabel: string }
   | { type: "inbound.batch_received"; batchId: string; productLabel: string; quantity: number; unitCost: number }
   | { type: "low_stock.warning"; productId: string; productLabel: string; quantity: number; threshold: number }
+  | { type: "product.condition_changed"; productId: string; productLabel: string; previousCondition: string; newCondition: string; reason?: string }
+  | { type: "product.aging_detected"; productId: string; productLabel: string; daysSinceLastOutbound: number }
   | { type: "delete_request.submitted"; requestId: string; entityType: string; reason: string }
   | { type: "delete_request.reviewed"; requestId: string; entityType: string; status: "approved" | "rejected"; requesterId: string; notes?: string };
 
@@ -37,6 +39,8 @@ const RELATED_ENTITY_TYPE: Record<NotifyEvent["type"], string | null> = {
   "return.processed": "return",
   "inbound.batch_received": "purchase_batch",
   "low_stock.warning": "product",
+  "product.condition_changed": "product",
+  "product.aging_detected": "product",
   "delete_request.submitted": "delete_request",
   "delete_request.reviewed": "delete_request",
 };
@@ -55,6 +59,8 @@ const RECIPIENT_ROLES: Partial<Record<NotifyEvent["type"], Role[]>> = {
   "return.verified": ["owner", "admin_online"],
   "return.processed": ["owner"],
   "inbound.batch_received": ["owner"],
+  "product.condition_changed": ["owner"],
+  "product.aging_detected": ["owner"],
   "delete_request.submitted": ["owner"],
 };
 
@@ -72,6 +78,8 @@ function getRelatedEntityId(event: NotifyEvent): string | null {
     case "inbound.batch_received":
       return event.batchId;
     case "low_stock.warning":
+    case "product.condition_changed":
+    case "product.aging_detected":
       return event.productId;
     case "delete_request.submitted":
     case "delete_request.reviewed":
@@ -135,6 +143,19 @@ function formatMessage(event: NotifyEvent): { subject: string; content: string }
       return {
         subject: `⚠️ Stok rendah — ${event.productLabel}`,
         content: `Stok ${event.productLabel} tinggal ${event.quantity} pcs (di bawah threshold ${event.threshold}). Perlu restock.`,
+      };
+    case "product.condition_changed": {
+      const toLabel = event.newCondition === "normal" ? "Normal" : event.newCondition === "defect" ? "Defect" : "Lama Tidak Laku";
+      const fromLabel = event.previousCondition === "normal" ? "Normal" : event.previousCondition === "defect" ? "Defect" : "Lama Tidak Laku";
+      return {
+        subject: `Status produk diubah → ${toLabel}`,
+        content: `${event.productLabel}: ${fromLabel} → ${toLabel}${event.reason ? `. Alasan: "${event.reason}"` : ""}.`,
+      };
+    }
+    case "product.aging_detected":
+      return {
+        subject: `⏳ Aging terdeteksi — ${event.productLabel}`,
+        content: `${event.productLabel} tidak ada outbound selama ${event.daysSinceLastOutbound} hari. Pertimbangkan diskon atau review harga.`,
       };
     case "delete_request.submitted":
       return {

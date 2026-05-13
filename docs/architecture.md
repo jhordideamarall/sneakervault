@@ -4,22 +4,22 @@
 
 | Layer | Technology | Alasan |
 |---|---|---|
-| Monorepo | Turborepo | Build caching, parallel tasks, dependency graph |
-| Frontend | Next.js 15 (App Router) + React 19 | SSR, Server Actions, sejalan dengan website client |
-| UI Components | Tailwind CSS 4 + shadcn/ui | Cepat develop, accessible, customizable |
+| Monorepo | Turborepo 2.9 | Build caching, parallel tasks, dependency graph |
+| Frontend | Next.js 16.2 (App Router + Proxy) + React 19.2 | SSR, Server Actions, sejalan dengan website client, mengikuti convention Next terbaru |
+| UI Components | Tailwind CSS 4.3 + shadcn/ui | Cepat develop, accessible, customizable |
 | Backend/API | Next.js Server Actions + API Routes | Collocated logic, type-safe |
-| Database | Supabase (PostgreSQL) | Cloud, realtime, RLS, storage, auth built-in |
-| Auth | Supabase Auth (email + password) | Simple, role-based via custom claims |
+| Database | Supabase (PostgreSQL 17) | Cloud, realtime, RLS, storage, auth built-in |
+| Auth | Supabase Auth + `@supabase/ssr` 0.10 | Simple, role-based via custom claims, SSR cookie handling terbaru |
 | File Storage | Supabase Storage | Foto produk, bukti pengiriman |
-| Barcode (Camera) | react-zxing (@zxing/library) | React hook, support 1D+2D, actively maintained |
+| Barcode (Camera) | react-zxing + @zxing/library 0.23 | React hook, support 1D+2D, actively maintained |
 | Barcode (Hardware) | Native keyboard event listener | USB scanner = keyboard input, no library needed |
-| Barcode Generate | JsBarcode | Generate barcode image dari kode numerik |
-| PDF Export | jsPDF + jsPDF-AutoTable | Client-side PDF generation |
+| Barcode Generate | JsBarcode 3.12 | Generate barcode image dari kode numerik |
+| PDF Export | jsPDF 4 + jsPDF-AutoTable 5 | Client-side PDF generation |
 | Excel Export | xlsx (SheetJS) | Client-side Excel generation |
-| Validation | Zod | Runtime type validation, shared between client/server |
+| Validation | Zod 4.4 | Runtime type validation, shared between client/server |
 | State Management | Zustand (minimal) | Lightweight, untuk scanner state |
-| Deploy | Vercel | Zero-config Next.js deploy, edge network |
-| Language | TypeScript (strict) | Type safety end-to-end |
+| Deploy | Vercel / Node.js >=20.9 | Zero-config Next.js deploy, edge network |
+| Language | TypeScript 6.0 (strict) | Type safety end-to-end |
 
 ---
 

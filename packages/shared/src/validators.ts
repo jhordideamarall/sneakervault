@@ -11,11 +11,43 @@ export const productInputSchema = z.object({
   quantity: z.coerce.number().int().nonnegative().default(0),
   hpp: z.coerce.number().nonnegative().default(0),
   sell_price: z.coerce.number().nonnegative(),
+  price_offline: z.coerce.number().nonnegative().optional(),
   default_supplier_id: z.string().uuid().nullable().optional(),
   image_url: z.string().url().nullable().optional(),
 });
 
 export type ProductInput = z.infer<typeof productInputSchema>;
+
+// ─── Product Condition Update ──────────────────────────────
+export const productConditionInputSchema = z
+  .object({
+    product_id: z.string().uuid(),
+    new_condition: z.enum(["normal", "defect", "dormant"]),
+    reason: z.string().optional(),
+  })
+  .refine(
+    (data) =>
+      data.new_condition === "normal" ||
+      (data.reason !== undefined && data.reason.trim().length > 0),
+    {
+      message: "Alasan wajib diisi jika status bukan normal",
+      path: ["reason"],
+    }
+  );
+
+export type ProductConditionInput = z.infer<typeof productConditionInputSchema>;
+
+// ─── Product Update (now includes price_offline, condition, image) ──────────
+export const productUpdateSchema = z.object({
+  id: z.string().uuid(),
+  sell_price: z.coerce.number().nonnegative().optional(),
+  price_offline: z.coerce.number().nonnegative().optional(),
+  color: z.string().optional(),
+  image_url: z.string().url().nullable().optional().or(z.literal("")),
+  default_supplier_id: z.string().uuid().nullable().optional(),
+});
+
+export type ProductUpdateInput = z.infer<typeof productUpdateSchema>;
 
 // ─── Purchase Batch ────────────────────────────────────────
 export const purchaseBatchInputSchema = z.object({
@@ -36,16 +68,27 @@ export const purchaseBatchInputSchema = z.object({
 export type PurchaseBatchInput = z.infer<typeof purchaseBatchInputSchema>;
 
 // ─── Packing Session ───────────────────────────────────────
-export const packingSessionInputSchema = z.object({
-  packed_by: z.string().uuid().optional(),
-  platform: z.enum(["shopee", "tiktok", "tokopedia", "offline", "other"]),
-  platform_order_id: z.string().optional(),
-  courier: z.enum(["jne", "jnt", "sicepat", "anteraja", "gosend", "grabexpress", "offline", "other"]),
-  courier_custom: z.string().optional(),
-}).refine(
-  (d) => d.platform === "offline" || d.courier !== "offline",
-  { message: "Kurir wajib dipilih jika platform bukan offline", path: ["courier"] }
-);
+export const packingSessionInputSchema = z
+  .object({
+    packed_by: z.string().uuid().optional(),
+    platform: z.enum(["shopee", "tiktok", "tokopedia", "offline", "other"]),
+    platform_order_id: z.string().optional(),
+    courier: z.enum([
+      "jne",
+      "jnt",
+      "sicepat",
+      "anteraja",
+      "gosend",
+      "grabexpress",
+      "offline",
+      "other",
+    ]),
+    courier_custom: z.string().optional(),
+  })
+  .refine((d) => d.platform === "offline" || d.courier !== "offline", {
+    message: "Kurir wajib dipilih jika platform bukan offline",
+    path: ["courier"],
+  });
 
 export type PackingSessionInput = z.infer<typeof packingSessionInputSchema>;
 
@@ -67,7 +110,12 @@ export type ProcessReturnInput = z.infer<typeof processReturnSchema>;
 
 // ─── Delete Request ────────────────────────────────────────
 export const deleteRequestInputSchema = z.object({
-  entity_type: z.enum(["product", "packing_session", "stock_movement", "purchase_batch"]),
+  entity_type: z.enum([
+    "product",
+    "packing_session",
+    "stock_movement",
+    "purchase_batch",
+  ]),
   entity_id: z.string().uuid(),
   reason: z.string().min(1, "Alasan wajib diisi"),
 });
@@ -85,6 +133,230 @@ export const supplierInputSchema = z.object({
 });
 
 export type SupplierInput = z.infer<typeof supplierInputSchema>;
+
+// ─── Customer (Phase 2) ────────────────────────────────────
+export const customerChannelEnum = z.enum([
+  "wa",
+  "shopee",
+  "tiktok",
+  "offline",
+  "website",
+  "mixed",
+]);
+
+export const customerInputSchema = z.object({
+  name: z.string().min(1, "Nama wajib diisi"),
+  contact_person: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().email("Email tidak valid").optional().or(z.literal("")),
+  address: z.string().optional(),
+  channel: customerChannelEnum.default("wa"),
+  npwp: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export type CustomerInput = z.infer<typeof customerInputSchema>;
+
+// ─── Bank Account (Phase 3) ────────────────────────────────
+export const bankAccountTypeEnum = z.enum([
+  "cash",
+  "bank",
+  "ewallet",
+  "marketplace_balance",
+]);
+
+export const bankAccountInputSchema = z.object({
+  name: z.string().min(1, "Nama wajib diisi"),
+  type: bankAccountTypeEnum,
+  bank_name: z.string().optional(),
+  account_number: z.string().optional(),
+  account_holder: z.string().optional(),
+  opening_balance: z.coerce.number().default(0),
+  currency: z.string().default("IDR"),
+  is_default: z.boolean().default(false),
+  notes: z.string().optional(),
+});
+
+export type BankAccountInput = z.infer<typeof bankAccountInputSchema>;
+
+// ─── Purchase Order (Phase 2) ──────────────────────────────
+export const poLineInputSchema = z.object({
+  product_id: z.string().uuid(),
+  ordered_qty: z.coerce.number().int().positive(),
+  unit_cost: z.coerce.number().nonnegative(),
+  notes: z.string().optional(),
+});
+
+export const poPaymentTypeSchema = z.enum(["credit", "cash", "dp"]);
+export type PoPaymentType = z.infer<typeof poPaymentTypeSchema>;
+
+export const purchaseOrderInputSchema = z
+  .object({
+    supplier_id: z.string().uuid("Vendor wajib dipilih"),
+    order_date: z.string().min(1),
+    expected_date: z.string().optional().nullable(),
+    tax: z.coerce.number().nonnegative().default(0),
+    shipping: z.coerce.number().nonnegative().default(0),
+    notes: z.string().optional(),
+    lines: z.array(poLineInputSchema).min(1, "Minimal 1 item"),
+    payment_type: poPaymentTypeSchema.default("credit"),
+    dp_amount: z.coerce.number().nonnegative().default(0),
+    dp_bank_account_id: z.string().uuid().nullable().optional(),
+  })
+  .refine(
+    (d) => d.payment_type === "credit" || !!d.dp_bank_account_id,
+    {
+      message: "Pilih akun bank sumber dana untuk Bayar Lunas / DP",
+      path: ["dp_bank_account_id"],
+    },
+  )
+  .refine(
+    (d) => d.payment_type !== "dp" || d.dp_amount > 0,
+    {
+      message: "Nominal DP harus lebih dari 0",
+      path: ["dp_amount"],
+    },
+  );
+
+export type PurchaseOrderInput = z.infer<typeof purchaseOrderInputSchema>;
+export type PoLineInput = z.infer<typeof poLineInputSchema>;
+
+export type PoStatus =
+  | "draft"
+  | "approved"
+  | "receiving"
+  | "completed"
+  | "cancelled";
+
+// ─── Receive PO (Phase 2 — Penerimaan) ─────────────────────
+export const receivePoLineSchema = z.object({
+  line_id: z.string().uuid(),
+  receive_qty: z.coerce.number().int().nonnegative(),
+});
+
+export const receivePurchaseOrderSchema = z.object({
+  po_id: z.string().uuid(),
+  notes: z.string().optional(),
+  lines: z.array(receivePoLineSchema).min(1),
+});
+
+export type ReceivePurchaseOrderInput = z.infer<
+  typeof receivePurchaseOrderSchema
+>;
+
+// ─── Purchase Invoice (Phase 2 — Faktur Pembelian) ─────────
+export const purchaseInvoiceInputSchema = z.object({
+  supplier_id: z.string().uuid("Vendor wajib dipilih"),
+  po_id: z.string().uuid().optional().nullable(),
+  invoice_date: z.string().min(1),
+  due_date: z.string().optional().nullable(),
+  subtotal: z.coerce.number().nonnegative(),
+  tax: z.coerce.number().nonnegative().default(0),
+  total: z.coerce.number().nonnegative(),
+  notes: z.string().optional(),
+  attachment_url: z.string().url().optional().or(z.literal("")).nullable(),
+});
+
+export type PurchaseInvoiceInput = z.infer<typeof purchaseInvoiceInputSchema>;
+export type PurchaseInvoiceStatus =
+  | "unpaid"
+  | "partial"
+  | "paid"
+  | "cancelled";
+
+// ─── Vendor Payment (Phase 2 — Pembayaran Vendor) ──────────
+export const paymentMethodEnum = z.enum([
+  "cash",
+  "bank_transfer",
+  "marketplace",
+  "other",
+]);
+
+export const paymentAllocationSchema = z.object({
+  invoice_id: z.string().uuid(),
+  amount: z.coerce.number().positive(),
+});
+
+export const vendorPaymentInputSchema = z.object({
+  supplier_id: z.string().uuid("Vendor wajib dipilih"),
+  payment_date: z.string().min(1),
+  payment_method: paymentMethodEnum,
+  bank_account_id: z.string().uuid().optional().nullable(),
+  reference_no: z.string().optional(),
+  notes: z.string().optional(),
+  attachment_url: z.string().url().optional().or(z.literal("")).nullable(),
+  allocations: z.array(paymentAllocationSchema).min(1, "Minimal 1 faktur"),
+});
+
+export type VendorPaymentInput = z.infer<typeof vendorPaymentInputSchema>;
+
+// ─── Sales Invoice (Phase 3) ───────────────────────────────
+export const salesInvoiceLineInputSchema = z.object({
+  product_id: z.string().uuid(),
+  qty: z.coerce.number().int().positive(),
+  unit_price: z.coerce.number().nonnegative(),
+  notes: z.string().optional(),
+});
+
+export const salesInvoiceInputSchema = z.object({
+  customer_id: z.string().uuid().optional().nullable(),
+  customer_name: z.string().min(1, "Nama customer wajib diisi"),
+  channel: customerChannelEnum,
+  invoice_date: z.string().min(1),
+  due_date: z.string().optional().nullable(),
+  discount: z.coerce.number().nonnegative().default(0),
+  shipping: z.coerce.number().nonnegative().default(0),
+  marketplace_fee: z.coerce.number().nonnegative().default(0),
+  tax: z.coerce.number().nonnegative().default(0),
+  marketplace_order_id: z.string().optional(),
+  notes: z.string().optional(),
+  lines: z.array(salesInvoiceLineInputSchema).min(1, "Minimal 1 item"),
+});
+
+export type SalesInvoiceInput = z.infer<typeof salesInvoiceInputSchema>;
+export type SalesInvoiceLineInput = z.infer<typeof salesInvoiceLineInputSchema>;
+export type SalesInvoiceStatus =
+  | "draft"
+  | "issued"
+  | "partial"
+  | "paid"
+  | "cancelled";
+
+// ─── Customer Payment (Phase 3 — Penerimaan Kas) ───────────
+export const customerPaymentAllocationSchema = z.object({
+  invoice_id: z.string().uuid(),
+  amount: z.coerce.number().positive(),
+});
+
+export const customerPaymentInputSchema = z.object({
+  customer_id: z.string().uuid().optional().nullable(),
+  customer_name: z.string().min(1, "Nama customer wajib"),
+  payment_date: z.string().min(1),
+  payment_method: paymentMethodEnum,
+  bank_account_id: z.string().uuid().optional().nullable(),
+  reference_no: z.string().optional(),
+  notes: z.string().optional(),
+  attachment_url: z.string().url().optional().or(z.literal("")).nullable(),
+  allocations: z
+    .array(customerPaymentAllocationSchema)
+    .min(1, "Minimal 1 invoice"),
+});
+
+export type CustomerPaymentInput = z.infer<typeof customerPaymentInputSchema>;
+
+// ─── Bank Transaction (manual entry) ───────────────────────
+export const bankTransactionTypeEnum = z.enum(["debit", "credit"]);
+
+export const bankTransactionInputSchema = z.object({
+  bank_account_id: z.string().uuid("Pilih akun"),
+  transaction_date: z.string().min(1),
+  type: bankTransactionTypeEnum,
+  amount: z.coerce.number().positive("Jumlah harus > 0"),
+  reference_no: z.string().optional(),
+  description: z.string().min(1, "Deskripsi wajib"),
+});
+
+export type BankTransactionInput = z.infer<typeof bankTransactionInputSchema>;
 
 // ─── Auth ──────────────────────────────────────────────────
 export const loginSchema = z.object({
