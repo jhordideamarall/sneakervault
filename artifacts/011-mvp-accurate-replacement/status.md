@@ -319,6 +319,21 @@ File `apps/web/supabase/migrations/20260514000000_phase5_po_payment_terms.sql` s
 
 ---
 
+## ⚠️ Production Readiness Gaps
+
+**Feature complete ≠ production ready.** Sebelum cutover dari Accurate Online ke Dewins.id, ada 4 hal kritis yang belum dikerjakan:
+
+1. **Import Marketplace** parser Shopee/TikTok
+2. **Data Migration** dari Accurate (saldo awal + master + outstanding)
+3. **Production Deployment** Vercel + domain
+4. **Persona Walkthrough & UAT** per role
+
+Detail lengkap, estimasi, dan task checklist → **[artifacts/018-production-readiness-gaps/status.md](../018-production-readiness-gaps/status.md)**
+
+Jangan claim "99% final" ke client sebelum 4 kritis di atas tuntas.
+
+---
+
 **BITE 19 SELESAI (2026-05-14): UX Adjustments Lanjutan dari Meeting3 — DEEP FIX**
 
 Berdasarkan feedback eksplisit user:

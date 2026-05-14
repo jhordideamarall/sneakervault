@@ -30,10 +30,13 @@ export default async function PurchaseOrderPage() {
     getBankAccounts({ includeInactive: false }),
   ]);
 
-  // Preload detail for each PO (so view/edit modal can open instantly).
-  // For larger volume, switch to lazy-load via separate route or RPC.
+  // Preload detail only for top N most-recent POs (orders already sorted by created_at DESC).
+  // Older POs lazy-load via server action `loadPoDetailAction` when user clicks view/edit.
+  // This caps N+1 cost — page load stays fast as PO history grows.
+  const PRELOAD_LIMIT = 30;
+  const ordersToPreload = orders.slice(0, PRELOAD_LIMIT);
   const detailEntries = await Promise.all(
-    orders.map(async (o) => {
+    ordersToPreload.map(async (o) => {
       const d = await getPurchaseOrderById(o.id);
       return [o.id, d] as const;
     }),

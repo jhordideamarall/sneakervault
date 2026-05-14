@@ -272,3 +272,11 @@ export async function updatePurchaseOrder(id: string, input: unknown) {
   revalidatePath(`/pembelian/purchase-order/${id}`);
   return { success: true };
 }
+
+export async function loadPoDetailAction(id: string) {
+  await requireRole(["owner", "finance", "admin_gudang"]);
+  const { getPurchaseOrderById } = await import("@/lib/queries");
+  const detail = await getPurchaseOrderById(id);
+  if (!detail) return { error: "PO tidak ditemukan" };
+  return { data: detail };
+}
