@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -198,6 +198,16 @@ function activeGroupId(pathname: string, groups: NavGroup[]): string | null {
   return null;
 }
 
+// Shows a spinner on the menu item being navigated to, so a click gives instant
+// feedback and users don't double-/spam-click while the next route loads.
+function NavSpinner() {
+  const { pending } = useLinkStatus();
+  if (!pending) return null;
+  return (
+    <span className="size-3.5 flex-shrink-0 animate-spin rounded-full border-[1.5px] border-white/25 border-t-white/80 @max-[120px]:hidden" />
+  );
+}
+
 export function Sidebar({
   roles,
   userId,
@@ -314,6 +324,7 @@ export function Sidebar({
                                     {item.badge}
                                   </span>
                                 ) : null}
+                                <NavSpinner />
                               </div>
                             </Link>
                           </li>
