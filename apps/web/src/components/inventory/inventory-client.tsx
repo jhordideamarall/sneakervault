@@ -820,50 +820,64 @@ function AddProductForm({
         </div>
         <div className="sm:col-span-3">
           <FieldLabel htmlFor="add-image">Foto Produk</FieldLabel>
-          <div className="flex items-center gap-3">
-            <label
-              className={cn(
-                "inline-flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm text-white/80 transition cursor-pointer hover:bg-white/[0.08]",
-                uploading && "pointer-events-none opacity-50",
-              )}
-            >
-              {uploading ? "Mengunggah…" : "Upload dari galeri / HP"}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhotoUpload}
-                disabled={uploading}
+          {form.image_url ? (
+            <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.04] p-2.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={form.image_url}
+                alt="Pratinjau"
+                className="size-12 flex-shrink-0 rounded-lg border border-white/10 object-cover"
               />
-            </label>
-            {form.image_url ? (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={form.image_url}
-                  alt="Pratinjau"
-                  className="size-11 rounded-lg border border-white/10 object-cover"
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium text-emerald-400">✓ Foto terpasang</p>
+                <p className="text-[11px] text-white/30">Tersimpan aman di storage</p>
+              </div>
+              <label className="flex-shrink-0 cursor-pointer rounded-lg border border-white/[0.08] px-3 py-1.5 text-[12px] text-white/70 transition hover:bg-white/[0.06]">
+                {uploading ? "…" : "Ganti"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoUpload}
+                  disabled={uploading}
                 />
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, image_url: "" })}
-                  className="text-[11px] text-white/40 hover:text-white/70"
-                >
-                  Hapus
-                </button>
-              </>
-            ) : null}
-          </div>
-          <Input
-            id="add-image"
-            type="url"
-            value={form.image_url}
-            onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-            placeholder="atau paste link gambar…"
-            className="mt-2"
-          />
+              </label>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, image_url: "" })}
+                className="flex-shrink-0 text-[12px] text-white/40 transition hover:text-rose-300"
+              >
+                Hapus
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm text-white/80 transition cursor-pointer hover:bg-white/[0.08]",
+                  uploading && "pointer-events-none opacity-50",
+                )}
+              >
+                {uploading ? "Mengunggah…" : "Upload dari galeri / HP"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoUpload}
+                  disabled={uploading}
+                />
+              </label>
+              <Input
+                id="add-image"
+                type="url"
+                value={form.image_url}
+                onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                placeholder="atau paste link gambar…"
+              />
+            </div>
+          )}
           <p className="mt-1 text-[11px] text-white/40">
-            Upload file dari galeri/HP, atau paste URL gambar.
+            Upload dari galeri/HP, atau paste URL gambar.
           </p>
         </div>
         {canEditPrice && (
