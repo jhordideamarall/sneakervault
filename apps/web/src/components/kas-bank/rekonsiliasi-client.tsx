@@ -1,16 +1,14 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import { Button, Card, Badge, Alert } from "@sneakervault/ui";
+import { Button, Card, Badge } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
 import {
   Upload,
-  FileUp,
   CheckCircle2,
   AlertCircle,
   ChevronRight,
-  Search,
   Banknote,
   ArrowRightLeft,
   X,
@@ -19,9 +17,118 @@ import { reconcileBankTransactions, getUnreconciledTransactions, type BankStatem
 import type { BankAccountRow, BankTransactionRow } from "@/lib/queries";
 
 type State = "setup" | "preview" | "result";
+type SheetRow = Record<string, unknown>;
 
 interface Props {
   bankAccounts: BankAccountRow[];
+}
+
+function normalizeKey(value: string) {
+  return value.trim().toLowerCase().replace(/[_\s.-]+/g, " ");
+}
+
+function pick(row: SheetRow, aliases: string[]) {
+  const normalized = new Map(
+    Object.entries(row).map(([key, value]) => [normalizeKey(key), value]),
+  );
+  for (const alias of aliases) {
+    const value = normalized.get(normalizeKey(alias));
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+  }
+  return "";
+}
+
+function readMoney(value: unknown) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const raw = String(value ?? "").trim();
+  if (!raw) return 0;
+  const negative = /\(|-/g.test(raw);
+  const compact = raw
+    .replace(/rp|idr|db|cr/gi, "")
+    .replace(/[()]/g, "")
+    .replace(/\s/g, "")
+    .replace(/[^\d,.-]/g, "");
+  const lastComma = compact.lastIndexOf(",");
+  const lastDot = compact.lastIndexOf(".");
+  let normalized = compact;
+  if (lastComma > -1 && lastDot > -1) {
+    normalized =
+      lastComma > lastDot
+        ? compact.replace(/\./g, "").replace(",", ".")
+        : compact.replace(/,/g, "");
+  } else if (lastComma > -1) {
+    const fraction = compact.slice(lastComma + 1);
+    normalized =
+      fraction.length > 0 && fraction.length <= 2
+        ? compact.replace(",", ".")
+        : compact.replace(/,/g, "");
+  } else if (lastDot > -1) {
+    const parts = compact.split(".");
+    const fraction = parts.at(-1) ?? "";
+    normalized =
+      parts.length > 2 || fraction.length === 3
+        ? compact.replace(/\./g, "")
+        : compact;
+  }
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return 0;
+  return negative ? -Math.abs(parsed) : parsed;
+}
+
+function formatDateParts(year: number, month: number, day: number) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function normalizeDate(value: unknown, parseExcelDate?: (serial: number) => { y: number; m: number; d: number } | null) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const parsed = parseExcelDate?.(value);
+    if (parsed) return formatDateParts(parsed.y, parsed.m, parsed.d);
+    const epoch = Date.UTC(1899, 11, 30);
+    return new Date(epoch + value * 86400000).toISOString().slice(0, 10);
+  }
+  const raw = String(value ?? "").trim();
+  const iso = raw.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
+  if (iso) return formatDateParts(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  const local = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
+  if (local) {
+    const year = Number(local[3]) < 100 ? 2000 + Number(local[3]) : Number(local[3]);
+    return formatDateParts(year, Number(local[2]), Number(local[1]));
+  }
+  return raw;
+}
+
+function extractReference(description: string) {
+  const match = description.match(/\b(?:INV|PAY|PO|SI|PI|TRX|REF|ORDER)?[-\s]?[A-Z0-9]{5,}\b/i);
+  return match?.[0]?.replace(/\s/g, "") ?? "";
+}
+
+function daysBetween(a: string, b: string) {
+  const da = new Date(a);
+  const db = new Date(b);
+  if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return null;
+  return Math.abs(da.getTime() - db.getTime()) / 86400000;
+}
+
+function scoreMatch(statement: BankStatementRow, tx: BankTransactionRow) {
+  if (statement.type !== tx.type) return 0;
+  if (Math.abs(Math.abs(Number(tx.amount)) - statement.amount) >= 0.01) return 0;
+
+  let score = 60;
+  const gap = daysBetween(String(tx.transaction_date), statement.date);
+  if (gap !== null && gap <= 3) score += 20;
+  else if (gap !== null && gap <= 14) score += 10;
+
+  const statementRef = (statement.reference ?? "").toLowerCase();
+  const txRef = String(tx.reference_no ?? "").toLowerCase();
+  const txDesc = String(tx.description ?? "").toLowerCase();
+  const statementDesc = statement.description.toLowerCase();
+  if (statementRef.length >= 4 && (txRef.includes(statementRef) || txDesc.includes(statementRef))) score += 20;
+  else if (txRef.length >= 4 && statementDesc.includes(txRef)) score += 20;
+  else if (statementDesc && txDesc && statementDesc.slice(0, 12) === txDesc.slice(0, 12)) score += 5;
+  return score;
 }
 
 export function RekonsiliasiClient({ bankAccounts }: Props) {
@@ -50,39 +157,42 @@ export function RekonsiliasiClient({ bankAccounts }: Props) {
         const XLSX = await import("xlsx");
         const wb = XLSX.read(data, { type: "array" });
         const ws = wb.Sheets[wb.SheetNames[0]!];
-        const rows = XLSX.utils.sheet_to_json(ws!) as any[];
+        const rows = XLSX.utils.sheet_to_json(ws!) as SheetRow[];
 
         if (rows.length === 0) {
           toast.push("File kosong", "error");
           return;
         }
 
-        // Logic parser BCA / Mandiri simple
-        // BCA usually: Tgl, Keterangan, Cabang, Jumlah, Saldo
-        // Mandiri usually: Tanggal, Keterangan, Debet, Kredit, Saldo
-        const mapped: BankStatementRow[] = rows.map((r) => {
-          const date = r.Tanggal || r.Tgl || r.Date || "";
-          const desc = r.Keterangan || r.Description || r.Memo || "";
-          const debit = Number(r.Debet || r.Debit || 0);
-          const credit = Number(r.Kredit || r.Credit || 0);
-          
-          // BCA format typically has one 'Jumlah' column with DB/CR indicator or sign
-          let amount = debit || credit || Number(r.Jumlah || r.Amount || 0);
-          let type: "debit" | "credit" = credit > 0 || (r.Type === "CR") ? "credit" : "debit";
-          
-          if (r.Jumlah && String(r.Jumlah).includes("DB")) {
-             type = "debit";
-             amount = Number(String(r.Jumlah).replace("DB", "").trim());
-          } else if (r.Jumlah && String(r.Jumlah).includes("CR")) {
-             type = "credit";
-             amount = Number(String(r.Jumlah).replace("CR", "").trim());
-          }
+        const parseExcelDate = (serial: number) => {
+          const parsed = XLSX.SSF.parse_date_code(serial) as { y: number; m: number; d: number } | null;
+          return parsed;
+        };
 
+        const mapped: BankStatementRow[] = rows.map((r) => {
+          const rawDate = pick(r, ["tanggal", "tgl", "date", "transaction date"]);
+          const desc = String(pick(r, ["keterangan", "description", "memo", "uraian", "remark"]));
+          const rawDebit = pick(r, ["debet", "debit", "db", "withdrawal"]);
+          const rawCredit = pick(r, ["kredit", "credit", "cr", "deposit"]);
+          const rawAmount = pick(r, ["jumlah", "amount", "nominal", "mutasi"]);
+          const rawType = String(pick(r, ["type", "tipe", "db cr", "d/c"])).toUpperCase();
+          const debit = Math.abs(readMoney(rawDebit));
+          const credit = Math.abs(readMoney(rawCredit));
+          const amountValue = readMoney(rawAmount);
+          const amountText = String(rawAmount ?? "").toUpperCase();
+          const hasDebitFlag = rawType.includes("DB") || rawType.includes("DEBIT") || amountText.includes("DB");
+          const hasCreditFlag = rawType.includes("CR") || rawType.includes("CREDIT") || amountText.includes("CR");
+          const type: "debit" | "credit" =
+            credit > 0 || hasCreditFlag || (!hasDebitFlag && debit === 0 && amountValue > 0)
+              ? "credit"
+              : "debit";
+          const amount = debit || credit || Math.abs(amountValue);
           return {
-            date: String(date),
-            description: String(desc),
+            date: normalizeDate(rawDate, parseExcelDate),
+            description: desc,
             type,
             amount: Math.abs(amount),
+            reference: extractReference(desc),
           };
         }).filter(r => r.amount > 0);
 
@@ -90,25 +200,24 @@ export function RekonsiliasiClient({ bankAccounts }: Props) {
 
         // Fetch internal transactions
         const tx = await getUnreconciledTransactions(selectedBankId);
-        setInternalTx(tx as any);
+        setInternalTx(tx);
 
         // Auto-match logic
         const autoMatches: MatchResult[] = [];
         const usedTx = new Set<string>();
 
         mapped.forEach((sr, sIdx) => {
-           // Find exact amount + type match
-           const match = tx.find(it => 
-              !usedTx.has(it.id) && 
-              Math.abs(Number(it.amount)) === sr.amount && 
-              it.type === sr.type
-           );
-           
+           const candidates = tx
+             .filter((it) => !usedTx.has(it.id))
+             .map((it) => ({ tx: it, score: scoreMatch(sr, it) }))
+             .filter((candidate) => candidate.score >= 70)
+             .sort((a, b) => b.score - a.score);
+           const match = candidates[0]?.tx;
            if (match) {
               autoMatches.push({
                  statement_row_idx: sIdx,
                  transaction_id: match.id,
-                 confidence: "exact"
+                 confidence: candidates[0]!.score >= 90 ? "exact" : "partial"
               });
               usedTx.add(match.id);
            }
@@ -116,7 +225,7 @@ export function RekonsiliasiClient({ bankAccounts }: Props) {
 
         setMatches(autoMatches);
         setState("preview");
-      } catch (err) {
+      } catch {
         toast.push("Gagal membaca file", "error");
       }
     };
@@ -126,7 +235,7 @@ export function RekonsiliasiClient({ bankAccounts }: Props) {
   function handleConfirm() {
     if (!selectedBankId) return;
     startTransition(async () => {
-      const r = await reconcileBankTransactions(selectedBankId, matches);
+      const r = await reconcileBankTransactions(selectedBankId, matches, statementRows);
       if (r.error) {
         setResult({ success: 0, error: r.error });
       } else {
@@ -234,7 +343,7 @@ export function RekonsiliasiClient({ bankAccounts }: Props) {
                                       </Badge>
                                    </div>
                                    <div className="text-xs text-white/70 mt-1 line-clamp-1">{sr.description}</div>
-                                   <div className="text-sm font-bold text-white mt-1">Rp {sr.amount.toLocaleString()}</div>
+                                   <div className="text-sm font-bold text-white mt-1">Rp {sr.amount.toLocaleString("id-ID")}</div>
                                 </div>
                                 
                                 {match ? (
@@ -276,7 +385,7 @@ export function RekonsiliasiClient({ bankAccounts }: Props) {
                                       <span className="uppercase">{it.type}</span>
                                    </div>
                                    <div className="text-xs text-white/80 mt-1 font-medium">{it.description}</div>
-                                   <div className="text-sm font-bold text-white">Rp {Math.abs(it.amount).toLocaleString()}</div>
+                                   <div className="text-sm font-bold text-white">Rp {Math.abs(it.amount).toLocaleString("id-ID")}</div>
                                 </div>
                                 <div className="flex flex-col items-end gap-2">
                                    {isMatched ? (
@@ -290,7 +399,7 @@ export function RekonsiliasiClient({ bankAccounts }: Props) {
                                             // Quick match if there's an unmatched row with same amount
                                             const openRowIdx = statementRows.findIndex((sr, idx) => 
                                                !matches.some(m => m.statement_row_idx === idx) && 
-                                               sr.amount === Math.abs(it.amount) && 
+                                               Math.abs(sr.amount - Math.abs(it.amount)) < 0.01 &&
                                                sr.type === it.type
                                             );
                                             if (openRowIdx !== -1) {

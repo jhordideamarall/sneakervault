@@ -1,8 +1,13 @@
-import { getBankTransactions, getBankAccounts } from "@/lib/queries";
+import {
+  getBankTransactions,
+  getBankAccounts,
+  getExpenseAccountOptions,
+  getExpenseCategories,
+  getExpenses,
+} from "@/lib/queries";
 import { getCurrentUser } from "@/lib/actions/auth";
-import { MutasiBankClient } from "@/components/kas-bank/mutasi-client";
+import { ExpensesClient } from "@/components/kas-bank/expenses-client";
 import { redirect } from "next/navigation";
-import { canSeeFinancialDashboard } from "@/config/permissions";
 import type { Role } from "@sneakervault/shared";
 
 export const dynamic = "force-dynamic";
@@ -12,21 +17,34 @@ export default async function KasBankPengeluaranPage() {
   if (!profile) redirect("/login");
 
   const roles = (profile.roles ?? []) as Role[];
-  if (!canSeeFinancialDashboard(roles)) redirect("/workspace");
+  const allowed = roles.some((role) =>
+    ["owner", "finance", "admin_gudang", "admin_online"].includes(role),
+  );
+  if (!allowed) redirect("/workspace");
 
-  const [transactions, bankAccounts] = await Promise.all([
-    getBankTransactions({ limit: 500 }),
+  const [
+    expenses,
+    categories,
+    accountOptions,
+    bankAccounts,
+    transactions,
+  ] = await Promise.all([
+    getExpenses({ limit: 500 }),
+    getExpenseCategories({ includeInactive: true }),
+    getExpenseAccountOptions(),
     getBankAccounts({ includeInactive: true }),
+    getBankTransactions({ limit: 500 }),
   ]);
 
   return (
-    <MutasiBankClient
-      transactions={transactions}
+    <ExpensesClient
+      expenses={expenses}
+      categories={categories}
+      accountOptions={accountOptions}
       bankAccounts={bankAccounts}
+      bankTransactions={transactions}
       roles={roles as string[]}
-      defaultTypeFilter="debit"
-      title="Pengeluaran Kas & Bank"
-      description="Semua uang keluar — bayar vendor, biaya operasional, transfer keluar"
+      userId={profile.id}
     />
   );
 }

@@ -1,27 +1,27 @@
 # Production Readiness Gaps — Dewins.id MVP
 
-**Status:** 🟡 In Progress
+**Status:** 🟡 Local Ready for UAT / DB Hardening Review
 **Sprint:** Final Stretch (pre-production)
 **Tanggal Mulai:** 2026-05-14
 **Tanggal Selesai:** —
-**Owner:** Jhordi + Claude
+**Owner:** Jhordi + Claude + Codex
 
 ---
 
 ## 0. Executive Summary
 
-**Feature completeness:** ~85-90% (core loops live, schema 15/15 OK di Supabase)
-**Production readiness:** ~60-65%
+**Feature completeness:** ~95%+ lokal untuk scope MVP + gap PDF utama.
+**Production readiness:** belum final sampai migration hardening direview, data testing operasional disiapkan, dan UAT per role selesai.
 
-> ⚠️ **Jangan janjikan "99% final" ke client sekarang.** Sistem inti memang sudah balance-tested dan build green, tapi 4 hal kritis di bawah ini belum dikerjakan. Tanpa itu, app tidak bisa dipakai harian oleh tim Dewin.
+> Catatan 2026-06-02: gap besar seperti POS, import marketplace, data sync Accurate, rekonsiliasi, stock opname, fiscal lock, dan expense sudah ada secara lokal. Yang perlu dijaga sekarang adalah correctness data akuntansi, apply migration hardening tanpa reset, dan testing operasional dengan data format asli client.
 
 ---
 
 ## 1. CRITICAL — wajib selesai sebelum go-live
 
-### 1.1 Import Marketplace Excel Parser 🔴
-**Lokasi:** `/penjualan/import-marketplace` (saat ini stub)
-**Why critical:** Dewin jualan terutama via Shopee + TikTok. **Tanpa parser ini, tidak ada cara rekam penjualan marketplace ke sistem.** Manual input invoice 100+/hari mustahil.
+### 1.1 Import Marketplace Excel Parser 🟡
+**Lokasi:** `/penjualan/import-marketplace`
+**Status update:** Parser/import flow sudah tersedia lokal dan wired ke invoice, stock decrement, dan jurnal. Masih perlu diuji dengan export asli Shopee/TikTok client untuk memastikan mapping kolom final.
 
 **Yang perlu dibangun:**
 - Parser Excel/CSV Shopee dengan field mapping (Order ID, SKU, qty, harga jual, biaya admin, ongkir, diskon, voucher, kanal, status)
@@ -32,10 +32,10 @@
 - Preview mode sebelum bulk-create
 - Error report untuk row yang gagal di-parse
 
-**Estimasi:** 1-2 hari deep work
+**Estimasi sisa:** 0.5-1 hari untuk sample asli + edge-case mapping.
 
-### 1.2 Data Migration dari Accurate Online 🔴
-**Why critical:** Saldo awal akun, master produk existing, customer existing, hutang/piutang outstanding — semua harus dipindah supaya sistem ini bisa "lanjut" dari posisi keuangan client saat ini, bukan zero.
+### 1.2 Data Migration dari Accurate Online 🟡
+**Status update:** Jalur `/settings/data-sync` sudah tersedia untuk master data dan saldo awal secara deterministic/non-AI. Tetap perlu sample export Accurate dan verifikasi trial balance di tanggal cutoff.
 
 **Yang perlu disiapkan:**
 - Export schema dari Accurate Online (saldo awal CoA, master produk, customer, supplier, outstanding invoices)
@@ -47,7 +47,7 @@
 - Cutoff strategy: tanggal X jam Y, sistem lama freeze, sistem baru go-live
 - Verification: trial balance Accurate = Neraca Dewins.id di tanggal cutoff
 
-**Estimasi:** 1-2 hari (tergantung volume data dan kerapian export Accurate)
+**Estimasi sisa:** 0.5-1.5 hari tergantung kerapian export Accurate.
 
 ### 1.3 Production Deployment 🔴
 **Why critical:** Saat ini app jalan di localhost. Tim Dewin tidak bisa pakai.
@@ -76,22 +76,19 @@
   - **Shopkeeper:** Tambah customer baru → Buat sales invoice offline → Penerimaan kas tunai
 - Catat semua friction points, fix, retest
 
-**Estimasi:** 0.5-1 hari testing + 1 hari fix iterasi
+**Estimasi:** 0.5-1 hari testing + 1 hari fix iterasi. Ini tetap wajib sebelum production.
 
 ---
 
 ## 2. MEDIUM — perlu tapi tidak blocking
 
-### 2.1 Rekonsiliasi BCA Dedicated 🟡
-**Lokasi:** `/kas-bank/rekonsiliasi` (stub)
-**Workaround sekarang:** Toggle reconciled di Mutasi Bank — works tapi tidak ideal untuk volume tinggi.
-**Yang ideal:** Upload statement BCA (CSV/PDF) → auto-match dengan bank_transactions → manual approve untuk yang tidak ke-match.
-**Estimasi:** 0.5-1 hari
+### 2.1 Rekonsiliasi BCA/Mandiri Dedicated 🟡
+**Lokasi:** `/kas-bank/rekonsiliasi`
+**Status update:** Upload XLSX/CSV, parser rekening koran, auto-match scoring, manual match, duplicate guard, validasi server-side, dan audit log match sudah tersedia lokal.
+**Sisa:** uji dengan file rekening koran asli client dan tambah template khusus bila format bank berbeda.
 
-### 2.2 POS untuk Penjualan WA / Offline / Toko 🟡
-**Why:** Di meeting, client confirm "WA bisa diakalin lewat POS". Tapi sistem POS belum ada — saat ini admin harus manual buat sales invoice untuk tiap penjualan offline. Tidak scalable kalau volume offline tinggi.
-**Yang dibutuhkan:** Quick POS form (1 customer + multi product line + bayar tunai/transfer langsung) yang generate invoice+payment+kurang stok dalam 1 step.
-**Estimasi:** 1 hari
+### 2.2 POS untuk Penjualan WA / Offline / Toko ✅
+**Status update:** POS sudah tersedia lokal dan membuat invoice, payment, stock movement, mutasi bank, dan jurnal dalam satu flow. UX input nominal di POS sudah memakai text formatted `id-ID` tanpa spinner.
 
 ### 2.3 Multi-Warehouse (Jember) 🟡
 **Saat ini:** Pakai notes di inventory (workaround).
@@ -132,16 +129,16 @@ Untuk hindari kebingungan, ini yang **SUDAH OK** dan tidak perlu dikerjakan ulan
 
 ## 5. Tasks (urutan prioritas)
 
-- [ ] **#1 Import Marketplace Parser** (Shopee + TikTok) — 1-2 hari
+- [x] **#1 Import Marketplace Parser** (Shopee + TikTok) — selesai lokal, perlu sample asli
 - [ ] **#2 Production Deployment** ke Vercel + domain — 0.5-1 hari
-- [ ] **#3 Data Migration dari Accurate** (script + verifikasi trial balance) — 1-2 hari
+- [x] **#3 Data Migration dari Accurate** (script + verifikasi trial balance) — jalur lokal selesai, trial balance butuh sample Accurate
 - [ ] **#4 Persona Walkthrough & UAT** — 1-2 hari
-- [ ] #5 Rekonsiliasi BCA dedicated parser — 0.5-1 hari
-- [ ] #6 POS module untuk WA/Offline/Toko — 1 hari
+- [x] #5 Rekonsiliasi BCA/Mandiri dedicated parser — selesai lokal, perlu sample asli
+- [x] #6 POS module untuk WA/Offline/Toko — selesai lokal
 - [ ] #7 Training session tim Dewin
-- [ ] #8 Mobile responsiveness pass
+- [ ] #8 Mobile responsiveness + UI numeric formatting pass
 
-**Total estimasi critical (1-4): 3.5-7 hari fokus.**
+**Estimasi sisa sebelum production:** UAT + sample data + deployment + UI refinement, sekitar 2-4 hari fokus tergantung temuan testing.
 
 ---
 

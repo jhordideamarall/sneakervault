@@ -5,6 +5,7 @@ import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { createClient } from "@sneakervault/supabase/server";
 import { revalidatePath } from "next/cache";
+import { assertPeriodOpen } from "@/lib/fiscal-periods";
 
 const ALLOWED_ROLES = ["owner", "finance"] as const;
 
@@ -24,6 +25,8 @@ export async function createManualJournalEntry(data: {
   if (!data.entry_date || !data.description) {
     return { error: { _form: ["Tanggal dan deskripsi wajib diisi"] } };
   }
+  const lock = await assertPeriodOpen(data.entry_date);
+  if (lock.error) return { error: { _form: [lock.error] } };
   if (!data.lines || data.lines.length < 2) {
     return { error: { _form: ["Jurnal minimal 2 baris"] } };
   }
@@ -101,6 +104,8 @@ export async function updateManualJournalEntry(data: {
   if (!data.entry_date || !data.description) {
     return { error: { _form: ["Tanggal dan deskripsi wajib diisi"] } };
   }
+  const lock = await assertPeriodOpen(data.entry_date);
+  if (lock.error) return { error: { _form: [lock.error] } };
   if (!data.lines || data.lines.length < 2) {
     return { error: { _form: ["Jurnal minimal 2 baris"] } };
   }

@@ -1,7 +1,8 @@
 export { cn } from "./cn";
 export { Button } from "./button";
 export type { ButtonProps } from "./button";
-export { Input, Textarea, FieldLabel, FieldError } from "./input";
+export { Input, NumberInput, Textarea, FieldLabel, FieldError } from "./input";
+export type { NumberInputProps } from "./input";
 export { Select } from "./select";
 export { Card, CardHeader, CardTitle } from "./card";
 export { Badge } from "./badge";

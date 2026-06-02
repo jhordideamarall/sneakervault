@@ -6,6 +6,7 @@ import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
 import { journalForCustomerPayment, reverseJournalBySource } from "../journal-engine";
+import { assertPeriodOpen } from "@/lib/fiscal-periods";
 
 const ROLES = ["owner", "finance"] as const;
 
@@ -13,6 +14,8 @@ export async function createCustomerPayment(input: unknown) {
   const profile = await requireRole([...ROLES]);
   const parsed = customerPaymentInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+  const lock = await assertPeriodOpen(parsed.data.payment_date);
+  if (lock.error) return { error: { _form: [lock.error] } };
 
   const supabase = await createClient();
 
@@ -155,11 +158,13 @@ export async function createCustomerPayment(input: unknown) {
   // Credit bank balance + transaction
   if (bankAcc) {
     const newBal = bankAcc.current_balance + totalAmount;
-    await supabase
+    const { error: bankError } = await supabase
       .from("bank_accounts")
       .update({ current_balance: newBal })
       .eq("id", bankAcc.id);
-    await supabase.from("bank_transactions").insert({
+    if (bankError) return { error: { _form: [bankError.message] } };
+
+    const { error: transactionError } = await supabase.from("bank_transactions").insert({
       bank_account_id: bankAcc.id,
       transaction_date: parsed.data.payment_date,
       type: "credit",
@@ -171,10 +176,11 @@ export async function createCustomerPayment(input: unknown) {
       related_entity_id: payment.id,
       created_by: profile.id,
     });
+    if (transactionError) return { error: { _form: [transactionError.message] } };
   }
 
   // Auto-journal: Dr Kas-Bank / Cr Piutang
-  await journalForCustomerPayment({
+  const journal = await journalForCustomerPayment({
     payment_id: payment.id,
     payment_number: payNum as string,
     payment_date: parsed.data.payment_date,
@@ -182,6 +188,7 @@ export async function createCustomerPayment(input: unknown) {
     bank_account_id: parsed.data.bank_account_id ?? null,
     user_id: profile.id,
   });
+  if (journal.error) return { error: { _form: [journal.error] } };
 
   await logActivity({
     user_id: profile.id,
@@ -206,15 +213,18 @@ export async function createCustomerPayment(input: unknown) {
 export async function reverseCustomerPayment(id: string, reason?: string) {
   const profile = await requireRole([...ROLES]);
   const supabase = await createClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const lock = await assertPeriodOpen(today);
+  if (lock.error) return { error: lock.error };
 
-  const { data: payment } = await supabase
+  const { data: payment, error: paymentErr } = await supabase
     .from("customer_payments")
     .select(
       "id, payment_number, amount, bank_account_id, customer_payment_allocations(invoice_id, amount)",
     )
     .eq("id", id)
     .single();
-  if (!payment) return { error: "Penerimaan tidak ditemukan" };
+  if (paymentErr || !payment) return { error: "Penerimaan tidak ditemukan" };
 
   const allocs = (payment.customer_payment_allocations ?? []) as Array<{
     invoice_id: string;
@@ -222,12 +232,14 @@ export async function reverseCustomerPayment(id: string, reason?: string) {
   }>;
 
   for (const a of allocs) {
-    const { data: inv } = await supabase
+    const { data: inv, error: invErr } = await supabase
       .from("sales_invoices")
       .select("paid_amount, total, status")
       .eq("id", a.invoice_id)
       .single();
-    if (!inv) continue;
+    if (invErr || !inv) {
+      return { error: invErr?.message ?? "Invoice tidak ditemukan" };
+    }
     const newPaid = Math.max(0, Number(inv.paid_amount) - Number(a.amount));
     const newStatus =
       newPaid <= 0.001
@@ -235,41 +247,51 @@ export async function reverseCustomerPayment(id: string, reason?: string) {
         : newPaid >= Number(inv.total) - 0.001
           ? "paid"
           : "partial";
-    await supabase
+    const { error: invoiceErr } = await supabase
       .from("sales_invoices")
       .update({ paid_amount: newPaid, status: newStatus })
       .eq("id", a.invoice_id);
+    if (invoiceErr) return { error: invoiceErr.message };
   }
 
   if (payment.bank_account_id) {
-    const { data: ba } = await supabase
+    const { data: ba, error: bankErr } = await supabase
       .from("bank_accounts")
       .select("current_balance")
       .eq("id", payment.bank_account_id)
       .single();
-    if (ba) {
-      const restored = Number(ba.current_balance) - Number(payment.amount);
-      await supabase
-        .from("bank_accounts")
-        .update({ current_balance: restored })
-        .eq("id", payment.bank_account_id);
-      await supabase.from("bank_transactions").insert({
-        bank_account_id: payment.bank_account_id,
-        transaction_date: new Date().toISOString().slice(0, 10),
-        type: "debit",
-        amount: Number(payment.amount),
-        balance_after: restored,
-        description: `Reverse penerimaan ${payment.payment_number}${reason ? ` — ${reason}` : ""}`,
-        related_entity_type: "customer_payment_reversal",
-        related_entity_id: payment.id,
-        created_by: profile.id,
-      });
+    if (bankErr || !ba) {
+      return { error: bankErr?.message ?? "Akun bank tidak ditemukan" };
     }
+    const restored = Number(ba.current_balance) - Number(payment.amount);
+    const { error: bankUpdateErr } = await supabase
+      .from("bank_accounts")
+      .update({ current_balance: restored })
+      .eq("id", payment.bank_account_id);
+    if (bankUpdateErr) return { error: bankUpdateErr.message };
+
+    const { error: bankTxErr } = await supabase.from("bank_transactions").insert({
+      bank_account_id: payment.bank_account_id,
+      transaction_date: today,
+      type: "debit",
+      amount: Number(payment.amount),
+      balance_after: restored,
+      description: `Reverse penerimaan ${payment.payment_number}${reason ? ` - ${reason}` : ""}`,
+      related_entity_type: "customer_payment_reversal",
+      related_entity_id: payment.id,
+      created_by: profile.id,
+    });
+    if (bankTxErr) return { error: bankTxErr.message };
   }
 
-  await reverseJournalBySource("customer_payment", id, reason);
+  const journal = await reverseJournalBySource("customer_payment", id, reason);
+  if (journal.error) return { error: journal.error };
 
-  await supabase.from("customer_payments").delete().eq("id", id);
+  const { error: deleteErr } = await supabase
+    .from("customer_payments")
+    .delete()
+    .eq("id", id);
+  if (deleteErr) return { error: deleteErr.message };
 
   await logActivity({
     user_id: profile.id,

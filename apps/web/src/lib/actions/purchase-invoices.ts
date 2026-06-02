@@ -6,6 +6,7 @@ import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
 import { journalForPurchaseInvoice, reverseJournalBySource } from "../journal-engine";
+import { assertPeriodOpen } from "@/lib/fiscal-periods";
 
 const ROLES = ["owner", "finance"] as const;
 
@@ -13,6 +14,8 @@ export async function createPurchaseInvoice(input: unknown) {
   const profile = await requireRole([...ROLES]);
   const parsed = purchaseInvoiceInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+  const lock = await assertPeriodOpen(parsed.data.invoice_date);
+  if (lock.error) return { error: { _form: [lock.error] } };
 
   const supabase = await createClient();
   const { data: invNum, error: numErr } = await supabase.rpc(
@@ -42,7 +45,7 @@ export async function createPurchaseInvoice(input: unknown) {
   if (error) return { error: { _form: [error.message] } };
 
   // Auto-journal: Dr Persediaan + (Dr Pajak Masukan) / Cr Hutang Usaha
-  await journalForPurchaseInvoice({
+  const journal = await journalForPurchaseInvoice({
     invoice_id: data.id,
     invoice_number: invNum as string,
     invoice_date: parsed.data.invoice_date,
@@ -50,6 +53,7 @@ export async function createPurchaseInvoice(input: unknown) {
     tax: parsed.data.tax,
     user_id: profile.id,
   });
+  if (journal.error) return { error: { _form: [journal.error] } };
 
   await logActivity({
     user_id: profile.id,
@@ -72,6 +76,8 @@ export async function updatePurchaseInvoice(id: string, input: unknown) {
   const profile = await requireRole([...ROLES]);
   const parsed = purchaseInvoiceInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+  const lock = await assertPeriodOpen(parsed.data.invoice_date);
+  if (lock.error) return { error: { _form: [lock.error] } };
 
   const supabase = await createClient();
   const { data: existing } = await supabase

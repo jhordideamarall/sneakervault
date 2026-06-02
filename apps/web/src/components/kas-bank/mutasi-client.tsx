@@ -46,6 +46,8 @@ const sourceLabel: Record<string, string> = {
   vendor_payment_reversal: "Reverse Bayar Vendor",
   customer_payment: "Terima Customer",
   customer_payment_reversal: "Reverse Terima",
+  expense: "Pengeluaran",
+  expense_void: "Void Pengeluaran",
   manual: "Manual",
 };
 

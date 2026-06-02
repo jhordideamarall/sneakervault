@@ -8,6 +8,8 @@ import {
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { notifyEvent } from "./notify";
+import { assertPeriodOpen } from "@/lib/fiscal-periods";
+import { createStockMovement } from "./stock-movements";
 
 export async function scanInbound(barcode: string) {
   await requireRole(["owner", "admin_gudang"]);
@@ -56,6 +58,8 @@ export async function confirmInbound(input: unknown) {
   const profile = await requireRole(["owner", "admin_gudang"]);
   const parsed = confirmInboundSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+  const lock = await assertPeriodOpen(parsed.data.batch_data.ordered_at);
+  if (lock.error) return { error: { _form: [lock.error] } };
 
   const { product_id, quantity, batch_data } = parsed.data;
   const supabase = await createClient();
@@ -84,16 +88,15 @@ export async function confirmInbound(input: unknown) {
   if (batchErr) return { error: { _form: [batchErr.message] } };
 
   // Record stock movement
-  const { error: mvErr } = await supabase.from("stock_movements").insert({
+  const movement = await createStockMovement(supabase, {
     product_id,
     type: "inbound",
     quantity,
     unit_cost: batch_data.unit_cost,
     reference_type: "purchase_batch",
     reference_id: batch.id,
-    performed_by: profile.id,
   });
-  if (mvErr) return { error: { _form: [mvErr.message] } };
+  if (movement.error) return { error: { _form: [movement.error] } };
 
   // Recompute HPP per-SKU (meeting 2 decision — was per-model).
   // Formula inside the RPC: weighted-avg of existing stock × old HPP + new.

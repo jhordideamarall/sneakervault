@@ -5,6 +5,7 @@ import { packingSessionInputSchema } from "@sneakervault/shared";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { notifyEvent, checkLowStockAndNotify } from "./notify";
+import { createStockMovement } from "./stock-movements";
 
 export async function createPackingSession(input: unknown) {
   const profile = await requireRole(["owner", "shopkeeper"]);
@@ -83,15 +84,15 @@ export async function scanPackingItem(sessionId: string, barcode: string) {
   if (itemErr) return { error: itemErr.message };
 
   // Record stock movement
-  await supabase.from("stock_movements").insert({
+  const movement = await createStockMovement(supabase, {
     product_id: product.id,
     type: "outbound",
     quantity: 1,
     unit_cost: product.hpp,
     reference_type: "packing_item",
     reference_id: item.id,
-    performed_by: profile.id,
   });
+  if (movement.error) return { error: movement.error };
 
   await logActivity({
     user_id: profile.id,

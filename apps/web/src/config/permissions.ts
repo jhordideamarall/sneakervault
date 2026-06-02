@@ -17,6 +17,7 @@ export const routePermissions: Record<string, Role[]> = {
 
   // Gudang
   "/inventory": ["owner", "admin_gudang", "admin_online", "shopkeeper", "finance"],
+  "/inventory/opname": ["owner", "admin_gudang", "finance"],
   "/inbound": ["owner", "admin_gudang"],
   "/outbound": ["owner", "shopkeeper"],
   "/returns": ["owner", "admin_gudang", "admin_online"],
@@ -31,6 +32,7 @@ export const routePermissions: Record<string, Role[]> = {
 
   // Penjualan (Phase 3)
   "/penjualan": ["owner", "finance", "admin_online"],
+  "/penjualan/pos": ["owner", "shopkeeper", "finance"],
   "/penjualan/invoice": ["owner", "finance", "admin_online"],
   "/penjualan/penerimaan-kas": ["owner", "finance"],
   "/penjualan/import-marketplace": ["owner", "finance", "admin_online"],
@@ -41,7 +43,7 @@ export const routePermissions: Record<string, Role[]> = {
   "/kas-bank": ["owner", "finance"],
   "/kas-bank/akun": ["owner", "finance"],
   "/kas-bank/penerimaan": ["owner", "finance"],
-  "/kas-bank/pengeluaran": ["owner", "finance"],
+  "/kas-bank/pengeluaran": ["owner", "finance", "admin_gudang", "admin_online"],
   "/kas-bank/mutasi": ["owner", "finance"],
   "/kas-bank/rekonsiliasi": ["owner", "finance"],
 
@@ -49,6 +51,7 @@ export const routePermissions: Record<string, Role[]> = {
   "/buku-besar": ["owner", "finance"],
   "/buku-besar/coa": ["owner", "finance"],
   "/buku-besar/journal": ["owner", "finance"],
+  "/buku-besar/periode": ["owner", "finance"],
 
   // Laporan
   "/reports": ["owner", "finance"],
@@ -64,6 +67,7 @@ export const routePermissions: Record<string, Role[]> = {
 
   // Pengaturan & audit
   "/settings": ["owner"],
+  "/settings/data-sync": ["owner"],
   "/activity-log": ["owner"],
   "/delete-requests": ["owner"],
 };

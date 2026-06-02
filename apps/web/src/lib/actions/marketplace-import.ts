@@ -5,6 +5,8 @@ import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
 import { journalForSalesInvoice } from "../journal-engine";
+import { assertPeriodOpen } from "@/lib/fiscal-periods";
+import { createStockMovement } from "./stock-movements";
 
 const ROLES = ["owner", "finance", "admin_online"] as const;
 
@@ -39,6 +41,15 @@ export async function bulkImportMarketplaceOrders(orders: MarketplaceOrder[]) {
 
   for (const order of orders) {
     try {
+      const lock = await assertPeriodOpen(order.order_date);
+      if (lock.error) {
+        results.errors.push({
+          order_id: order.order_id,
+          reason: lock.error,
+        });
+        continue;
+      }
+
       // 1. Check if order already exists to prevent double import
       const { data: existing } = await supabase
         .from("sales_invoices")
@@ -112,7 +123,11 @@ export async function bulkImportMarketplaceOrders(orders: MarketplaceOrder[]) {
       const total = orderSubtotal - order.discount + order.shipping_fee - order.admin_fee;
 
       // 4. Generate Invoice Number
-      const { data: invNum } = await supabase.rpc("generate_sales_invoice_number");
+      const { data: invNum, error: invNumErr } = await supabase.rpc("generate_sales_invoice_number");
+      if (invNumErr) {
+        results.errors.push({ order_id: order.order_id, reason: invNumErr.message });
+        continue;
+      }
 
       // 5. Insert Invoice (Status: Issued)
       const { data: invoice, error: invErr } = await supabase
@@ -152,24 +167,53 @@ export async function bulkImportMarketplaceOrders(orders: MarketplaceOrder[]) {
       }
 
       // 7. Stock decrement & Auto-Journal
+      const decrementedLines: typeof validLines = [];
       for (const line of validLines) {
-        await supabase.rpc("decrement_product_quantity", {
+        const { data: decOk, error: decErr } = await supabase.rpc("decrement_product_quantity", {
           p_id: line.product_id,
           qty: line.qty,
         });
+        if (decErr || !decOk) {
+          results.errors.push({
+            order_id: order.order_id,
+            reason: decErr?.message ?? "Stok tidak cukup saat import marketplace",
+          });
+          stockIssue = true;
+          break;
+        }
+        decrementedLines.push(line);
 
-        await supabase.from("stock_movements").insert({
+        const movement = await createStockMovement(supabase, {
           product_id: line.product_id,
           type: "outbound",
           quantity: line.qty,
           unit_cost: line.unit_cost,
           reference_type: "sales_invoice_line",
           reference_id: invoice.id,
-          performed_by: profile.id,
         });
+        if (movement.error) {
+          results.errors.push({ order_id: order.order_id, reason: movement.error });
+          stockIssue = true;
+          break;
+        }
+      }
+      if (stockIssue) {
+        for (const line of decrementedLines) {
+          await supabase.rpc("increment_product_quantity", {
+            p_id: line.product_id,
+            qty: line.qty,
+          });
+        }
+        await supabase
+          .from("stock_movements")
+          .delete()
+          .eq("reference_type", "sales_invoice_line")
+          .eq("reference_id", invoice.id);
+        await supabase.from("sales_invoices").delete().eq("id", invoice.id);
+        continue;
       }
 
-      await journalForSalesInvoice({
+      const journal = await journalForSalesInvoice({
         invoice_id: invoice.id,
         invoice_number: invNum as string,
         invoice_date: order.order_date,
@@ -183,6 +227,10 @@ export async function bulkImportMarketplaceOrders(orders: MarketplaceOrder[]) {
         cogs_total: cogsTotal,
         user_id: profile.id,
       });
+      if (journal.error) {
+        results.errors.push({ order_id: order.order_id, reason: journal.error });
+        continue;
+      }
 
       results.success++;
     } catch (err) {

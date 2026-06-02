@@ -6,6 +6,7 @@ import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
 import { journalForVendorPayment, reverseJournalBySource } from "../journal-engine";
+import { assertPeriodOpen } from "@/lib/fiscal-periods";
 
 const ROLES = ["owner", "finance"] as const;
 
@@ -13,6 +14,8 @@ export async function createVendorPayment(input: unknown) {
   const profile = await requireRole([...ROLES]);
   const parsed = vendorPaymentInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+  const lock = await assertPeriodOpen(parsed.data.payment_date);
+  if (lock.error) return { error: { _form: [lock.error] } };
 
   const supabase = await createClient();
 
@@ -152,12 +155,13 @@ export async function createVendorPayment(input: unknown) {
   // Update bank account balance + record transaction
   if (bankAcc) {
     const newBal = bankAcc.current_balance - totalAmount;
-    await supabase
+    const { error: bankError } = await supabase
       .from("bank_accounts")
       .update({ current_balance: newBal })
       .eq("id", bankAcc.id);
+    if (bankError) return { error: { _form: [bankError.message] } };
 
-    await supabase.from("bank_transactions").insert({
+    const { error: transactionError } = await supabase.from("bank_transactions").insert({
       bank_account_id: bankAcc.id,
       transaction_date: parsed.data.payment_date,
       type: "debit",
@@ -169,10 +173,11 @@ export async function createVendorPayment(input: unknown) {
       related_entity_id: payment.id,
       created_by: profile.id,
     });
+    if (transactionError) return { error: { _form: [transactionError.message] } };
   }
 
   // Auto-journal: Dr Hutang Usaha / Cr Kas-Bank
-  await journalForVendorPayment({
+  const journal = await journalForVendorPayment({
     payment_id: payment.id,
     payment_number: payNum as string,
     payment_date: parsed.data.payment_date,
@@ -180,6 +185,7 @@ export async function createVendorPayment(input: unknown) {
     bank_account_id: parsed.data.bank_account_id ?? null,
     user_id: profile.id,
   });
+  if (journal.error) return { error: { _form: [journal.error] } };
 
   await logActivity({
     user_id: profile.id,
@@ -205,15 +211,18 @@ export async function createVendorPayment(input: unknown) {
 export async function reverseVendorPayment(id: string, reason?: string) {
   const profile = await requireRole([...ROLES]);
   const supabase = await createClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const lock = await assertPeriodOpen(today);
+  if (lock.error) return { error: lock.error };
 
-  const { data: payment } = await supabase
+  const { data: payment, error: paymentErr } = await supabase
     .from("vendor_payments")
     .select(
       "id, payment_number, amount, bank_account_id, vendor_payment_allocations(invoice_id, amount)",
     )
     .eq("id", id)
     .single();
-  if (!payment) return { error: "Pembayaran tidak ditemukan" };
+  if (paymentErr || !payment) return { error: "Pembayaran tidak ditemukan" };
 
   const allocs = (payment.vendor_payment_allocations ?? []) as Array<{
     invoice_id: string;
@@ -222,12 +231,14 @@ export async function reverseVendorPayment(id: string, reason?: string) {
 
   // Reverse each invoice
   for (const a of allocs) {
-    const { data: inv } = await supabase
+    const { data: inv, error: invErr } = await supabase
       .from("purchase_invoices")
       .select("paid_amount, total, status")
       .eq("id", a.invoice_id)
       .single();
-    if (!inv) continue;
+    if (invErr || !inv) {
+      return { error: invErr?.message ?? "Faktur tidak ditemukan" };
+    }
     const newPaid = Math.max(0, Number(inv.paid_amount) - Number(a.amount));
     const newStatus =
       newPaid <= 0.001
@@ -235,44 +246,54 @@ export async function reverseVendorPayment(id: string, reason?: string) {
         : newPaid >= Number(inv.total) - 0.001
           ? "paid"
           : "partial";
-    await supabase
+    const { error: invoiceErr } = await supabase
       .from("purchase_invoices")
       .update({ paid_amount: newPaid, status: newStatus })
       .eq("id", a.invoice_id);
+    if (invoiceErr) return { error: invoiceErr.message };
   }
 
   // Restore bank balance + insert reversing credit transaction
   if (payment.bank_account_id) {
-    const { data: ba } = await supabase
+    const { data: ba, error: bankErr } = await supabase
       .from("bank_accounts")
       .select("current_balance")
       .eq("id", payment.bank_account_id)
       .single();
-    if (ba) {
-      const restored = Number(ba.current_balance) + Number(payment.amount);
-      await supabase
-        .from("bank_accounts")
-        .update({ current_balance: restored })
-        .eq("id", payment.bank_account_id);
-      await supabase.from("bank_transactions").insert({
-        bank_account_id: payment.bank_account_id,
-        transaction_date: new Date().toISOString().slice(0, 10),
-        type: "credit",
-        amount: Number(payment.amount),
-        balance_after: restored,
-        description: `Reverse pembayaran ${payment.payment_number}${reason ? ` — ${reason}` : ""}`,
-        related_entity_type: "vendor_payment_reversal",
-        related_entity_id: payment.id,
-        created_by: profile.id,
-      });
+    if (bankErr || !ba) {
+      return { error: bankErr?.message ?? "Akun bank tidak ditemukan" };
     }
+    const restored = Number(ba.current_balance) + Number(payment.amount);
+    const { error: bankUpdateErr } = await supabase
+      .from("bank_accounts")
+      .update({ current_balance: restored })
+      .eq("id", payment.bank_account_id);
+    if (bankUpdateErr) return { error: bankUpdateErr.message };
+
+    const { error: bankTxErr } = await supabase.from("bank_transactions").insert({
+      bank_account_id: payment.bank_account_id,
+      transaction_date: today,
+      type: "credit",
+      amount: Number(payment.amount),
+      balance_after: restored,
+      description: `Reverse pembayaran ${payment.payment_number}${reason ? ` - ${reason}` : ""}`,
+      related_entity_type: "vendor_payment_reversal",
+      related_entity_id: payment.id,
+      created_by: profile.id,
+    });
+    if (bankTxErr) return { error: bankTxErr.message };
   }
 
   // Reverse journal
-  await reverseJournalBySource("vendor_payment", id, reason);
+  const journal = await reverseJournalBySource("vendor_payment", id, reason);
+  if (journal.error) return { error: journal.error };
 
   // Delete payment (cascade deletes allocations)
-  await supabase.from("vendor_payments").delete().eq("id", id);
+  const { error: deleteErr } = await supabase
+    .from("vendor_payments")
+    .delete()
+    .eq("id", id);
+  if (deleteErr) return { error: deleteErr.message };
 
   await logActivity({
     user_id: profile.id,

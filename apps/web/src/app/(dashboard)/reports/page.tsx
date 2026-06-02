@@ -1,5 +1,14 @@
 import { Suspense } from "react";
-import { getStockValue, getProfitReport, getAgingReport, getFinancialSummaryByModel } from "@/lib/queries";
+import {
+  getAgingReport,
+  getExpenseReport,
+  getFinancialSummaryByModel,
+  getMarketplaceCostReport,
+  getProfitByChannelReport,
+  getProfitReport,
+  getStockCardReport,
+  getStockValue,
+} from "@/lib/queries";
 import { ReportsExport } from "@/components/reports/reports-export";
 import {
   nowWIB,
@@ -65,6 +74,14 @@ export default async function ReportsPage({
 
       <Suspense fallback={<TableSkeleton />}>
         <AgingTable />
+      </Suspense>
+
+      <Suspense key={`channel-${filterKey}`} fallback={<TableSkeleton />}>
+        <ChannelAndExpenseTables from={from} to={to} />
+      </Suspense>
+
+      <Suspense fallback={<TableSkeleton />}>
+        <StockCardTable />
       </Suspense>
     </div>
   );
@@ -250,6 +267,119 @@ async function AgingTable() {
               </tr>
             );
           })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+async function ChannelAndExpenseTables({ from, to }: { from: string; to: string }) {
+  const [channelProfit, marketplaceCosts, expenses] = await Promise.all([
+    getProfitByChannelReport(from, to),
+    getMarketplaceCostReport(from, to),
+    getExpenseReport(from, to),
+  ]);
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-2">
+      <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+        <div className="border-b border-white/[0.04] px-6 py-4">
+          <p className="text-sm font-medium text-white/80">Profit per Channel</p>
+          <p className="text-[11px] text-white/30">Omset, HPP, fee, dan margin per sumber penjualan</p>
+        </div>
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-white/[0.04] text-[11px] uppercase tracking-wider text-white/30">
+              <th className="px-6 py-3 text-left font-medium">Channel</th>
+              <th className="px-6 py-3 text-right font-medium">Invoice</th>
+              <th className="px-6 py-3 text-right font-medium">Revenue</th>
+              <th className="px-6 py-3 text-right font-medium">Profit</th>
+              <th className="px-6 py-3 text-right font-medium">Margin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {channelProfit.length === 0 ? (
+              <tr><td colSpan={5} className="px-6 py-8 text-center text-sm text-white/25">Belum ada data channel</td></tr>
+            ) : channelProfit.map((row) => (
+              <tr key={row.channel} className="border-b border-white/[0.02]">
+                <td className="px-6 py-3 text-sm font-medium capitalize text-white/75">{row.channel}</td>
+                <td className="px-6 py-3 text-right text-xs text-white/50">{row.invoices}</td>
+                <td className="px-6 py-3 text-right text-xs text-white/50">Rp {formatNum(row.revenue)}</td>
+                <td className="px-6 py-3 text-right text-xs font-semibold text-emerald-300">Rp {formatNum(row.profit)}</td>
+                <td className="px-6 py-3 text-right text-xs text-white/60">{row.margin.toFixed(1)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+        <div className="border-b border-white/[0.04] px-6 py-4">
+          <p className="text-sm font-medium text-white/80">Biaya Marketplace & Pengeluaran</p>
+          <p className="text-[11px] text-white/30">Fee marketplace dan beban operasional per kategori</p>
+        </div>
+        <div className="divide-y divide-white/[0.04]">
+          <div className="p-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/35">Marketplace</p>
+            {marketplaceCosts.length === 0 ? (
+              <p className="text-sm text-white/25">Belum ada fee marketplace.</p>
+            ) : marketplaceCosts.map((row) => (
+              <div key={row.channel} className="flex items-center justify-between py-2 text-sm">
+                <span className="capitalize text-white/70">{row.channel}</span>
+                <span className="text-white/50">Fee Rp {formatNum(row.marketplace_fee)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="p-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/35">Pengeluaran</p>
+            {expenses.length === 0 ? (
+              <p className="text-sm text-white/25">Belum ada pengeluaran paid.</p>
+            ) : expenses.slice(0, 8).map((row) => (
+              <div key={`${row.account_code}-${row.category}`} className="flex items-center justify-between py-2 text-sm">
+                <span className="text-white/70">{row.category}</span>
+                <span className="text-white/50">Rp {formatNum(row.total)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+async function StockCardTable() {
+  const rows = await getStockCardReport();
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+      <div className="border-b border-white/[0.04] px-6 py-4">
+        <p className="text-sm font-medium text-white/80">Kartu Stok</p>
+        <p className="text-[11px] text-white/30">Ringkasan pergerakan inbound, outbound, adjustment, dan stok akhir</p>
+      </div>
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-white/[0.04] text-[11px] uppercase tracking-wider text-white/30">
+            <th className="px-6 py-3 text-left font-medium">Produk</th>
+            <th className="px-6 py-3 text-right font-medium">Masuk</th>
+            <th className="px-6 py-3 text-right font-medium">Keluar</th>
+            <th className="px-6 py-3 text-right font-medium">Adjust</th>
+            <th className="px-6 py-3 text-right font-medium">Akhir</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr><td colSpan={5} className="px-6 py-8 text-center text-sm text-white/25">Belum ada kartu stok.</td></tr>
+          ) : rows.slice(0, 25).map((row) => (
+            <tr key={row.product_id} className="border-b border-white/[0.02]">
+              <td className="px-6 py-3">
+                <p className="text-sm text-white/75">{row.product_label}</p>
+                <p className="font-mono text-[11px] text-white/30">{row.sku}</p>
+              </td>
+              <td className="px-6 py-3 text-right text-xs text-white/50">{row.inbound}</td>
+              <td className="px-6 py-3 text-right text-xs text-white/50">{row.outbound}</td>
+              <td className="px-6 py-3 text-right text-xs text-white/50">{row.adjustment}</td>
+              <td className="px-6 py-3 text-right text-xs font-semibold text-white/80">{row.current_qty}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

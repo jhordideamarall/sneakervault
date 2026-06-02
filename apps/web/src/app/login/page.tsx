@@ -1,7 +1,14 @@
 import { login } from "@/lib/actions/auth";
 import { LoginForm } from "@/components/auth/login-form";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ inactive?: string }>;
+}) {
+  const params = await searchParams;
+  const inactive = params?.inactive === "1";
+
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#1F1F1E] px-4 py-10 text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(16,185,129,0.14),transparent_32%),radial-gradient(circle_at_75%_75%,rgba(59,130,246,0.12),transparent_30%)]" />
@@ -51,7 +58,7 @@ export default function LoginPage() {
               <p className="mt-2 text-sm text-white/45">Gunakan kredensial staff yang sudah terdaftar.</p>
             </div>
 
-            <LoginForm action={login} />
+            <LoginForm action={login} inactive={inactive} />
           </div>
         </div>
       </section>

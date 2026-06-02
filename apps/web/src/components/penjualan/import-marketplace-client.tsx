@@ -19,6 +19,29 @@ import { bulkImportMarketplaceOrders } from "@/lib/actions/marketplace-import";
 
 type ImportState = "upload" | "preview" | "processing" | "result";
 
+function readNumber(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value !== "string") return 0;
+  const cleaned = value
+    .replace(/rp/gi, "")
+    .replace(/\s/g, "")
+    .replace(/\./g, "")
+    .replace(/,/g, ".");
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function readDate(value: unknown, fallback: string): string {
+  if (!value) return fallback;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime())
+    ? fallback
+    : parsed.toISOString().slice(0, 10);
+}
+
 export function ImportMarketplaceClient() {
   const router = useRouter();
   const toast = useToast();
@@ -52,7 +75,8 @@ export function ImportMarketplaceClient() {
 
       try {
         const XLSX = await import("xlsx");
-        const wb = XLSX.read(data, { type: "array" });
+        const isCsv = file.name.toLowerCase().endsWith(".csv");
+        const wb = XLSX.read(data, { type: isCsv ? "string" : "array" });
         const sheetName = wb.SheetNames[0];
         if (!sheetName) {
           toast.push("File Excel tidak valid", "error");
@@ -65,7 +89,10 @@ export function ImportMarketplaceClient() {
           return;
         }
 
-        const rows = XLSX.utils.sheet_to_json(sheet) as Record<string, any>[];
+        const rows = XLSX.utils.sheet_to_json(sheet, {
+          raw: false,
+          defval: "",
+        }) as Record<string, unknown>[];
 
         if (rows.length === 0) {
           toast.push("File kosong", "error");
@@ -112,26 +139,26 @@ export function ImportMarketplaceClient() {
             orderId = String(row["No. Pesanan"] || "");
             customerName = String(row["Username (Pembeli)"] || "Shopee User");
             sku = String(row["No. Referensi SKU"] || "").trim();
-            qty = Number(row["Jumlah"] || 0);
-            unitPrice = Number(row["Harga Asli"] || 0);
+            qty = readNumber(row["Jumlah"]);
+            unitPrice = readNumber(row["Harga Asli"]);
             productName = String(row["Nama Produk"] || "");
-            orderDateVal = row["Waktu Pesanan Dibuat"] ? (new Date(row["Waktu Pesanan Dibuat"]).toISOString().split("T")[0] as string) : orderDateVal;
-            shipping = Number(row["Ongkos Kirim Dibayar Pembeli"] || 0);
-            discount = Math.abs(Number(row["Diskon Dari Penjual"] || 0));
-            adminFee = Number(row["Biaya Administrasi"] || 0);
+            orderDateVal = readDate(row["Waktu Pesanan Dibuat"], orderDateVal);
+            shipping = readNumber(row["Ongkos Kirim Dibayar Pembeli"]);
+            discount = Math.abs(readNumber(row["Diskon Dari Penjual"]));
+            adminFee = readNumber(row["Biaya Administrasi"]);
           } else if (detected === "tiktok") {
             orderId = String(row["Order ID"] || "");
             customerName = String(row["Buyer Username"] || "TikTok User");
             sku = String(row["Seller SKU"] || "").trim();
-            qty = Number(row["Quantity"] || 0);
-            unitPrice = Number(row["SKU Unit Original Price"] || 0);
+            qty = readNumber(row["Quantity"]);
+            unitPrice = readNumber(row["SKU Unit Original Price"]);
             productName = String(row["Product Name"] || "");
-            orderDateVal = row["Order Creation Time"] ? (new Date(row["Order Creation Time"]).toISOString().split("T")[0] as string) : orderDateVal;
-            shipping = Number(row["Shipping Fee"] || 0);
-            discount = Math.abs(Number(row["Seller Discount"] || 0));
+            orderDateVal = readDate(row["Order Creation Time"], orderDateVal);
+            shipping = readNumber(row["Shipping Fee"]);
+            discount = Math.abs(readNumber(row["Seller Discount"]));
           }
 
-          if (!orderId || !sku) return;
+          if (!orderId || !sku || qty <= 0) return;
 
           if (!mappedOrders.has(orderId)) {
             mappedOrders.set(orderId, {
@@ -165,7 +192,11 @@ export function ImportMarketplaceClient() {
         toast.push("Gagal memproses file", "error");
       }
     };
-    reader.readAsArrayBuffer(file);
+    if (file.name.toLowerCase().endsWith(".csv")) {
+      reader.readAsText(file);
+    } else {
+      reader.readAsArrayBuffer(file);
+    }
   }
 
   function handleImport() {
@@ -190,16 +221,16 @@ export function ImportMarketplaceClient() {
             Upload Laporan Penjualan
           </h2>
           <p className="mb-8 max-w-sm text-sm text-white/50">
-            Pilih file Excel laporan pesanan dari Shopee Seller Center atau TikTok Shop Seller Center.
+            Pilih file Excel/CSV laporan pesanan dari Shopee Seller Center atau TikTok Shop Seller Center.
           </p>
 
           <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-semibold text-black transition-all hover:bg-white/90 active:scale-95">
             <FileUp size={18} />
-            Pilih File Excel
+            Pilih File
             <input
               ref={fileInputRef}
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.xls,.csv"
               onChange={handleFile}
               className="hidden"
             />
@@ -208,11 +239,11 @@ export function ImportMarketplaceClient() {
           <div className="mt-8 flex gap-4 text-xs text-white/30">
             <div className="flex items-center gap-1.5">
               <div className="h-1.5 w-1.5 rounded-full bg-orange-500" />
-              Shopee Support
+              Shopee Excel/CSV
             </div>
             <div className="flex items-center gap-1.5">
               <div className="h-1.5 w-1.5 rounded-full bg-pink-500" />
-              TikTok Support
+              TikTok Excel/CSV
             </div>
           </div>
         </Card>

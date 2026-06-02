@@ -72,6 +72,20 @@ export type PaymentMethod =
   | "marketplace"
   | "other";
 
+export type ExpenseStatus =
+  | "draft"
+  | "approved"
+  | "paid"
+  | "rejected"
+  | "voided";
+
+export type StockOpnameStatus =
+  | "open"
+  | "counting"
+  | "review"
+  | "approved"
+  | "cancelled";
+
 export type CoaType =
   | "asset"
   | "liability"

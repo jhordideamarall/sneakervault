@@ -3,10 +3,9 @@
 Folder ini berisi tracking progress setiap sprint/task.
 Setiap subfolder = satu sprint atau task besar dengan `status.md` di dalamnya.
 
-## Status Project: **READY FOR DEPLOY** ✓
+## Status Project: **LOCAL READY FOR UAT / DB HARDENING REVIEW**
 
-Seluruh fitur MVP (F01-F18) dari [`docs/prd.md`](../docs/prd.md) sudah terimplementasi.
-Satu-satunya yang belum dilakukan: **deploy 5 migration files ke Supabase via Dashboard SQL Editor**.
+Seluruh fitur MVP dan scope gap PDF utama sudah terimplementasi lokal. Status saat ini bukan "langsung deploy", karena ada migration hardening baru yang perlu direview sebelum diterapkan ke Supabase remote dan database belum di-reset untuk testing operasional.
 
 ---
 
@@ -19,6 +18,12 @@ Satu-satunya yang belum dilakukan: **deploy 5 migration files ke Supabase via Da
 | 002 | [Sprint 1 — Auth + Layout + Backend Logic](./002-sprint-1-auth-layout-backend/status.md) | ✅ Done | Supabase Auth, middleware, dashboard shell, semua server actions + queries |
 | 003 | [Sprint 2-7 — UI & Feature Completion](./003-sprint-2-7-ui-completion/status.md) | ✅ Done | Semua UI wired, flows lengkap, export PDF/Excel, barcode gen, realtime, bulk import, backup script |
 | 004 | [Sprint 4 — Audit Fixes + UI Overhaul](./004-audit-fixes-ui-overhaul/status.md) | 🟡 In Progress | Deep audit fixes, UI redesign dark sidebar, role-based menu |
+| 019 | [PDF Scope Gap A1 — Expenses Foundation](./019-expenses-foundation/status.md) | ✅ Done | Pengeluaran/beban, kategori, storage bukti, jurnal expense |
+| 020 | [PDF Scope Gap A2 — POS Kasir Offline](./020-pos-kasir-offline/status.md) | ✅ Done | POS checkout offline, invoice+payment+stock+journal, struk, sound asset |
+| 021 | [PDF Scope Gap A3 — Stock Opname](./021-stock-opname/status.md) | ✅ Done | Cycle count, variance, approval, stock movement, adjustment journal |
+| 022 | [PDF Scope Gap A4 — Fiscal Period Lock](./022-fiscal-period-lock/status.md) | ✅ Done | Tutup buku, reopen, lock enforcement di action transaksi |
+| 023 | [PDF Scope Gap B1-B4 — Import, Reports, Data Sync](./023-import-reports-data-sync/status.md) | ✅ Done | Marketplace parser, reports, dashboard stats, Accurate cutover sync, PDF parser |
+| 024 | [Operational Hardening — Accounting, Stock, Rekonsiliasi](./024-operational-hardening/status.md) | 🟡 Review | Auth inactive gate, stock movement RPC migration, rekonsiliasi parser, accounting action error handling |
 
 ---
 
@@ -47,19 +52,17 @@ Satu-satunya yang belum dilakukan: **deploy 5 migration files ke Supabase via Da
 
 ---
 
-## Next Steps (handover ke production)
+## Next Steps (review sebelum production)
 
-1. **Deploy migration**
-   - Buka Supabase Dashboard → SQL Editor
-   - Copy-paste berurutan: `schema.sql` → `functions.sql` → `triggers.sql` → `rls.sql` → `seed_helpers.sql`
-2. **Bootstrap owner**
-   - Sign up owner account via app `/login`
-   - Di SQL Editor: `SELECT public.bootstrap_first_owner('email-owner@domain.com');`
-3. **Seed data awal**
-   - Import produk lewat tombol "📂 Import CSV/Excel" di halaman Inventory
-   - Assign role ke tim via `/settings`
-4. **Deploy app**
-   - Push ke GitHub → connect Vercel project
-   - Set env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_APP_URL`
-5. **Backup rutin**
-   - Jalankan `./scripts/backup.sh` setiap 1-2 minggu
+1. **Review migration hardening lokal**
+   - File: `apps/web/supabase/migrations/20260602091212_operational_hardening_no_reset.sql`
+   - Scope: RPC stok/HPP, RPC stock movement, policy storage `chat-attachments`.
+2. **Apply migration setelah disetujui**
+   - Jangan reset database sebelum keputusan testing operasional.
+3. **Testing operasional per role**
+   - Owner, finance, admin gudang, admin online, shopkeeper.
+   - Fokus: POS, marketplace import, PO receive, payment, expense, stock opname, rekonsiliasi, mail/pesan anti-fraud.
+4. **Refine UI per modul**
+   - Prioritas setelah logic stabil: numeric input formatter, density table, dan microcopy workflow.
+5. **Deploy production**
+   - Vercel + env vars + domain + backup/monitoring setelah UAT hijau.

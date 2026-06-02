@@ -5,6 +5,7 @@ import { purchaseOrderInputSchema } from "@sneakervault/shared";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
+import { assertPeriodOpen } from "@/lib/fiscal-periods";
 
 const ROLES = ["owner", "finance"] as const;
 
@@ -25,6 +26,8 @@ export async function createPurchaseOrder(input: unknown) {
   const profile = await requireRole([...ROLES]);
   const parsed = purchaseOrderInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+  const lock = await assertPeriodOpen(parsed.data.order_date);
+  if (lock.error) return { error: { _form: [lock.error] } };
 
   const supabase = await createClient();
 
@@ -201,6 +204,8 @@ export async function updatePurchaseOrder(id: string, input: unknown) {
   const profile = await requireRole([...ROLES]);
   const parsed = purchaseOrderInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+  const lock = await assertPeriodOpen(parsed.data.order_date);
+  if (lock.error) return { error: { _form: [lock.error] } };
 
   const supabase = await createClient();
 

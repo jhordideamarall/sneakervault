@@ -5,6 +5,7 @@ import { bankTransactionInputSchema } from "@sneakervault/shared";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
+import { assertPeriodOpen } from "@/lib/fiscal-periods";
 
 const ROLES = ["owner", "finance"] as const;
 
@@ -12,6 +13,8 @@ export async function createBankTransaction(input: unknown) {
   const profile = await requireRole([...ROLES]);
   const parsed = bankTransactionInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+  const lock = await assertPeriodOpen(parsed.data.transaction_date);
+  if (lock.error) return { error: { _form: [lock.error] } };
 
   const supabase = await createClient();
 

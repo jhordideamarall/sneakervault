@@ -1,5 +1,6 @@
 import { createClient } from "@sneakervault/supabase/server";
 import { getCurrentUser } from "@/lib/actions/auth";
+import type { ExpenseStatus, PaymentMethod } from "@sneakervault/shared";
 import {
   daysInWIBMonth,
   getWIBDay,
@@ -152,15 +153,24 @@ export async function getDashboardStats() {
   await requireOwner();
   const supabase = await createClient();
 
-  const [stockRes, soldRes, returnsRes] = await Promise.all([
-    supabase.from("products").select("quantity, hpp").eq("is_active", true),
+  const [stockRes, soldRes, returnsRes, pendingOrdersRes] = await Promise.all([
+    supabase.from("products").select("quantity, hpp, condition, first_inbound_at").eq("is_active", true),
     supabase.from("packing_items").select("sell_price, unit_hpp, packing_sessions!inner(status)").in("packing_sessions.status", ["shipped", "completed", "has_return"]).gte("created_at", getMonthStart()),
     supabase.from("returns").select("id").eq("status", "pending"),
+    supabase.from("sales_invoices").select("id").in("status", ["draft", "issued", "partial"]),
   ]);
 
   const products = stockRes.data ?? [];
   const totalItems = products.reduce((s, p) => s + p.quantity, 0);
   const totalValue = products.reduce((s, p) => s + p.quantity * p.hpp, 0);
+  const lowStock = products.filter((p) => p.quantity > 0 && p.quantity < 3).length;
+  const defectStock = products
+    .filter((p) => p.condition === "defect")
+    .reduce((s, p) => s + p.quantity, 0);
+  const slowMoving = products.filter((p) => {
+    if (!p.first_inbound_at || p.quantity <= 0) return false;
+    return (Date.now() - new Date(p.first_inbound_at).getTime()) / 86400000 > 60;
+  }).length;
 
   const soldItems = soldRes.data ?? [];
   const monthlyRevenue = soldItems.reduce((s, i) => s + (i.sell_price ?? 0), 0);
@@ -172,6 +182,10 @@ export async function getDashboardStats() {
     monthlyRevenue,
     monthlyProfit,
     pendingReturns: returnsRes.data?.length ?? 0,
+    pendingOrders: pendingOrdersRes.data?.length ?? 0,
+    lowStock,
+    defectStock,
+    slowMoving,
   };
 }
 
@@ -917,6 +931,374 @@ export async function getBankTransactions(opts?: {
     is_reconciled: r.is_reconciled,
     created_at: r.created_at,
   }));
+}
+
+// ─── Expenses (PDF Scope A1) ───────────────────────────────
+export type ExpenseCategoryRow = {
+  id: string;
+  name: string;
+  account_code: string;
+  is_active: boolean;
+  is_system: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ExpenseAccountOption = {
+  code: string;
+  name: string;
+};
+
+export async function getExpenseCategories(opts?: {
+  includeInactive?: boolean;
+}): Promise<ExpenseCategoryRow[]> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("expense_categories")
+    .select("id, name, account_code, is_active, is_system, sort_order, created_at, updated_at")
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+  if (!opts?.includeInactive) q = q.eq("is_active", true);
+  const { data } = await q;
+  return (data as ExpenseCategoryRow[] | null) ?? [];
+}
+
+export async function getExpenseAccountOptions(): Promise<
+  ExpenseAccountOption[]
+> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("chart_of_accounts")
+    .select("code, name")
+    .eq("type", "expense")
+    .eq("is_active", true)
+    .order("code", { ascending: true });
+  return (data as ExpenseAccountOption[] | null) ?? [];
+}
+
+export type ExpenseRow = {
+  id: string;
+  expense_number: string;
+  expense_date: string;
+  category_id: string;
+  category_name: string;
+  category_account_code: string;
+  description: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  bank_account_id: string;
+  bank_account_name: string;
+  receipt_path: string | null;
+  status: ExpenseStatus;
+  created_by: string | null;
+  created_by_name: string | null;
+  approved_by_name: string | null;
+  approved_at: string | null;
+  paid_by_name: string | null;
+  paid_at: string | null;
+  rejected_by_name: string | null;
+  rejected_at: string | null;
+  rejection_reason: string | null;
+  voided_by_name: string | null;
+  voided_at: string | null;
+  void_reason: string | null;
+  created_at: string;
+};
+
+export async function getExpenses(opts?: {
+  status?: ExpenseStatus | "all";
+  limit?: number;
+}): Promise<ExpenseRow[]> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("expenses")
+    .select(
+      "id, expense_number, expense_date, category_id, description, amount, payment_method, bank_account_id, receipt_path, status, created_by, approved_at, paid_at, rejected_at, rejection_reason, voided_at, void_reason, created_at, expense_categories:category_id(name, account_code), bank_accounts:bank_account_id(name), creator:created_by(full_name), approver:approved_by(full_name), payer:paid_by(full_name), rejecter:rejected_by(full_name), voider:voided_by(full_name)",
+    )
+    .order("expense_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (opts?.status && opts.status !== "all") q = q.eq("status", opts.status);
+  if (opts?.limit) q = q.limit(opts.limit);
+  const { data } = await q;
+  return (
+    (data as unknown as Array<{
+      id: string;
+      expense_number: string;
+      expense_date: string;
+      category_id: string;
+      description: string;
+      amount: number;
+      payment_method: PaymentMethod;
+      bank_account_id: string;
+      receipt_path: string | null;
+      status: ExpenseStatus;
+      created_by: string | null;
+      approved_at: string | null;
+      paid_at: string | null;
+      rejected_at: string | null;
+      rejection_reason: string | null;
+      voided_at: string | null;
+      void_reason: string | null;
+      created_at: string;
+      expense_categories: { name: string; account_code: string } | null;
+      bank_accounts: { name: string } | null;
+      creator: { full_name: string } | null;
+      approver: { full_name: string } | null;
+      payer: { full_name: string } | null;
+      rejecter: { full_name: string } | null;
+      voider: { full_name: string } | null;
+    }> | null) ?? []
+  ).map((r) => ({
+    id: r.id,
+    expense_number: r.expense_number,
+    expense_date: r.expense_date,
+    category_id: r.category_id,
+    category_name: r.expense_categories?.name ?? "—",
+    category_account_code: r.expense_categories?.account_code ?? "—",
+    description: r.description,
+    amount: Number(r.amount),
+    payment_method: r.payment_method,
+    bank_account_id: r.bank_account_id,
+    bank_account_name: r.bank_accounts?.name ?? "—",
+    receipt_path: r.receipt_path,
+    status: r.status,
+    created_by: r.created_by,
+    created_by_name: r.creator?.full_name ?? null,
+    approved_by_name: r.approver?.full_name ?? null,
+    approved_at: r.approved_at,
+    paid_by_name: r.payer?.full_name ?? null,
+    paid_at: r.paid_at,
+    rejected_by_name: r.rejecter?.full_name ?? null,
+    rejected_at: r.rejected_at,
+    rejection_reason: r.rejection_reason,
+    voided_by_name: r.voider?.full_name ?? null,
+    voided_at: r.voided_at,
+    void_reason: r.void_reason,
+    created_at: r.created_at,
+  }));
+}
+
+// ─── Stock Opname (PDF Scope A3) ──────────────────────────
+export type StockOpnameStatus =
+  | "open"
+  | "counting"
+  | "review"
+  | "approved"
+  | "cancelled";
+
+export type StockOpnameSessionRow = {
+  id: string;
+  opname_number: string;
+  opname_date: string;
+  status: StockOpnameStatus;
+  scope: string;
+  notes: string | null;
+  started_by_name: string | null;
+  reviewed_by_name: string | null;
+  approved_by_name: string | null;
+  approved_at: string | null;
+  created_at: string;
+  total_lines: number;
+  counted_lines: number;
+  variance_lines: number;
+};
+
+export async function getStockOpnameSessions(): Promise<
+  StockOpnameSessionRow[]
+> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("stock_opname_sessions")
+    .select(
+      "id, opname_number, opname_date, status, scope, notes, approved_at, created_at, starter:started_by(full_name), reviewer:reviewed_by(full_name), approver:approved_by(full_name), stock_opname_lines(id, physical_qty, variance)",
+    )
+    .order("opname_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  return (
+    (data as unknown as Array<{
+      id: string;
+      opname_number: string;
+      opname_date: string;
+      status: StockOpnameStatus;
+      scope: string;
+      notes: string | null;
+      approved_at: string | null;
+      created_at: string;
+      starter: { full_name: string } | null;
+      reviewer: { full_name: string } | null;
+      approver: { full_name: string } | null;
+      stock_opname_lines: Array<{
+        id: string;
+        physical_qty: number | null;
+        variance: number;
+      }> | null;
+    }> | null) ?? []
+  ).map((row) => {
+    const lines = row.stock_opname_lines ?? [];
+    return {
+      id: row.id,
+      opname_number: row.opname_number,
+      opname_date: row.opname_date,
+      status: row.status,
+      scope: row.scope,
+      notes: row.notes,
+      started_by_name: row.starter?.full_name ?? null,
+      reviewed_by_name: row.reviewer?.full_name ?? null,
+      approved_by_name: row.approver?.full_name ?? null,
+      approved_at: row.approved_at,
+      created_at: row.created_at,
+      total_lines: lines.length,
+      counted_lines: lines.filter((line) => line.physical_qty !== null).length,
+      variance_lines: lines.filter((line) => Number(line.variance) !== 0).length,
+    };
+  });
+}
+
+export type StockOpnameLineRow = {
+  id: string;
+  product_id: string;
+  product_label: string;
+  sku: string;
+  barcode: string;
+  system_qty: number;
+  physical_qty: number | null;
+  variance: number;
+  unit_cost: number;
+  reason: string | null;
+};
+
+export type StockOpnameDetail = StockOpnameSessionRow & {
+  lines: StockOpnameLineRow[];
+};
+
+export async function getStockOpnameDetail(
+  id: string,
+): Promise<StockOpnameDetail | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("stock_opname_sessions")
+    .select(
+      "id, opname_number, opname_date, status, scope, notes, approved_at, created_at, starter:started_by(full_name), reviewer:reviewed_by(full_name), approver:approved_by(full_name), stock_opname_lines(id, product_id, system_qty, physical_qty, variance, unit_cost, reason, products:product_id(brand, model, color, size, sku, barcode))",
+    )
+    .eq("id", id)
+    .single();
+  if (!data) return null;
+
+  const row = data as unknown as {
+    id: string;
+    opname_number: string;
+    opname_date: string;
+    status: StockOpnameStatus;
+    scope: string;
+    notes: string | null;
+    approved_at: string | null;
+    created_at: string;
+    starter: { full_name: string } | null;
+    reviewer: { full_name: string } | null;
+    approver: { full_name: string } | null;
+    stock_opname_lines: Array<{
+      id: string;
+      product_id: string;
+      system_qty: number;
+      physical_qty: number | null;
+      variance: number;
+      unit_cost: number;
+      reason: string | null;
+      products: {
+        brand: string;
+        model: string;
+        color: string | null;
+        size: number;
+        sku: string;
+        barcode: string;
+      } | null;
+    }> | null;
+  };
+  const lines = (row.stock_opname_lines ?? [])
+    .map((line) => ({
+      id: line.id,
+      product_id: line.product_id,
+      product_label: line.products
+        ? `${line.products.brand} ${line.products.model} ${line.products.color ?? ""} • Size ${Number(line.products.size)}`
+        : "(produk dihapus)",
+      sku: line.products?.sku ?? "—",
+      barcode: line.products?.barcode ?? "—",
+      system_qty: Number(line.system_qty),
+      physical_qty:
+        line.physical_qty === null ? null : Number(line.physical_qty),
+      variance: Number(line.variance),
+      unit_cost: Number(line.unit_cost),
+      reason: line.reason,
+    }))
+    .sort((a, b) => a.product_label.localeCompare(b.product_label));
+
+  return {
+    id: row.id,
+    opname_number: row.opname_number,
+    opname_date: row.opname_date,
+    status: row.status,
+    scope: row.scope,
+    notes: row.notes,
+    started_by_name: row.starter?.full_name ?? null,
+    reviewed_by_name: row.reviewer?.full_name ?? null,
+    approved_by_name: row.approver?.full_name ?? null,
+    approved_at: row.approved_at,
+    created_at: row.created_at,
+    total_lines: lines.length,
+    counted_lines: lines.filter((line) => line.physical_qty !== null).length,
+    variance_lines: lines.filter((line) => line.variance !== 0).length,
+    lines,
+  };
+}
+
+// ─── Fiscal Periods (PDF Scope A4) ────────────────────────
+export type FiscalPeriodRow = {
+  id: string;
+  year: number;
+  month: number;
+  status: "open" | "closed";
+  closed_by_name: string | null;
+  closed_at: string | null;
+  notes: string | null;
+};
+
+export async function getFiscalPeriods(year?: number): Promise<FiscalPeriodRow[]> {
+  await requireOwnerOrFinance();
+  const supabase = await createClient();
+  const targetYear = year ?? new Date().getFullYear();
+  const { data } = await supabase
+    .from("fiscal_periods")
+    .select("id, year, month, status, closed_at, notes, closer:closed_by(full_name)")
+    .eq("year", targetYear)
+    .order("month", { ascending: true });
+
+  const existing = new Map(
+    ((data as unknown as Array<{
+      id: string;
+      year: number;
+      month: number;
+      status: "open" | "closed";
+      closed_at: string | null;
+      notes: string | null;
+      closer: { full_name: string } | null;
+    }> | null) ?? []).map((row) => [row.month, row]),
+  );
+
+  return Array.from({ length: 12 }, (_, idx) => {
+    const month = idx + 1;
+    const row = existing.get(month);
+    return {
+      id: row?.id ?? `${targetYear}-${month}`,
+      year: targetYear,
+      month,
+      status: row?.status ?? "open",
+      closed_by_name: row?.closer?.full_name ?? null,
+      closed_at: row?.closed_at ?? null,
+      notes: row?.notes ?? null,
+    };
+  });
 }
 
 // ─── Customer Payments (Phase 3 — Penerimaan Kas) ──────────
@@ -2002,6 +2384,236 @@ export async function getAgingReport(): Promise<unknown[]> {
     .order("first_inbound_at", { ascending: true, nullsFirst: true })
     .limit(50);
   return data ?? [];
+}
+
+export type ExpenseReportRow = {
+  category: string;
+  account_code: string;
+  total: number;
+  count: number;
+};
+
+export async function getExpenseReport(
+  from?: string,
+  to?: string,
+): Promise<ExpenseReportRow[]> {
+  await requireOwnerOrFinance();
+  const supabase = await createClient();
+  let query = supabase
+    .from("expenses")
+    .select("amount, expense_date, status, expense_categories:category_id(name, account_code)")
+    .eq("status", "paid");
+  if (from) query = query.gte("expense_date", from.slice(0, 10));
+  if (to) query = query.lte("expense_date", to.slice(0, 10));
+
+  const { data } = await query;
+  const map = new Map<string, ExpenseReportRow>();
+  for (const row of ((data ?? []) as unknown as Array<{
+    amount: number;
+    expense_categories: { name: string; account_code: string } | null;
+  }>)) {
+    const category = row.expense_categories?.name ?? "Tanpa kategori";
+    const account = row.expense_categories?.account_code ?? "—";
+    const key = `${account}:${category}`;
+    const current = map.get(key) ?? {
+      category,
+      account_code: account,
+      total: 0,
+      count: 0,
+    };
+    current.total += Number(row.amount ?? 0);
+    current.count += 1;
+    map.set(key, current);
+  }
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
+}
+
+export type MarketplaceCostReportRow = {
+  channel: string;
+  orders: number;
+  gmv: number;
+  marketplace_fee: number;
+  discount: number;
+  shipping: number;
+  net_sales: number;
+};
+
+export async function getMarketplaceCostReport(
+  from?: string,
+  to?: string,
+): Promise<MarketplaceCostReportRow[]> {
+  await requireOwnerOrFinance();
+  const supabase = await createClient();
+  let query = supabase
+    .from("sales_invoices")
+    .select("channel, invoice_date, subtotal, discount, shipping, marketplace_fee, total, status")
+    .in("channel", ["shopee", "tiktok"])
+    .neq("status", "cancelled");
+  if (from) query = query.gte("invoice_date", from.slice(0, 10));
+  if (to) query = query.lte("invoice_date", to.slice(0, 10));
+
+  const { data } = await query;
+  const map = new Map<string, MarketplaceCostReportRow>();
+  for (const row of (data ?? []) as Array<{
+    channel: string;
+    subtotal: number;
+    discount: number;
+    shipping: number;
+    marketplace_fee: number;
+    total: number;
+  }>) {
+    const current = map.get(row.channel) ?? {
+      channel: row.channel,
+      orders: 0,
+      gmv: 0,
+      marketplace_fee: 0,
+      discount: 0,
+      shipping: 0,
+      net_sales: 0,
+    };
+    current.orders += 1;
+    current.gmv += Number(row.subtotal ?? 0);
+    current.marketplace_fee += Number(row.marketplace_fee ?? 0);
+    current.discount += Number(row.discount ?? 0);
+    current.shipping += Number(row.shipping ?? 0);
+    current.net_sales += Number(row.total ?? 0);
+    map.set(row.channel, current);
+  }
+  return Array.from(map.values()).sort((a, b) => b.net_sales - a.net_sales);
+}
+
+export type ProfitByChannelRow = {
+  channel: string;
+  invoices: number;
+  units: number;
+  revenue: number;
+  cogs: number;
+  marketplace_fee: number;
+  discount: number;
+  profit: number;
+  margin: number;
+};
+
+export async function getProfitByChannelReport(
+  from?: string,
+  to?: string,
+): Promise<ProfitByChannelRow[]> {
+  await requireOwnerOrFinance();
+  const supabase = await createClient();
+  let query = supabase
+    .from("sales_invoices")
+    .select("id, channel, invoice_date, total, discount, marketplace_fee, status, sales_invoice_lines(qty, unit_cost)")
+    .neq("status", "cancelled");
+  if (from) query = query.gte("invoice_date", from.slice(0, 10));
+  if (to) query = query.lte("invoice_date", to.slice(0, 10));
+
+  const { data } = await query;
+  const map = new Map<string, ProfitByChannelRow>();
+  for (const row of (data ?? []) as Array<{
+    channel: string;
+    total: number;
+    discount: number;
+    marketplace_fee: number;
+    sales_invoice_lines: Array<{ qty: number; unit_cost: number }> | null;
+  }>) {
+    const current = map.get(row.channel) ?? {
+      channel: row.channel,
+      invoices: 0,
+      units: 0,
+      revenue: 0,
+      cogs: 0,
+      marketplace_fee: 0,
+      discount: 0,
+      profit: 0,
+      margin: 0,
+    };
+    const lines = row.sales_invoice_lines ?? [];
+    const cogs = lines.reduce(
+      (sum, line) => sum + Number(line.qty ?? 0) * Number(line.unit_cost ?? 0),
+      0,
+    );
+    const units = lines.reduce((sum, line) => sum + Number(line.qty ?? 0), 0);
+    current.invoices += 1;
+    current.units += units;
+    current.revenue += Number(row.total ?? 0);
+    current.cogs += cogs;
+    current.marketplace_fee += Number(row.marketplace_fee ?? 0);
+    current.discount += Number(row.discount ?? 0);
+    map.set(row.channel, current);
+  }
+
+  return Array.from(map.values())
+    .map((row) => {
+      row.profit = row.revenue - row.cogs;
+      row.margin = row.revenue > 0 ? (row.profit / row.revenue) * 100 : 0;
+      return row;
+    })
+    .sort((a, b) => b.profit - a.profit);
+}
+
+export type StockCardRow = {
+  product_id: string;
+  product_label: string;
+  sku: string;
+  barcode: string;
+  inbound: number;
+  outbound: number;
+  adjustment: number;
+  current_qty: number;
+  last_movement_at: string | null;
+};
+
+export async function getStockCardReport(): Promise<StockCardRow[]> {
+  await requireOwnerOrFinance();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("products")
+    .select("id, brand, model, size, sku, barcode, quantity, stock_movements(type, quantity, created_at)")
+    .eq("is_active", true)
+    .order("brand", { ascending: true })
+    .order("model", { ascending: true })
+    .limit(300);
+
+  return ((data as unknown as Array<{
+    id: string;
+    brand: string;
+    model: string;
+    size: number;
+    sku: string;
+    barcode: string;
+    quantity: number;
+    stock_movements: Array<{
+      type: string;
+      quantity: number;
+      created_at: string;
+    }> | null;
+  }> | null) ?? []).map((product) => {
+    const movements = product.stock_movements ?? [];
+    const inbound = movements
+      .filter((movement) => ["inbound", "return_in"].includes(movement.type))
+      .reduce((sum, movement) => sum + Number(movement.quantity ?? 0), 0);
+    const outbound = movements
+      .filter((movement) => ["outbound", "return_out"].includes(movement.type))
+      .reduce((sum, movement) => sum + Number(movement.quantity ?? 0), 0);
+    const adjustment = movements
+      .filter((movement) => movement.type === "adjustment")
+      .reduce((sum, movement) => sum + Number(movement.quantity ?? 0), 0);
+    const lastMovement = movements
+      .map((movement) => movement.created_at)
+      .sort()
+      .at(-1) ?? null;
+    return {
+      product_id: product.id,
+      product_label: `${product.brand} ${product.model} • Size ${Number(product.size)}`,
+      sku: product.sku,
+      barcode: product.barcode,
+      inbound,
+      outbound,
+      adjustment,
+      current_qty: Number(product.quantity ?? 0),
+      last_movement_at: lastMovement,
+    };
+  });
 }
 
 // ─── Returns ───────────────────────────────────────────────

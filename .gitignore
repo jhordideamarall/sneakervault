@@ -24,6 +24,7 @@ Riwayatmeeting.md
 
 # Supabase
 supabase/.temp
+**/supabase/.temp/
 
 # TypeScript build cache
 *.tsbuildinfo

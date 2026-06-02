@@ -5,6 +5,7 @@ import { initiateReturnSchema, processReturnSchema } from "@sneakervault/shared"
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { notifyEvent } from "./notify";
+import { createStockMovement } from "./stock-movements";
 
 export async function initiateReturn(input: unknown) {
   const profile = await requireRole(["owner", "admin_online"]);
@@ -120,46 +121,76 @@ export async function processReturn(input: unknown) {
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
   const supabase = await createClient();
-  const { data: ret } = await supabase.from("returns").select("*, packing_items(product_id)").eq("id", parsed.data.return_id).maybeSingle();
+  const { data: ret } = await supabase
+    .from("returns")
+    .select("*, packing_items(product_id)")
+    .eq("id", parsed.data.return_id)
+    .maybeSingle();
   if (!ret) return { error: { _form: ["Return tidak ditemukan"] } };
   if (ret.status !== "verified") return { error: { _form: ["Return belum diverifikasi"] } };
 
   const originalProductId = ret.original_product_id;
+  const isExchange = ret.type === "exchange_size";
 
   if (ret.type === "refund") {
     const { error: rpcErr } = await supabase.rpc("increment_product_quantity", { p_id: originalProductId, qty: 1 });
     if (rpcErr) return { error: { _form: [rpcErr.message] } };
 
-    const { error: mvErr } = await supabase.from("stock_movements").insert({
+    const movement = await createStockMovement(supabase, {
       product_id: originalProductId, type: "return_in", quantity: 1, unit_cost: 0,
-      reference_type: "return", reference_id: ret.id, performed_by: profile.id,
+      reference_type: "return", reference_id: ret.id,
     });
-    if (mvErr) return { error: { _form: [mvErr.message] } };
-  } else if (ret.type === "exchange_size") {
+    if (movement.error) return { error: { _form: [movement.error] } };
+  } else if (isExchange) {
     const newProductId = parsed.data.new_product_id;
     if (!newProductId) return { error: { _form: ["Produk pengganti wajib dipilih"] } };
 
-    // Return in original
-    const { error: incErr } = await supabase.rpc("increment_product_quantity", { p_id: originalProductId, qty: 1 });
-    if (incErr) return { error: { _form: [incErr.message] } };
-    await supabase.from("stock_movements").insert({
-      product_id: originalProductId, type: "return_in", quantity: 1, unit_cost: 0,
-      reference_type: "return", reference_id: ret.id, performed_by: profile.id,
-    });
-
-    // Send out new product
+    // Reserve replacement first so an out-of-stock exchange does not add back
+    // the original item while the return is still unresolved.
     const { data: decOk, error: decErr } = await supabase.rpc("decrement_product_quantity", { p_id: newProductId, qty: 1 });
     if (decErr) return { error: { _form: [decErr.message] } };
     if (!decOk) return { error: { _form: ["Stok produk pengganti habis"] } };
-    await supabase.from("stock_movements").insert({
-      product_id: newProductId, type: "return_out", quantity: 1, unit_cost: 0,
-      reference_type: "return", reference_id: ret.id, performed_by: profile.id,
+
+    // Return in original
+    const { error: incErr } = await supabase.rpc("increment_product_quantity", { p_id: originalProductId, qty: 1 });
+    if (incErr) {
+      await supabase.rpc("increment_product_quantity", { p_id: newProductId, qty: 1 });
+      return { error: { _form: [incErr.message] } };
+    }
+    const returnIn = await createStockMovement(supabase, {
+      product_id: originalProductId, type: "return_in", quantity: 1, unit_cost: 0,
+      reference_type: "return", reference_id: ret.id,
     });
-  // Update return status
-  const { error: updateErr } = await supabase.from("returns").update({
-    status: "processed", processed_by: profile.id, processed_at: new Date().toISOString(),
-    new_product_id: parsed.data.new_product_id || null, new_size: parsed.data.new_size || null,
-  }).eq("id", parsed.data.return_id);
+    if (returnIn.error) {
+      await supabase.rpc("decrement_product_quantity", { p_id: originalProductId, qty: 1 });
+      await supabase.rpc("increment_product_quantity", { p_id: newProductId, qty: 1 });
+      return { error: { _form: [returnIn.error] } };
+    }
+
+    // Send out new product
+    const returnOut = await createStockMovement(supabase, {
+      product_id: newProductId, type: "return_out", quantity: 1, unit_cost: 0,
+      reference_type: "return", reference_id: ret.id,
+    });
+    if (returnOut.error) {
+      await supabase.rpc("decrement_product_quantity", { p_id: originalProductId, qty: 1 });
+      await supabase.rpc("increment_product_quantity", { p_id: newProductId, qty: 1 });
+      return { error: { _form: [returnOut.error] } };
+    }
+  } else {
+    return { error: { _form: ["Tipe return tidak didukung"] } };
+  }
+
+  const { error: updateErr } = await supabase
+    .from("returns")
+    .update({
+      status: "processed",
+      processed_by: profile.id,
+      processed_at: new Date().toISOString(),
+      new_product_id: isExchange ? parsed.data.new_product_id || null : null,
+      new_size: isExchange ? parsed.data.new_size || null : null,
+    })
+    .eq("id", parsed.data.return_id);
   if (updateErr) return { error: { _form: [updateErr.message] } };
 
   await logActivity({
@@ -170,11 +201,6 @@ export async function processReturn(input: unknown) {
     new_data: { type: ret.type, new_product_id: parsed.data.new_product_id },
   });
 
-  return { success: true };
-  }
-  await logActivity({ user_id: profile.id, action: "process_return", entity_type: "return", entity_id: parsed.data.return_id, new_data: { type: ret.type, new_product_id: parsed.data.new_product_id } });
-
-  // Notif processed
   const { data: prodOriginal } = await supabase
     .from("products")
     .select("brand, model, size")

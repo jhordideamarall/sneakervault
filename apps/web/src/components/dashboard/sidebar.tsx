@@ -37,6 +37,9 @@ import {
   Upload,
   ArrowDownLeft,
   ArrowUpRight,
+  CalendarClock,
+  Calculator,
+  Database,
 } from "lucide-react";
 import { MailInbox } from "./mail/mail-inbox";
 import {
@@ -93,6 +96,7 @@ const navGroups: NavGroup[] = [
     icon: i(ShoppingCart),
     items: [
       { href: "/orders", label: "Order Masuk", icon: i(ShoppingCart) },
+      { href: "/penjualan/pos", label: "POS Kasir", icon: i(Calculator) },
       { href: "/penjualan/invoice", label: "Invoice Penjualan", icon: i(FileText) },
       { href: "/penjualan/penerimaan-kas", label: "Penerimaan Kas", icon: i(Wallet) },
       { href: "/penjualan/import-marketplace", label: "Import Marketplace", icon: i(Upload) },
@@ -105,7 +109,8 @@ const navGroups: NavGroup[] = [
     icon: i(Package),
     items: [
       { href: "/inventory", label: "Inventori", icon: i(Package) },
-      { href: "/inbound", label: "Stock Opname", icon: i(QrCode) },
+      { href: "/inbound", label: "Barang Masuk", icon: i(QrCode) },
+      { href: "/inventory/opname", label: "Stock Opname", icon: i(ClipboardList) },
       { href: "/outbound", label: "Packing / Outbound", icon: i(PackageMinus) },
       { href: "/returns", label: "Retur", icon: i(RotateCcw) },
     ],
@@ -128,6 +133,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/buku-besar/coa", label: "Chart of Accounts", icon: i(BookOpen) },
       { href: "/buku-besar/journal", label: "Jurnal Penyesuaian", icon: i(ScrollText) },
+      { href: "/buku-besar/periode", label: "Tutup Buku", icon: i(CalendarClock) },
     ],
   },
   {
@@ -158,6 +164,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/activity-log", label: "Activity Log", icon: i(ScrollText) },
       { href: "/delete-requests", label: "Req. Hapus", icon: i(Trash2) },
+      { href: "/settings/data-sync", label: "Sinkronisasi Data", icon: i(Database) },
       { href: "/settings", label: "Pengaturan", icon: i(Settings) },
     ],
   },

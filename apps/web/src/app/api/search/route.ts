@@ -19,15 +19,15 @@ export async function GET(request: NextRequest) {
     .or(`brand.ilike.${pattern},model.ilike.${pattern},barcode.ilike.${pattern}`)
     .limit(6);
 
-  // Search orders (by order_number)
-  const { data: orders } = await supabase
+  // Search orders (by platform order id)
+  const { data: orders, error: ordersError } = await supabase
     .from("packing_sessions")
-    .select("id, order_number, platform, status, created_at")
-    .ilike("order_number", pattern)
+    .select("id, platform_order_id, platform, status, created_at")
+    .ilike("platform_order_id", pattern)
     .limit(4);
 
   return NextResponse.json({
     products: products ?? [],
-    orders: orders ?? [],
+    orders: ordersError ? [] : (orders ?? []),
   });
 }

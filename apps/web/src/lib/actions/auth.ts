@@ -4,6 +4,7 @@ import { createClient } from "@sneakervault/supabase/server";
 import { redirect } from "next/navigation";
 import { loginSchema, registerSchema } from "@sneakervault/shared";
 import type { Role } from "@sneakervault/shared";
+import { getCurrentUserCached } from "@/lib/auth-session";
 
 export async function login(_prev: unknown, formData: FormData) {
   const parsed = loginSchema.safeParse({
@@ -45,21 +46,13 @@ export async function logout() {
 }
 
 export async function getCurrentUser() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, roles, avatar_url, is_active")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  return profile;
+  // Delegates to the request-cached reader so repeated calls within one render
+  // (layout + page requireRole + server components) share a single auth lookup.
+  return getCurrentUserCached();
 }
 
 export async function requireRole(allowedRoles: Role[]) {
-  const profile = await getCurrentUser();
+  const profile = await getCurrentUserCached();
   if (!profile) redirect("/login");
 
   const hasRole = profile.roles?.some((r: string) => allowedRoles.includes(r as Role));

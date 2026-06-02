@@ -6,6 +6,8 @@ import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
 import { journalForSalesInvoice, reverseJournalBySource } from "../journal-engine";
+import { assertPeriodOpen } from "@/lib/fiscal-periods";
+import { createStockMovement } from "./stock-movements";
 
 const ROLES = ["owner", "finance", "admin_online"] as const;
 
@@ -34,6 +36,10 @@ export async function createSalesInvoice(
   const profile = await requireRole([...ROLES]);
   const parsed = salesInvoiceInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+  if (options?.issue) {
+    const lock = await assertPeriodOpen(parsed.data.invoice_date);
+    if (lock.error) return { error: { _form: [lock.error] } };
+  }
 
   const supabase = await createClient();
 
@@ -133,7 +139,7 @@ export async function createSalesInvoice(
       const prod = products.find((p) => p.id === l.product_id)!;
       cogsTotal += Number(prod.hpp) * l.qty;
     }
-    await journalForSalesInvoice({
+    const journal = await journalForSalesInvoice({
       invoice_id: invoice.id,
       invoice_number: invNum as string,
       invoice_date: parsed.data.invoice_date,
@@ -147,15 +153,17 @@ export async function createSalesInvoice(
       cogs_total: cogsTotal,
       user_id: profile.id,
     });
+    if (journal.error) return { error: { _form: [journal.error] } };
 
     for (const l of parsed.data.lines) {
-      const { error: decErr } = await supabase.rpc(
+      const { data: decOk, error: decErr } = await supabase.rpc(
         "decrement_product_quantity",
         { p_id: l.product_id, qty: l.qty },
       );
       if (decErr) return { error: { _form: [decErr.message] } };
+      if (!decOk) return { error: { _form: ["Stok tidak cukup saat menerbitkan invoice"] } };
 
-      await supabase.from("stock_movements").insert({
+      const movement = await createStockMovement(supabase, {
         product_id: l.product_id,
         type: "outbound",
         quantity: l.qty,
@@ -163,8 +171,8 @@ export async function createSalesInvoice(
           Number(products.find((p) => p.id === l.product_id)?.hpp ?? 0),
         reference_type: "sales_invoice_line",
         reference_id: invoice.id,
-        performed_by: profile.id,
       });
+      if (movement.error) return { error: { _form: [movement.error] } };
     }
   }
 
@@ -201,6 +209,8 @@ export async function issueSalesInvoice(id: string) {
   if (!inv) return { error: "Invoice tidak ditemukan" };
   if (inv.status !== "draft")
     return { error: "Hanya invoice Draft yang bisa diterbitkan" };
+  const lock = await assertPeriodOpen(inv.invoice_date);
+  if (lock.error) return { error: lock.error };
 
   const lines = (inv.sales_invoice_lines ?? []) as Array<{
     product_id: string;
@@ -229,20 +239,21 @@ export async function issueSalesInvoice(id: string) {
   }
 
   for (const l of lines) {
-    const { error: decErr } = await supabase.rpc(
+    const { data: decOk, error: decErr } = await supabase.rpc(
       "decrement_product_quantity",
       { p_id: l.product_id, qty: l.qty },
     );
     if (decErr) return { error: decErr.message };
-    await supabase.from("stock_movements").insert({
+    if (!decOk) return { error: "Stok tidak cukup saat menerbitkan invoice" };
+    const movement = await createStockMovement(supabase, {
       product_id: l.product_id,
       type: "outbound",
       quantity: l.qty,
       unit_cost: Number(l.unit_cost),
       reference_type: "sales_invoice_line",
       reference_id: id,
-      performed_by: profile.id,
     });
+    if (movement.error) return { error: movement.error };
   }
 
   await supabase
@@ -266,7 +277,7 @@ export async function issueSalesInvoice(id: string) {
     marketplace_fee: number;
     tax: number;
   };
-  await journalForSalesInvoice({
+  const journal = await journalForSalesInvoice({
     invoice_id: id,
     invoice_number: inv2.invoice_number,
     invoice_date: inv2.invoice_date,
@@ -280,6 +291,7 @@ export async function issueSalesInvoice(id: string) {
     cogs_total: cogsTotal,
     user_id: profile.id,
   });
+  if (journal.error) return { error: journal.error };
 
   await logActivity({
     user_id: profile.id,
@@ -321,19 +333,20 @@ export async function cancelSalesInvoice(id: string, reason?: string) {
       unit_cost: number;
     }>;
     for (const l of lines) {
-      await supabase.rpc("increment_product_quantity", {
+      const { error: incErr } = await supabase.rpc("increment_product_quantity", {
         p_id: l.product_id,
         qty: l.qty,
       });
-      await supabase.from("stock_movements").insert({
+      if (incErr) return { error: incErr.message };
+      const movement = await createStockMovement(supabase, {
         product_id: l.product_id,
         type: "inbound",
         quantity: l.qty,
         unit_cost: Number(l.unit_cost),
         reference_type: "sales_invoice_cancel",
         reference_id: id,
-        performed_by: profile.id,
       });
+      if (movement.error) return { error: movement.error };
     }
   }
 
@@ -394,6 +407,8 @@ export async function updateSalesInvoice(id: string, input: unknown) {
   const profile = await requireRole([...ROLES]);
   const parsed = salesInvoiceInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+  const lock = await assertPeriodOpen(parsed.data.invoice_date);
+  if (lock.error) return { error: { _form: [lock.error] } };
 
   const supabase = await createClient();
   const { data: existing } = await supabase

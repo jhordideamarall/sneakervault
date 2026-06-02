@@ -9,7 +9,7 @@ export default function ImportMarketplacePage() {
           Import Laporan Marketplace
         </h1>
         <p className="text-white/50">
-          Tarik laporan penjualan Shopee & TikTok dari Excel — auto-parse jadi invoice & jurnal.
+          Tarik laporan penjualan Shopee & TikTok dari Excel/CSV — parser deterministik jadi invoice & jurnal.
         </p>
       </div>
 

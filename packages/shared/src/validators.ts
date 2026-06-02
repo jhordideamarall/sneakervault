@@ -358,6 +358,93 @@ export const bankTransactionInputSchema = z.object({
 
 export type BankTransactionInput = z.infer<typeof bankTransactionInputSchema>;
 
+// ─── Expenses (PDF Scope A1) ───────────────────────────────
+export const expenseStatusEnum = z.enum([
+  "draft",
+  "approved",
+  "paid",
+  "rejected",
+  "voided",
+]);
+
+export const expenseCategoryInputSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().min(1, "Nama kategori wajib diisi"),
+  account_code: z.string().min(1, "Akun beban wajib dipilih"),
+  sort_order: z.coerce.number().int().nonnegative().default(100),
+  is_active: z.boolean().default(true),
+});
+
+export type ExpenseCategoryInput = z.infer<
+  typeof expenseCategoryInputSchema
+>;
+
+export const expenseInputSchema = z.object({
+  expense_date: z.string().min(1, "Tanggal wajib diisi"),
+  category_id: z.string().uuid("Kategori wajib dipilih"),
+  description: z.string().min(1, "Deskripsi wajib diisi"),
+  amount: z.coerce.number().positive("Nominal harus lebih dari 0"),
+  payment_method: paymentMethodEnum,
+  bank_account_id: z.string().uuid("Akun kas/bank wajib dipilih"),
+  receipt_path: z.string().optional().nullable(),
+});
+
+export type ExpenseInput = z.infer<typeof expenseInputSchema>;
+
+// ─── POS Kasir Offline (PDF Scope A2) ─────────────────────
+export const posCheckoutLineSchema = z.object({
+  product_id: z.string().uuid(),
+  qty: z.coerce.number().int().positive("Qty harus lebih dari 0"),
+  unit_price: z.coerce.number().nonnegative("Harga tidak boleh negatif"),
+});
+
+export const posCheckoutSchema = z.object({
+  customer_name: z.string().optional(),
+  customer_id: z.string().uuid().optional(),
+  invoice_date: z.string().min(1, "Tanggal wajib diisi"),
+  payment_method: paymentMethodEnum,
+  bank_account_id: z.string().uuid("Akun kas/bank wajib dipilih"),
+  reference_no: z.string().optional(),
+  discount: z.coerce.number().nonnegative().default(0),
+  tax: z.coerce.number().nonnegative().default(0),
+  notes: z.string().optional(),
+  lines: z.array(posCheckoutLineSchema).min(1, "Minimal 1 item"),
+});
+
+export type PosCheckoutInput = z.infer<typeof posCheckoutSchema>;
+export type PosCheckoutLineInput = z.infer<typeof posCheckoutLineSchema>;
+
+// ─── Stock Opname (PDF Scope A3) ──────────────────────────
+export const startStockOpnameSchema = z.object({
+  opname_date: z.string().min(1, "Tanggal wajib diisi"),
+  scope: z.string().min(1).default("all"),
+  notes: z.string().optional(),
+  product_ids: z.array(z.string().uuid()).optional(),
+});
+
+export const stockOpnameCountLineSchema = z.object({
+  line_id: z.string().uuid(),
+  physical_qty: z.coerce.number().int().nonnegative(),
+  reason: z.string().optional(),
+});
+
+export const stockOpnameCountSchema = z.object({
+  session_id: z.string().uuid(),
+  lines: z.array(stockOpnameCountLineSchema).min(1, "Minimal 1 baris"),
+});
+
+export type StartStockOpnameInput = z.infer<typeof startStockOpnameSchema>;
+export type StockOpnameCountInput = z.infer<typeof stockOpnameCountSchema>;
+
+// ─── Fiscal Period Lock (PDF Scope A4) ────────────────────
+export const fiscalPeriodSchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+  reason: z.string().min(1, "Alasan wajib diisi"),
+});
+
+export type FiscalPeriodInput = z.infer<typeof fiscalPeriodSchema>;
+
 // ─── Auth ──────────────────────────────────────────────────
 export const loginSchema = z.object({
   email: z.string().email("Email tidak valid"),

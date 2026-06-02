@@ -31,15 +31,35 @@ export async function updateSession(request: NextRequest) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  const isLoginPage = request.nextUrl.pathname.startsWith("/login");
+  const pathname = request.nextUrl.pathname;
+  const isLoginPage = pathname.startsWith("/login");
+  // Public routes accessible without authentication (e.g. marketing landing).
+  const isPublicPage = pathname === "/" || isLoginPage;
+  let isActiveUser = false;
 
-  if (!user && !isLoginPage) {
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_active")
+      .eq("id", user.id)
+      .maybeSingle();
+    isActiveUser = profile?.is_active === true;
+  }
+
+  if (!user && !isPublicPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  if (user && isLoginPage) {
+  if (user && !isActiveUser && !isPublicPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("inactive", "1");
+    return NextResponse.redirect(url);
+  }
+
+  if (user && isActiveUser && isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/workspace";
     return NextResponse.redirect(url);

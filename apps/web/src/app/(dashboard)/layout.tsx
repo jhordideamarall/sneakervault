@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/dashboard/sidebar";
-import { RightSidebar } from "@/components/dashboard/right-sidebar";
+import { RightSidebarSlot } from "@/components/dashboard/right-sidebar-slot";
+import { MainShell } from "@/components/dashboard/main-shell";
 import { getCurrentUser } from "@/lib/actions/auth";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -47,23 +48,17 @@ export default async function DashboardLayout({
           defaultSize={85}
           className="bg-[#1F1F1E] rounded-md overflow-hidden"
         >
-          <main className="h-full overflow-y-auto px-8 pt-16 pb-8">
-            <div className="mx-auto max-w-4xl">
-              {children}
-            </div>
-          </main>
+          <MainShell>{children}</MainShell>
         </ResizablePanel>
       </ResizablePanelGroup>
 
-      {/* Right Sidebar — FIXED width, tidak resize */}
-      <div className="w-[300px] flex-shrink-0 bg-[#262626] rounded-md overflow-y-auto">
-        <RightSidebar
-          fullName={profile.full_name}
-          roles={profile.roles as string[]}
-          avatarUrl={profile.avatar_url}
-          userId={profile.id}
-        />
-      </div>
+      {/* Right Sidebar — disembunyikan HANYA di POS kasir (client-side per route). */}
+      <RightSidebarSlot
+        fullName={profile.full_name}
+        roles={profile.roles as string[]}
+        avatarUrl={profile.avatar_url}
+        userId={profile.id}
+      />
     </div>
     </DateFilterProvider>
   );

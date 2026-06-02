@@ -15,9 +15,11 @@
 //   6.2   Beban Diskon & Promosi
 //   6.3   Beban Pengiriman
 //   6.7   Beban Penyesuaian Stok
+//   6.8+  Beban operasional PDF scope
 
 import { createClient } from "@sneakervault/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { assertPeriodOpen } from "@/lib/fiscal-periods";
 
 type JournalLineInput = {
   account_code: string;
@@ -33,6 +35,7 @@ export type JournalSourceType =
   | "sales_invoice"
   | "customer_payment"
   | "stock_adjustment"
+  | "expense"
   | "opening_balance"
   | "closing"
   | "other";
@@ -60,6 +63,23 @@ async function coaIdByCode(
   return (data as { id: string } | null)?.id ?? null;
 }
 
+async function bankCodeByAccountId(
+  supabase: SupabaseClient,
+  bankAccountId: string | null,
+): Promise<string> {
+  if (!bankAccountId) return "1.1.01";
+
+  const { data: ba } = await supabase
+    .from("bank_accounts")
+    .select("type")
+    .eq("id", bankAccountId)
+    .single();
+  const type = (ba as { type: string } | null)?.type;
+  if (type === "cash") return "1.1.01";
+  if (type === "marketplace_balance") return "1.1.03";
+  return "1.1.02";
+}
+
 export async function createJournalEntry(args: {
   entry_date: string;
   description: string;
@@ -68,6 +88,9 @@ export async function createJournalEntry(args: {
   user_id?: string | null;
   lines: JournalLineInput[];
 }): Promise<{ id?: string; error?: string }> {
+  const lock = await assertPeriodOpen(args.entry_date);
+  if (lock.error) return { error: lock.error };
+
   const supabase = await createClient();
 
   let totalDebit = 0;
@@ -178,20 +201,7 @@ export async function journalForVendorPayment(args: {
 }): Promise<{ id?: string; error?: string }> {
   // Determine bank/cash code: try lookup from bank_accounts.type
   const supabase = await createClient();
-  let bankCode = "1.1.02"; // default bank
-  if (args.bank_account_id) {
-    const { data: ba } = await supabase
-      .from("bank_accounts")
-      .select("type")
-      .eq("id", args.bank_account_id)
-      .single();
-    const t = (ba as { type: string } | null)?.type;
-    if (t === "cash") bankCode = "1.1.01";
-    else if (t === "marketplace_balance") bankCode = "1.1.03";
-    else bankCode = "1.1.02";
-  } else {
-    bankCode = "1.1.01"; // cash default
-  }
+  const bankCode = await bankCodeByAccountId(supabase, args.bank_account_id);
 
   return createJournalEntry({
     entry_date: args.payment_date,
@@ -312,20 +322,7 @@ export async function journalForCustomerPayment(args: {
   user_id?: string | null;
 }): Promise<{ id?: string; error?: string }> {
   const supabase = await createClient();
-  let bankCode = "1.1.02";
-  if (args.bank_account_id) {
-    const { data: ba } = await supabase
-      .from("bank_accounts")
-      .select("type")
-      .eq("id", args.bank_account_id)
-      .single();
-    const t = (ba as { type: string } | null)?.type;
-    if (t === "cash") bankCode = "1.1.01";
-    else if (t === "marketplace_balance") bankCode = "1.1.03";
-    else bankCode = "1.1.02";
-  } else {
-    bankCode = "1.1.01";
-  }
+  const bankCode = await bankCodeByAccountId(supabase, args.bank_account_id);
 
   return createJournalEntry({
     entry_date: args.payment_date,
@@ -345,6 +342,87 @@ export async function journalForCustomerPayment(args: {
         description: "Pelunasan piutang",
       },
     ],
+  });
+}
+
+export async function journalForExpense(args: {
+  expense_id: string;
+  expense_number: string;
+  expense_date: string;
+  category_account_code: string;
+  category_name: string;
+  amount: number;
+  bank_account_id: string | null;
+  user_id?: string | null;
+}): Promise<{ id?: string; error?: string }> {
+  const supabase = await createClient();
+  const bankCode = await bankCodeByAccountId(supabase, args.bank_account_id);
+
+  return createJournalEntry({
+    entry_date: args.expense_date,
+    description: `Pengeluaran ${args.expense_number} - ${args.category_name}`,
+    source_type: "expense",
+    source_id: args.expense_id,
+    user_id: args.user_id,
+    lines: [
+      {
+        account_code: args.category_account_code,
+        debit: args.amount,
+        description: args.category_name,
+      },
+      {
+        account_code: bankCode,
+        credit: args.amount,
+        description: "Kas/Bank keluar",
+      },
+    ],
+  });
+}
+
+export async function journalForStockAdjustment(args: {
+  session_id: string;
+  opname_number: string;
+  adjustment_date: string;
+  amount: number;
+  direction: "increase" | "decrease";
+  user_id?: string | null;
+}): Promise<{ id?: string; error?: string }> {
+  if (args.amount <= 0) return { id: undefined };
+
+  const lines: JournalLineInput[] =
+    args.direction === "increase"
+      ? [
+          {
+            account_code: "1.1.05",
+            debit: args.amount,
+            description: "Selisih lebih stock opname",
+          },
+          {
+            account_code: "6.7",
+            credit: args.amount,
+            description: "Koreksi beban penyesuaian stok",
+          },
+        ]
+      : [
+          {
+            account_code: "6.7",
+            debit: args.amount,
+            description: "Selisih kurang stock opname",
+          },
+          {
+            account_code: "1.1.05",
+            credit: args.amount,
+            description: "Persediaan berkurang saat opname",
+          },
+        ];
+
+  return createJournalEntry({
+    entry_date: args.adjustment_date,
+    description: `Stock opname ${args.opname_number}`,
+    source_type: "stock_adjustment",
+    source_id: args.session_id,
+    user_id: args.user_id,
+    lines,
   });
 }
 

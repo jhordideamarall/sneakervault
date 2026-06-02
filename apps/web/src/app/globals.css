@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
 
@@ -102,6 +103,21 @@ body {
   scrollbar-width: none;  /* Firefox */
 }
 
+/* Numeric fields are styled as plain formatted text inputs; keep browser spinners hidden. */
+input[type="number"],
+.no-number-spinner {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button,
+.no-number-spinner::-webkit-outer-spin-button,
+.no-number-spinner::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
 
 /* Remove focus outline and hover background on chart elements */
 .recharts-surface:focus,
@@ -115,4 +131,26 @@ body {
 .recharts-line-chart .recharts-tooltip-cursor {
   stroke: rgba(255, 255, 255, 0.1) !important;
   stroke-width: 1 !important;
+}
+
+/* POS thermal receipt — print only the receipt slip */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .pos-receipt-print,
+  .pos-receipt-print * {
+    visibility: visible;
+  }
+  .pos-receipt-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    margin: 0;
+    box-shadow: none !important;
+    font-family: ui-monospace, "SFMono-Regular", monospace;
+  }
+  .pos-no-print {
+    display: none !important;
+  }
 }

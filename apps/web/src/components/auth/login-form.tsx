@@ -16,7 +16,13 @@ function SubmitButton() {
   );
 }
 
-export function LoginForm({ action }: { action: (prev: unknown, formData: FormData) => Promise<unknown> }) {
+export function LoginForm({
+  action,
+  inactive = false,
+}: {
+  action: (prev: unknown, formData: FormData) => Promise<unknown>;
+  inactive?: boolean;
+}) {
   const [state, formAction] = useActionState(action, null);
   const error = state && typeof state === "object" && "error" in state
     ? Object.values((state as { error: Record<string, string[]> }).error).flat()[0]
@@ -53,6 +59,11 @@ export function LoginForm({ action }: { action: (prev: unknown, formData: FormDa
       {error && (
         <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
           {error}
+        </p>
+      )}
+      {inactive && !error && (
+        <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+          Akun ini sedang nonaktif. Minta owner untuk mengaktifkan kembali akses.
         </p>
       )}
       <SubmitButton />

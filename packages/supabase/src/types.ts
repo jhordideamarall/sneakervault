@@ -815,6 +815,22 @@ export type Database = {
         }
         Returns: string
       }
+      create_stock_movement: {
+        Args: {
+          p_product_id: string
+          p_type: Database["public"]["Enums"]["stock_movement_type"]
+          p_quantity: number
+          p_unit_cost?: number
+          p_reference_type?: string | null
+          p_reference_id?: string | null
+          p_notes?: string | null
+        }
+        Returns: string
+      }
+      pos_checkout: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
       decrement_product_quantity: {
         Args: { p_id: string; qty: number }
         Returns: boolean

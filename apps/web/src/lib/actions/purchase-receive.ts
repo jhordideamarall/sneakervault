@@ -9,6 +9,8 @@ import {
   journalForPurchaseInvoice,
   journalForVendorPayment,
 } from "../journal-engine";
+import { assertPeriodOpen } from "@/lib/fiscal-periods";
+import { createStockMovement } from "./stock-movements";
 
 export async function receivePurchaseOrder(input: unknown) {
   const profile = await requireRole(["owner", "admin_gudang", "finance"]);
@@ -17,6 +19,9 @@ export async function receivePurchaseOrder(input: unknown) {
 
   const { po_id, lines, notes } = parsed.data;
   const supabase = await createClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const lock = await assertPeriodOpen(today);
+  if (lock.error) return { error: { _form: [lock.error] } };
 
   // Load PO + lines snapshot
   const { data: po, error: poErr } = await supabase
@@ -93,21 +98,16 @@ export async function receivePurchaseOrder(input: unknown) {
     });
     if (hppErr) return { error: { _form: [hppErr.message] } };
 
-    const { data: mv, error: mvErr } = await supabase
-      .from("stock_movements")
-      .insert({
-        product_id: p.product_id,
-        type: "inbound",
-        quantity: p.receive_qty,
-        unit_cost: p.unit_cost,
-        reference_type: "purchase_order_line",
-        reference_id: p.line_id,
-        performed_by: profile.id,
-      })
-      .select("id")
-      .single();
-    if (mvErr) return { error: { _form: [mvErr.message] } };
-    if (mv) movementIds.push(mv.id);
+    const movement = await createStockMovement(supabase, {
+      product_id: p.product_id,
+      type: "inbound",
+      quantity: p.receive_qty,
+      unit_cost: p.unit_cost,
+      reference_type: "purchase_order_line",
+      reference_id: p.line_id,
+    });
+    if (movement.error) return { error: { _form: [movement.error] } };
+    if (movement.id) movementIds.push(movement.id);
 
     const { error: lineUpdErr } = await supabase
       .from("purchase_order_lines")
@@ -153,177 +153,222 @@ export async function receivePurchaseOrder(input: unknown) {
       .maybeSingle();
 
     if (!existingInv) {
-      const { data: poFull } = await supabase
+      const { data: poFull, error: poFullErr } = await supabase
         .from("purchase_orders")
         .select(
           "supplier_id, order_date, subtotal, tax, total, po_number, payment_type, dp_amount, dp_bank_account_id",
         )
         .eq("id", po_id)
         .single();
+      if (poFullErr || !poFull) {
+        return { error: { _form: ["Gagal membaca detail PO"] } };
+      }
 
-      const { data: invNum } = await supabase.rpc(
+      const { data: invNum, error: invNumErr } = await supabase.rpc(
         "generate_purchase_invoice_number",
       );
-
-      if (poFull && invNum) {
-        const f = poFull as {
-          supplier_id: string;
-          order_date: string;
-          subtotal: number;
-          tax: number;
-          total: number;
-          po_number: string;
-          payment_type: "credit" | "cash" | "dp" | null;
-          dp_amount: number | null;
-          dp_bank_account_id: string | null;
+      if (invNumErr || !invNum) {
+        return {
+          error: {
+            _form: [invNumErr?.message ?? "Gagal membuat nomor faktur pembelian"],
+          },
         };
-        const invDate = new Date().toISOString().slice(0, 10);
-        const invTotal = Number(f.total);
+      }
 
-        const { data: newInv } = await supabase
-          .from("purchase_invoices")
+      const f = poFull as {
+        supplier_id: string;
+        order_date: string;
+        subtotal: number;
+        tax: number;
+        total: number;
+        po_number: string;
+        payment_type: "credit" | "cash" | "dp" | null;
+        dp_amount: number | null;
+        dp_bank_account_id: string | null;
+      };
+      const invDate = today;
+      const invTotal = Number(f.total);
+
+      const { data: newInv, error: newInvErr } = await supabase
+        .from("purchase_invoices")
+        .insert({
+          invoice_number: invNum,
+          supplier_id: f.supplier_id,
+          po_id,
+          invoice_date: invDate,
+          due_date: null,
+          subtotal: Number(f.subtotal),
+          tax: Number(f.tax),
+          total: invTotal,
+          paid_amount: 0,
+          status: "unpaid",
+          notes: `Auto-generated dari ${f.po_number} saat penerimaan selesai`,
+          created_by: profile.id,
+        })
+        .select("id")
+        .single();
+      if (newInvErr || !newInv) {
+        return {
+          error: {
+            _form: [newInvErr?.message ?? "Gagal membuat faktur pembelian"],
+          },
+        };
+      }
+
+      autoInvoiceId = newInv.id;
+      const purchaseJournal = await journalForPurchaseInvoice({
+        invoice_id: newInv.id,
+        invoice_number: invNum as string,
+        invoice_date: invDate,
+        subtotal: Number(f.subtotal),
+        tax: Number(f.tax),
+        user_id: profile.id,
+      });
+      if (purchaseJournal.error) {
+        return { error: { _form: [purchaseJournal.error] } };
+      }
+
+      // Auto-create vendor payment based on PO payment terms
+      const payType = f.payment_type ?? "credit";
+      const dpAmount = Number(f.dp_amount ?? 0);
+      const payAmount =
+        payType === "cash"
+          ? invTotal
+          : payType === "dp"
+            ? Math.min(dpAmount, invTotal)
+            : 0;
+
+      if (payAmount > 0 && f.dp_bank_account_id) {
+        // Validate bank still active + has balance
+        const { data: bank, error: bankErr } = await supabase
+          .from("bank_accounts")
+          .select("id, current_balance, type, name, is_active")
+          .eq("id", f.dp_bank_account_id)
+          .single();
+        if (bankErr || !bank) {
+          return { error: { _form: ["Akun kas/bank pembayaran tidak ditemukan"] } };
+        }
+        const b = bank as {
+          id: string;
+          current_balance: number;
+          type: string;
+          name: string;
+          is_active: boolean;
+        };
+
+        if (!b.is_active) {
+          return { error: { _form: ["Akun kas/bank pembayaran tidak aktif"] } };
+        }
+        if (Number(b.current_balance) < payAmount) {
+          return {
+            error: { _form: ["Saldo kas/bank tidak cukup untuk auto-bayar PO"] },
+          };
+        }
+
+        const { data: payNum, error: payNumErr } = await supabase.rpc(
+          "generate_vendor_payment_number",
+        );
+        if (payNumErr || !payNum) {
+          return {
+            error: {
+              _form: [payNumErr?.message ?? "Gagal membuat nomor pembayaran vendor"],
+            },
+          };
+        }
+        const paymentMethod = b.type === "cash" ? "cash" : "bank_transfer";
+
+        const { data: vp, error: vpErr } = await supabase
+          .from("vendor_payments")
           .insert({
-            invoice_number: invNum,
+            payment_number: payNum,
             supplier_id: f.supplier_id,
-            po_id,
-            invoice_date: invDate,
-            due_date: null,
-            subtotal: Number(f.subtotal),
-            tax: Number(f.tax),
-            total: invTotal,
-            paid_amount: 0,
-            status: "unpaid",
-            notes: `Auto-generated dari ${f.po_number} saat penerimaan selesai`,
+            payment_date: invDate,
+            payment_method: paymentMethod,
+            bank_account_id: f.dp_bank_account_id,
+            amount: payAmount,
+            reference_no: null,
+            notes:
+              payType === "cash"
+                ? `Auto-Bayar Lunas dari ${f.po_number}`
+                : `Auto-DP dari ${f.po_number}`,
+            attachment_url: null,
             created_by: profile.id,
           })
           .select("id")
           .single();
+        if (vpErr || !vp) {
+          return {
+            error: {
+              _form: [vpErr?.message ?? "Gagal membuat pembayaran vendor"],
+            },
+          };
+        }
 
-        if (newInv) {
-          autoInvoiceId = newInv.id;
-          await journalForPurchaseInvoice({
+        autoPaymentId = vp.id;
+        autoPaymentAmount = payAmount;
+
+        // Insert allocation
+        const { error: allocationErr } = await supabase
+          .from("vendor_payment_allocations")
+          .insert({
+            payment_id: vp.id,
             invoice_id: newInv.id,
-            invoice_number: invNum as string,
-            invoice_date: invDate,
-            subtotal: Number(f.subtotal),
-            tax: Number(f.tax),
-            user_id: profile.id,
+            amount: payAmount,
           });
+        if (allocationErr) return { error: { _form: [allocationErr.message] } };
 
-          // Auto-create vendor payment based on PO payment terms
-          const payType = f.payment_type ?? "credit";
-          const dpAmount = Number(f.dp_amount ?? 0);
-          const payAmount =
-            payType === "cash"
-              ? invTotal
-              : payType === "dp"
-                ? Math.min(dpAmount, invTotal)
-                : 0;
+        // Update invoice paid_amount + status
+        const newPaid = payAmount;
+        const invoiceStatus = newPaid >= invTotal ? "paid" : "partial";
+        const { error: invoicePayErr } = await supabase
+          .from("purchase_invoices")
+          .update({
+            paid_amount: newPaid,
+            status: invoiceStatus,
+          })
+          .eq("id", newInv.id);
+        if (invoicePayErr) return { error: { _form: [invoicePayErr.message] } };
 
-          if (payAmount > 0 && f.dp_bank_account_id) {
-            // Validate bank still active + has balance
-            const { data: bank } = await supabase
-              .from("bank_accounts")
-              .select("id, current_balance, type, name, is_active")
-              .eq("id", f.dp_bank_account_id)
-              .single();
-            const b = bank as {
-              id: string;
-              current_balance: number;
-              type: string;
-              name: string;
-              is_active: boolean;
-            } | null;
+        // Decrement bank balance
+        const { error: bankBalanceErr } = await supabase
+          .from("bank_accounts")
+          .update({
+            current_balance: Number(b.current_balance) - payAmount,
+          })
+          .eq("id", b.id);
+        if (bankBalanceErr) return { error: { _form: [bankBalanceErr.message] } };
 
-            if (b && b.is_active && Number(b.current_balance) >= payAmount) {
-              const { data: payNum } = await supabase.rpc(
-                "generate_vendor_payment_number",
-              );
-              const paymentMethod = b.type === "cash" ? "cash" : "bank_transfer";
+        // Record bank transaction (debit = uang keluar)
+        const { error: bankTxErr } = await supabase
+          .from("bank_transactions")
+          .insert({
+            bank_account_id: b.id,
+            transaction_date: invDate,
+            type: "debit",
+            amount: payAmount,
+            description:
+              payType === "cash"
+                ? `Bayar Lunas Vendor - ${f.po_number}`
+                : `DP Vendor - ${f.po_number}`,
+            reference_no: payNum as string,
+            related_entity_type: "vendor_payment",
+            related_entity_id: vp.id,
+            is_reconciled: false,
+            created_by: profile.id,
+          });
+        if (bankTxErr) return { error: { _form: [bankTxErr.message] } };
 
-              const { data: vp } = await supabase
-                .from("vendor_payments")
-                .insert({
-                  payment_number: payNum,
-                  supplier_id: f.supplier_id,
-                  payment_date: invDate,
-                  payment_method: paymentMethod,
-                  bank_account_id: f.dp_bank_account_id,
-                  amount: payAmount,
-                  reference_no: null,
-                  notes:
-                    payType === "cash"
-                      ? `Auto-Bayar Lunas dari ${f.po_number}`
-                      : `Auto-DP dari ${f.po_number}`,
-                  attachment_url: null,
-                  created_by: profile.id,
-                })
-                .select("id")
-                .single();
-
-              if (vp) {
-                autoPaymentId = vp.id;
-                autoPaymentAmount = payAmount;
-
-                // Insert allocation
-                await supabase
-                  .from("vendor_payment_allocations")
-                  .insert({
-                    payment_id: vp.id,
-                    invoice_id: newInv.id,
-                    amount: payAmount,
-                  });
-
-                // Update invoice paid_amount + status
-                const newPaid = payAmount;
-                const newStatus =
-                  newPaid >= invTotal ? "paid" : "partial";
-                await supabase
-                  .from("purchase_invoices")
-                  .update({
-                    paid_amount: newPaid,
-                    status: newStatus,
-                  })
-                  .eq("id", newInv.id);
-
-                // Decrement bank balance
-                await supabase
-                  .from("bank_accounts")
-                  .update({
-                    current_balance:
-                      Number(b.current_balance) - payAmount,
-                  })
-                  .eq("id", b.id);
-
-                // Record bank transaction (debit = uang keluar)
-                await supabase.from("bank_transactions").insert({
-                  bank_account_id: b.id,
-                  transaction_date: invDate,
-                  type: "debit",
-                  amount: payAmount,
-                  description:
-                    payType === "cash"
-                      ? `Bayar Lunas Vendor — ${f.po_number}`
-                      : `DP Vendor — ${f.po_number}`,
-                  reference_no: payNum as string,
-                  related_entity_type: "vendor_payment",
-                  related_entity_id: vp.id,
-                  is_reconciled: false,
-                  created_by: profile.id,
-                });
-
-                // Auto-journal Dr Hutang / Cr Kas-Bank
-                await journalForVendorPayment({
-                  payment_id: vp.id,
-                  payment_number: payNum as string,
-                  payment_date: invDate,
-                  amount: payAmount,
-                  bank_account_id: b.id,
-                  user_id: profile.id,
-                });
-              }
-            }
-          }
+        // Auto-journal Dr Hutang / Cr Kas-Bank
+        const vendorPaymentJournal = await journalForVendorPayment({
+          payment_id: vp.id,
+          payment_number: payNum as string,
+          payment_date: invDate,
+          amount: payAmount,
+          bank_account_id: b.id,
+          user_id: profile.id,
+        });
+        if (vendorPaymentJournal.error) {
+          return { error: { _form: [vendorPaymentJournal.error] } };
         }
       }
     } else {

@@ -13,17 +13,21 @@ export function ReportsExport() {
     const supabase = createClient();
 
     // Fetch all data in parallel
-    const [productsRes, packingItemsRes, sessionsRes, returnsRes] = await Promise.all([
+    const [productsRes, packingItemsRes, sessionsRes, returnsRes, invoicesRes, expensesRes] = await Promise.all([
       supabase.from("products").select("id, brand, model, size, quantity, hpp, sell_price, first_inbound_at").eq("is_active", true),
       supabase.from("packing_items").select("sell_price, unit_hpp, created_at, products(brand, model), packing_sessions!inner(status, platform)").in("packing_sessions.status", ["shipped", "completed", "has_return"]),
       supabase.from("packing_sessions").select("id, platform, status, created_at").in("status", ["packing", "shipped", "completed", "has_return"]),
       supabase.from("returns").select("id, status, return_type, created_at"),
+      supabase.from("sales_invoices").select("channel, subtotal, discount, shipping, marketplace_fee, total, status, sales_invoice_lines(qty, unit_cost)").neq("status", "cancelled"),
+      supabase.from("expenses").select("amount, status, expense_categories:category_id(name, account_code)").eq("status", "paid"),
     ]);
 
     const products = productsRes.data ?? [];
     const items = packingItemsRes.data ?? [];
     const sessions = sessionsRes.data ?? [];
     const returns = returnsRes.data ?? [];
+    const invoices = invoicesRes.data ?? [];
+    const expenses = expensesRes.data ?? [];
 
     // ═══════════════════════════════════════════
     // SECTION 1: INVENTORY REPORTING
@@ -137,11 +141,68 @@ export function ReportsExport() {
     };
 
     // ═══════════════════════════════════════════
+    // SECTION 4: CHANNEL PROFIT + MARKETPLACE COST
+    // ═══════════════════════════════════════════
+    const channelMap: Record<string, { invoices: number; units: number; revenue: number; cogs: number; fee: number; discount: number }> = {};
+    for (const invoice of invoices as any[]) {
+      const channel = invoice.channel ?? "other";
+      if (!channelMap[channel]) channelMap[channel] = { invoices: 0, units: 0, revenue: 0, cogs: 0, fee: 0, discount: 0 };
+      const lines = invoice.sales_invoice_lines ?? [];
+      channelMap[channel].invoices++;
+      channelMap[channel].revenue += Number(invoice.total ?? 0);
+      channelMap[channel].fee += Number(invoice.marketplace_fee ?? 0);
+      channelMap[channel].discount += Number(invoice.discount ?? 0);
+      for (const line of lines) {
+        channelMap[channel].units += Number(line.qty ?? 0);
+        channelMap[channel].cogs += Number(line.qty ?? 0) * Number(line.unit_cost ?? 0);
+      }
+    }
+
+    const channelRows = Object.entries(channelMap)
+      .sort((a, b) => (b[1].revenue - b[1].cogs) - (a[1].revenue - a[1].cogs))
+      .map(([channel, d], i) => {
+        const profit = d.revenue - d.cogs;
+        return [i + 1, channel, d.invoices, d.units, Math.round(d.revenue), Math.round(d.cogs), Math.round(d.fee), Math.round(profit), d.revenue > 0 ? `${((profit / d.revenue) * 100).toFixed(1)}%` : "0%"];
+      });
+
+    const channelSection: ReportSection = {
+      title: "CHANNEL PROFIT & MARKETPLACE COST",
+      columns: ["No", "Channel", "Invoice", "Unit", "Revenue (Rp)", "HPP (Rp)", "Fee (Rp)", "Profit (Rp)", "Margin (%)"],
+      rows: channelRows,
+    };
+
+    // ═══════════════════════════════════════════
+    // SECTION 5: EXPENSE REPORTING
+    // ═══════════════════════════════════════════
+    const expenseMap: Record<string, { category: string; account: string; count: number; total: number }> = {};
+    for (const expense of expenses as any[]) {
+      const category = expense.expense_categories?.name ?? "Tanpa kategori";
+      const account = expense.expense_categories?.account_code ?? "—";
+      const key = `${account}:${category}`;
+      if (!expenseMap[key]) expenseMap[key] = { category, account, count: 0, total: 0 };
+      expenseMap[key].count++;
+      expenseMap[key].total += Number(expense.amount ?? 0);
+    }
+    const expenseRows = Object.values(expenseMap)
+      .sort((a, b) => b.total - a.total)
+      .map((row, i) => [i + 1, row.account, row.category, row.count, Math.round(row.total)]);
+
+    const expenseSection: ReportSection = {
+      title: "EXPENSE REPORTING",
+      columns: ["No", "Akun", "Kategori", "Transaksi", "Total (Rp)"],
+      rows: expenseRows,
+      summary: [
+        { label: "Total Pengeluaran", value: `Rp ${Object.values(expenseMap).reduce((s, r) => s + r.total, 0).toLocaleString("id-ID")}` },
+        { label: "Kategori Aktif", value: String(Object.keys(expenseMap).length) },
+      ],
+    };
+
+    // ═══════════════════════════════════════════
     // GENERATE REPORT
     // ═══════════════════════════════════════════
     const exportParams = {
       title: "Executive Summary Report",
-      sections: [inventorySection, financialSection, operationalSection],
+      sections: [inventorySection, financialSection, operationalSection, channelSection, expenseSection],
       period: new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" }),
     };
 
