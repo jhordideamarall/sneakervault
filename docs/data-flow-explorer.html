@@ -32,6 +32,11 @@
   .floatbar{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:4;display:flex;gap:7px;padding:7px;border-radius:15px;background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(16px);box-shadow:0 14px 40px rgba(0,0,0,.45)}
   .chip{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--sub);border-radius:999px;padding:7px 13px;cursor:pointer;font-size:12.5px;font-weight:600;transition:.18s;white-space:nowrap}
   .chip:hover{color:var(--ink);background:rgba(255,255,255,.09)} .chip.on{color:#06121f;background:#fff;border-color:#fff}
+  .steps{position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:4;display:none;gap:5px;align-items:center;flex-wrap:wrap;max-width:78%;justify-content:center;padding:8px 13px;border-radius:13px;background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(14px);box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  .steps.show{display:flex}
+  .steps .st{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);font-weight:500}
+  .steps .num{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#fff;color:#06121f;font-size:10.5px;font-weight:800}
+  .steps .arr{opacity:.35;margin:0 1px}
   .legend{position:absolute;left:14px;bottom:14px;z-index:4;background:var(--glass);border:1px solid var(--line);border-radius:15px;padding:13px 15px;backdrop-filter:blur(16px);box-shadow:0 14px 40px rgba(0,0,0,.45)}
   .legend h4{margin:0 0 9px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--sub)}
   .legend .row{display:flex;align-items:center;gap:9px;margin:6px 0;font-size:12.5px;cursor:pointer;transition:.15s}
@@ -68,6 +73,7 @@
   </header>
   <main>
     <div class="floatbar" id="presets"></div>
+    <div class="steps" id="steps"></div>
     <div id="cy"></div>
     <div class="loading" id="loading">Memuat…</div>
     <div class="legend" id="legend"><h4>Workspace (klik untuk sembunyikan)</h4></div>
@@ -198,6 +204,7 @@ const cy=cytoscape({
       'label':'data(label)','color':'#fff','font-size':11,'font-weight':600,'text-valign':'center','text-halign':'center',
       'text-wrap':'wrap','text-max-width':128,'width':'label','height':'label','padding':'11px',
       'background-color':e=>WSC[e.data('ws')],'background-opacity':.18,'border-width':1.6,'border-color':e=>WSC[e.data('ws')],'border-opacity':.9,
+      'text-outline-color':'#0a0c12','text-outline-width':1.6,
       'shape':e=>e.data('kind')==='action'?'round-rectangle':e.data('kind')==='report'?'round-hexagon':'barrel',
       'transition-property':'background-opacity,border-width,opacity','transition-duration':'160ms'
     }},
@@ -208,13 +215,13 @@ const cy=cytoscape({
     {selector:'edge.flow',style:{'line-style':'dashed','line-dash-pattern':[7,7]}},
     {selector:'edge.broken',style:{'line-style':'dashed','line-dash-pattern':[3,5],'target-arrow-shape':'none','opacity':.95,
       'label':'⚠ tidak sinkron','font-size':9,'color':'#ff453a','text-rotation':'autorotate','text-background-color':'#07080c','text-background-opacity':.75,'text-background-padding':2}},
-    {selector:'node.dim',style:{'opacity':.32}},
+    {selector:'node.dim',style:{'opacity':.3}},
     {selector:'edge.dim',style:{'opacity':.06}},
     {selector:'node[?isParent].dim',style:{'opacity':.5}},
-    {selector:'node.focus',style:{'background-opacity':.62,'border-width':3.6}},
-    {selector:'edge.lit',style:{'opacity':1,'width':e=>ETYPE[e.data('etype')].w+1.7}},
-    {selector:'node.lit',style:{'opacity':1,'background-opacity':.55,'border-width':3,'color':'#fff'}},
-    {selector:'node.step',style:{'border-color':'#fff','color':'#fff'}},
+    {selector:'edge.lit',style:{'opacity':1,'width':e=>ETYPE[e.data('etype')].w+2.4,'underlay-color':e=>ETYPE[e.data('etype')].c,'underlay-opacity':.3,'underlay-padding':2.5}},
+    {selector:'node.lit',style:{'opacity':1,'background-opacity':.62,'border-width':3,'border-opacity':1,'color':'#fff','underlay-color':e=>WSC[e.data('ws')],'underlay-opacity':.3,'underlay-padding':8}},
+    {selector:'node.focus',style:{'opacity':1,'background-opacity':.9,'border-width':4,'border-color':'#fff','underlay-color':e=>WSC[e.data('ws')],'underlay-opacity':.65,'underlay-padding':15}},
+    {selector:'node.step',style:{'border-color':'#fff','border-width':3}},
   ],
   layout:{name:'preset',fit:true,padding:60}
 });
@@ -270,7 +277,7 @@ cy.on('mouseout','node[!isParent]',e=>{if(!cy.elements().hasClass('focus'))cy.el
 
 // ===== step numbering: label jadi "1 · Nama" saat alur dipilih =====
 const ORIG=Object.fromEntries(N.map(n=>[n[0],n[1]]));
-function clearNums(){cy.batch(()=>cy.nodes('[!isParent]').forEach(n=>{n.data('label',ORIG[n.id()]);n.removeClass('step');}));}
+function clearNums(){cy.batch(()=>cy.nodes('[!isParent]').forEach(n=>{n.data('label',ORIG[n.id()]);n.removeClass('step');}));const st=document.getElementById('steps');if(st){st.classList.remove('show');st.innerHTML='';}}
 function applyNums(ids){cy.batch(()=>ids.forEach((id,i)=>{const el=cy.getElementById(id);if(el&&el.nonempty()){el.data('label',(i+1)+' · '+ORIG[id]);el.addClass('step');}}));}
 
 // presets — urutan array = urutan langkah alur
@@ -287,7 +294,10 @@ Object.keys(PRESETS).forEach((k,i)=>{const c=document.createElement('div');c.cla
     const set=cy.collection(ids.map(id=>cy.getElementById(id)));const sub=set.union(set.edgesWith(set));
     cy.batch(()=>{cy.elements().addClass('dim');sub.removeClass('dim').addClass('lit');});
     applyNums(ids);
-    cy.animate({fit:{eles:sub,padding:80}},{duration:460,easing:'ease-in-out-cubic'});};
+    const st=document.getElementById('steps');
+    st.innerHTML=ids.map((id,j)=>`<span class="st"><span class="num">${j+1}</span>${ORIG[id]||id}</span>`).join('<span class="arr">→</span>');
+    st.classList.add('show');
+    cy.animate({fit:{eles:sub,padding:90}},{duration:460,easing:'ease-in-out-cubic'});};
   pb.appendChild(c);});
 
 document.getElementById('q').addEventListener('input',ev=>{const v=ev.target.value.trim().toLowerCase();clearNums();if(!v){clearFocus();return;}
