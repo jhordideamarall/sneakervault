@@ -208,10 +208,13 @@ const cy=cytoscape({
     {selector:'edge.flow',style:{'line-style':'dashed','line-dash-pattern':[7,7]}},
     {selector:'edge.broken',style:{'line-style':'dashed','line-dash-pattern':[3,5],'target-arrow-shape':'none','opacity':.95,
       'label':'⚠ tidak sinkron','font-size':9,'color':'#ff453a','text-rotation':'autorotate','text-background-color':'#07080c','text-background-opacity':.75,'text-background-padding':2}},
-    {selector:'.dim',style:{'opacity':.06}},
-    {selector:'node.focus',style:{'background-opacity':.46,'border-width':3}},
-    {selector:'edge.lit',style:{'opacity':1,'width':e=>ETYPE[e.data('etype')].w+1.3}},
-    {selector:'node.lit',style:{'opacity':1,'background-opacity':.36,'border-width':2.6}},
+    {selector:'node.dim',style:{'opacity':.32}},
+    {selector:'edge.dim',style:{'opacity':.06}},
+    {selector:'node[?isParent].dim',style:{'opacity':.5}},
+    {selector:'node.focus',style:{'background-opacity':.62,'border-width':3.6}},
+    {selector:'edge.lit',style:{'opacity':1,'width':e=>ETYPE[e.data('etype')].w+1.7}},
+    {selector:'node.lit',style:{'opacity':1,'background-opacity':.55,'border-width':3,'color':'#fff'}},
+    {selector:'node.step',style:{'border-color':'#fff','color':'#fff'}},
   ],
   layout:{name:'preset',fit:true,padding:60}
 });
@@ -233,7 +236,7 @@ WS.forEach(w=>{ const r=document.createElement('div');r.className='row';
 let off=0;(function tick(){off-=0.5;cy.batch(()=>cy.edges('.flow').style('line-dash-offset',off));requestAnimationFrame(tick);})();
 
 function clearFocus(){cy.elements().removeClass('dim lit focus');}
-function focusNode(node){ if(node.data('isParent')){ focusWs(node.data('ws')); return; }
+function focusNode(node){ clearNums(); if(node.data('isParent')){ focusWs(node.data('ws')); return; }
   const hood=node.closedNeighborhood().closedNeighborhood();
   cy.batch(()=>{cy.elements().addClass('dim');hood.removeClass('dim').addClass('lit');node.removeClass('dim').addClass('focus');});
   openPanel(node.id()); cy.animate({fit:{eles:hood,padding:90}},{duration:420,easing:'ease-in-out-cubic'});
@@ -259,36 +262,42 @@ function openPanel(id){ const m=META[id]; if(!m)return;
   if(['packing_sessions','terjual','sales_invoices'].includes(id)) h+=`<div class="sec"><div class="warnbox">⚠️ <b>Dua jalur terpisah:</b> pengiriman (packing → Terjual) tidak nyambung ke akuntansi (faktur jual → Laporan). Penjualan POS tidak muncul di Terjual — hati-hati salah hitung.</div></div>`;
   document.getElementById('p-body').innerHTML=h; panel.classList.add('open');
 }
-document.getElementById('px').onclick=()=>{panel.classList.remove('open');clearFocus();cy.animate({fit:{eles:cy.elements(),padding:60}},{duration:360});};
+document.getElementById('px').onclick=()=>{panel.classList.remove('open');clearFocus();clearNums();cy.animate({fit:{eles:cy.elements(),padding:60}},{duration:360});};
 cy.on('tap','node',e=>focusNode(e.target));
-cy.on('tap',e=>{if(e.target===cy){panel.classList.remove('open');clearFocus();}});
+cy.on('tap',e=>{if(e.target===cy){panel.classList.remove('open');clearFocus();clearNums();}});
 cy.on('mouseover','node[!isParent]',e=>{if(!cy.elements().hasClass('focus'))e.target.closedNeighborhood().addClass('lit');});
 cy.on('mouseout','node[!isParent]',e=>{if(!cy.elements().hasClass('focus'))cy.elements().removeClass('lit');});
 
-// presets
+// ===== step numbering: label jadi "1 · Nama" saat alur dipilih =====
+const ORIG=Object.fromEntries(N.map(n=>[n[0],n[1]]));
+function clearNums(){cy.batch(()=>cy.nodes('[!isParent]').forEach(n=>{n.data('label',ORIG[n.id()]);n.removeClass('step');}));}
+function applyNums(ids){cy.batch(()=>ids.forEach((id,i)=>{const el=cy.getElementById(id);if(el&&el.nonempty()){el.data('label',(i+1)+' · '+ORIG[id]);el.addClass('step');}}));}
+
+// presets — urutan array = urutan langkah alur
 const PRESETS={'Semua':null,
-  'Alur jualan POS':['pos','sales_invoices','customer_payments','stock_movements','journal_entries','bank_accounts','bank_transactions','products','customers','lap_keuangan','reports_ops'],
-  'Alur beli & terima':['po','receive','products','purchase_invoices','vendor_payments','stock_movements','journal_entries','bank_accounts','bank_transactions','suppliers'],
-  'Silo pengiriman':['outbound','packing_sessions','terjual','orders','returns','stock_movements','sales_invoices'],
-  'Semua ke jurnal':['journal_entries','lap_keuangan','sales_invoices','purchase_invoices','customer_payments','vendor_payments','expense','opname','coa','pos','receive']};
+  'Alur jualan POS':['products','pos','sales_invoices','stock_movements','customer_payments','bank_accounts','bank_transactions','journal_entries','lap_keuangan'],
+  'Alur beli & terima':['suppliers','po','receive','products','stock_movements','purchase_invoices','vendor_payments','bank_accounts','bank_transactions','journal_entries'],
+  'Silo pengiriman':['products','outbound','packing_sessions','orders','terjual','returns'],
+  'Semua ke jurnal':['pos','receive','expense','opname','sales_invoices','purchase_invoices','customer_payments','vendor_payments','coa','journal_entries','lap_keuangan']};
 const pb=document.getElementById('presets');
 Object.keys(PRESETS).forEach((k,i)=>{const c=document.createElement('div');c.className='chip'+(i===0?' on':'');c.textContent=k;
   c.onclick=()=>{document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');
-    const ids=PRESETS[k];clearFocus();panel.classList.remove('open');
+    const ids=PRESETS[k];clearFocus();clearNums();panel.classList.remove('open');
     if(!ids){cy.animate({fit:{eles:cy.elements(),padding:60}},{duration:420});return;}
     const set=cy.collection(ids.map(id=>cy.getElementById(id)));const sub=set.union(set.edgesWith(set));
     cy.batch(()=>{cy.elements().addClass('dim');sub.removeClass('dim').addClass('lit');});
-    cy.animate({fit:{eles:sub,padding:70}},{duration:460,easing:'ease-in-out-cubic'});};
+    applyNums(ids);
+    cy.animate({fit:{eles:sub,padding:80}},{duration:460,easing:'ease-in-out-cubic'});};
   pb.appendChild(c);});
 
-document.getElementById('q').addEventListener('input',ev=>{const v=ev.target.value.trim().toLowerCase();if(!v){clearFocus();return;}
+document.getElementById('q').addEventListener('input',ev=>{const v=ev.target.value.trim().toLowerCase();clearNums();if(!v){clearFocus();return;}
   const hit=cy.nodes('[!isParent]').filter(n=>n.data('label').toLowerCase().includes(v)||n.id().includes(v));
   cy.batch(()=>{cy.elements().addClass('dim');hit.removeClass('dim').addClass('lit');});
   if(hit.length)cy.animate({fit:{eles:hit,padding:130}},{duration:300});});
 document.getElementById('reset').onclick=()=>{document.getElementById('q').value='';
   document.querySelectorAll('.chip').forEach((x,i)=>x.classList.toggle('on',i===0));
   hidden.clear();document.querySelectorAll('.legend .row').forEach(r=>r.classList.remove('off'));
-  cy.nodes('[!isParent]').style('display','element');clearFocus();panel.classList.remove('open');
+  cy.nodes('[!isParent]').style('display','element');clearFocus();clearNums();panel.classList.remove('open');
   cy.animate({fit:{eles:cy.elements(),padding:60}},{duration:420});};
 </script>
 </body>
