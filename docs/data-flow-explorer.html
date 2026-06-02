@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dewins.id — Data Flow Explorer</title>
+<style>
+  :root{
+    --bg:#07080c; --bg2:#0c0e15; --ink:#eef0f6; --sub:#9aa0b4; --line:rgba(255,255,255,.08);
+    --master:#8e8e93; --buy:#30d158; --sell:#0a84ff; --fulf:#ff9f0a; --conv:#ffd60a; --report:#bf5af2; --broken:#ff453a;
+    --glass:rgba(20,22,30,.72);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:radial-gradient(1200px 700px at 70% -10%,#15203a 0%,var(--bg) 55%) fixed;
+       color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+       -webkit-font-smoothing:antialiased;overflow:hidden}
+  #app{display:grid;grid-template-rows:auto 1fr;height:100%}
+
+  /* top bar */
+  header{display:flex;align-items:center;gap:18px;padding:14px 20px;border-bottom:1px solid var(--line);
+         background:linear-gradient(180deg,rgba(12,14,21,.9),rgba(12,14,21,.55));backdrop-filter:blur(14px);z-index:5}
+  .brand{display:flex;flex-direction:column;line-height:1.15}
+  .brand b{font-size:17px;letter-spacing:-.02em}
+  .brand span{font-size:11px;color:var(--sub);letter-spacing:.05em;text-transform:uppercase}
+  .stats{display:flex;gap:14px;margin-left:6px}
+  .stat{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:12px;padding:6px 12px;text-align:center}
+  .stat b{font-size:16px;display:block} .stat span{font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:.05em}
+  .grow{flex:1}
+  .search{position:relative}
+  .search input{background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--ink);border-radius:11px;
+                padding:9px 12px 9px 32px;width:210px;outline:none;font-size:13px}
+  .search input:focus{border-color:rgba(10,132,255,.6);box-shadow:0 0 0 3px rgba(10,132,255,.15)}
+  .search svg{position:absolute;left:10px;top:9px;opacity:.5}
+  .btn{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--ink);border-radius:11px;
+       padding:9px 13px;cursor:pointer;font-size:13px;transition:.15s}
+  .btn:hover{background:rgba(255,255,255,.12)}
+
+  /* presets chips */
+  .chips{display:flex;gap:8px;align-items:center}
+  .chip{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--sub);border-radius:999px;
+        padding:7px 13px;cursor:pointer;font-size:12.5px;font-weight:600;transition:.18s;white-space:nowrap}
+  .chip:hover{color:var(--ink);background:rgba(255,255,255,.09)}
+  .chip.on{color:#06121f;background:#fff;border-color:#fff}
+
+  main{position:relative;overflow:hidden}
+  #cy{position:absolute;inset:0}
+
+  /* floating preset bar */
+  .floatbar{position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:4;
+            display:flex;gap:8px;padding:8px;border-radius:16px;background:var(--glass);
+            border:1px solid var(--line);backdrop-filter:blur(16px);box-shadow:0 14px 40px rgba(0,0,0,.45)}
+
+  /* legend */
+  .legend{position:absolute;left:16px;bottom:16px;z-index:4;background:var(--glass);border:1px solid var(--line);
+          border-radius:16px;padding:14px 16px;backdrop-filter:blur(16px);box-shadow:0 14px 40px rgba(0,0,0,.45);max-width:230px}
+  .legend h4{margin:0 0 10px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--sub)}
+  .legend .row{display:flex;align-items:center;gap:9px;margin:7px 0;font-size:12.5px;cursor:pointer;opacity:.95;transition:.15s}
+  .legend .row:hover{opacity:1;transform:translateX(2px)}
+  .legend .row.off{opacity:.32;text-decoration:line-through}
+  .swatch{width:13px;height:13px;border-radius:4px;flex:0 0 auto;box-shadow:0 0 10px currentColor}
+
+  /* detail panel */
+  .panel{position:absolute;top:16px;right:16px;bottom:16px;width:340px;z-index:6;background:var(--glass);
+         border:1px solid var(--line);border-radius:18px;backdrop-filter:blur(18px);box-shadow:0 20px 60px rgba(0,0,0,.55);
+         transform:translateX(380px);transition:transform .32s cubic-bezier(.22,1,.36,1);display:flex;flex-direction:column;overflow:hidden}
+  .panel.open{transform:none}
+  .panel .ph{padding:18px 18px 14px;border-bottom:1px solid var(--line)}
+  .panel .tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+              padding:3px 9px;border-radius:999px;margin-bottom:9px}
+  .panel h3{margin:0;font-size:19px;letter-spacing:-.01em}
+  .panel .kind{color:var(--sub);font-size:12px;margin-top:3px}
+  .panel .pb{padding:16px 18px;overflow-y:auto}
+  .panel .sec{margin-bottom:16px}
+  .panel .sec h5{margin:0 0 7px;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--sub)}
+  .panel .sec p{margin:0;color:#cfd3e0;font-size:13px}
+  .panel .lst{display:flex;flex-wrap:wrap;gap:6px}
+  .panel .lst span{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:8px;padding:4px 9px;font-size:11.5px}
+  .panel .flags{display:flex;gap:8px;margin-top:4px}
+  .flag{font-size:11px;font-weight:700;border-radius:9px;padding:5px 10px;border:1px solid var(--line)}
+  .flag.on{color:#06121f} .flag.off{color:var(--sub);opacity:.6}
+  .panel .x{position:absolute;top:14px;right:14px;cursor:pointer;opacity:.6;font-size:18px;line-height:1}
+  .panel .x:hover{opacity:1}
+  .warnbox{background:rgba(255,69,58,.1);border:1px solid rgba(255,69,58,.35);border-radius:12px;padding:11px 12px;color:#ffb4ae;font-size:12.5px}
+
+  .hint{position:absolute;right:16px;bottom:16px;z-index:3;color:var(--sub);font-size:12px;background:var(--glass);
+        border:1px solid var(--line);border-radius:11px;padding:8px 12px;backdrop-filter:blur(10px)}
+  .loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--sub);font-size:13px;z-index:2}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand"><b>Data Flow Explorer</b><span>Dewins.id · peta sinkronisasi</span></div>
+    <div class="stats">
+      <div class="stat"><b id="s-mod">0</b><span>modul</span></div>
+      <div class="stat"><b id="s-tab">0</b><span>tabel</span></div>
+      <div class="stat"><b id="s-edge">0</b><span>koneksi</span></div>
+    </div>
+    <div class="grow"></div>
+    <div class="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="q" placeholder="Cari modul / tabel…" autocomplete="off"/>
+    </div>
+    <button class="btn" id="reset">Reset</button>
+  </header>
+  <main>
+    <div class="floatbar" id="presets"></div>
+    <div id="cy"></div>
+    <div class="loading" id="loading">Memuat graph…</div>
+
+    <div class="legend" id="legend"><h4>Layer (klik untuk sembunyikan)</h4></div>
+
+    <div class="panel" id="panel">
+      <div class="x" id="px">✕</div>
+      <div class="ph">
+        <span class="tag" id="p-tag">—</span>
+        <h3 id="p-title">—</h3>
+        <div class="kind" id="p-kind">—</div>
+      </div>
+      <div class="pb" id="p-body"></div>
+    </div>
+
+    <div class="hint">Klik node = telusuri koneksi · scroll = zoom · drag = geser</div>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+<script>
+const COLORS={master:'#8e8e93',buy:'#30d158',sell:'#0a84ff',fulf:'#ff9f0a',conv:'#ffd60a',report:'#bf5af2'};
+const CATLABEL={master:'Master / Config',buy:'Pembelian',sell:'Penjualan',fulf:'Fulfillment (silo)',conv:'Titik kumpul',report:'Laporan'};
+
+// ---- NODES (kind: action | table | report) — derived from real code map ----
+const N=[
+  // master
+  ['products','Produk','table','master','Master barang. quantity & HPP diubah oleh transaksi (terima/jual/opname).'],
+  ['suppliers','Supplier','table','master','Master pemasok.'],
+  ['customers','Customer','table','master','Master pelanggan.'],
+  ['bank_accounts','Akun Bank','table','master','Master kas/bank. Saldo hidup, diubah oleh tiap pembayaran.'],
+  ['coa','Chart of Accounts','table','master','36 akun (kode→nama). Engine jurnal merujuk lewat KODE. Reference wajib.'],
+  // purchasing
+  ['po','PO (Purchase Order)','action','buy','Buat pesanan beli ke supplier.'],
+  ['receive','Terima Barang','action','buy','Scan/terima → naikkan stok+HPP, auto faktur & (cash/DP) bayar vendor.'],
+  ['purchase_invoices','purchase_invoices','table','buy','Faktur pembelian (hutang ke vendor).'],
+  ['vendor_payments','vendor_payments','table','buy','Pembayaran ke vendor + alokasi.'],
+  // selling
+  ['pos','POS Kasir','action','sell','Checkout offline ATOMIK (1 transaksi).'],
+  ['invoice','Invoice Penjualan','action','sell','Buat invoice manual.'],
+  ['import_mp','Import Marketplace','action','sell','Impor order Shopee/TikTok → invoice.'],
+  ['sales_invoices','sales_invoices','table','sell','Faktur penjualan (piutang). Sumber Laporan & Reports.'],
+  ['customer_payments','customer_payments','table','sell','Penerimaan dari customer + alokasi.'],
+  // expense / opname
+  ['expense','Pengeluaran/Beban','action','sell','Catat beban operasional + bukti.'],
+  ['expenses','expenses','table','sell','Tabel beban.'],
+  ['opname','Stock Opname','action','buy','Cycle count → selisih → penyesuaian stok+jurnal.'],
+  ['stock_opname','stock_opname_sessions','table','buy','Sesi & baris opname.'],
+  // fulfillment SILO
+  ['outbound','Barang Keluar / Packing','action','fulf','Scan barang keluar untuk pengiriman online.'],
+  ['packing_sessions','packing_sessions','table','fulf','Sesi packing/kirim. Sumber halaman Terjual.'],
+  ['returns','Retur','action','fulf','Retur / tukar size.'],
+  ['terjual','Halaman TERJUAL','report','fulf','Riwayat barang DIKIRIM (status completed). BUKAN semua penjualan.'],
+  // convergence
+  ['stock_movements','stock_movements','table','conv','Kartu stok — semua mutasi masuk/keluar.'],
+  ['journal_entries','journal_entries','table','conv','Buku besar — muara semua transaksi akuntansi.'],
+  ['bank_transactions','bank_transactions','table','conv','Mutasi kas/bank.'],
+  // reports
+  ['lap_keuangan','Laporan Keuangan','report','report','Neraca · Laba-Rugi · Arus Kas · Ekuitas.'],
+  ['kartu_stok','Kartu Stok','report','report','Mutasi & nilai persediaan.'],
+  ['kas_bank','Kas & Bank','report','report','Mutasi + Rekonsiliasi.'],
+  ['reports_ops','Reports Operasional','report','report','Profit, per channel, retur, slow moving.'],
+];
+// ---- EDGES [from,to,type] ----  type: write|stock|journal|money|report|fulfil|broken
+const E=[
+  ['suppliers','po','write'],['products','po','write'],
+  ['po','receive','write'],
+  ['receive','products','stock'],['receive','stock_movements','stock'],
+  ['receive','purchase_invoices','write'],['purchase_invoices','journal_entries','journal'],
+  ['receive','vendor_payments','money'],['vendor_payments','bank_accounts','money'],
+  ['vendor_payments','bank_transactions','money'],['vendor_payments','journal_entries','journal'],
+
+  ['products','pos','write'],['products','invoice','write'],['products','import_mp','write'],['customers','pos','write'],
+  ['pos','sales_invoices','write'],['invoice','sales_invoices','write'],['import_mp','sales_invoices','write'],
+  ['sales_invoices','stock_movements','stock'],['sales_invoices','journal_entries','journal'],
+  ['pos','customer_payments','money'],['customer_payments','sales_invoices','write'],
+  ['customer_payments','bank_accounts','money'],['customer_payments','bank_transactions','money'],
+  ['customer_payments','journal_entries','journal'],
+
+  ['expense','expenses','write'],['expenses','journal_entries','journal'],['expense','bank_transactions','money'],
+  ['opname','stock_opname','write'],['opname','products','stock'],['opname','stock_movements','stock'],['opname','journal_entries','journal'],
+
+  ['products','outbound','write'],['outbound','packing_sessions','fulfil'],['outbound','stock_movements','stock'],
+  ['returns','packing_sessions','fulfil'],['returns','stock_movements','stock'],['packing_sessions','terjual','fulfil'],
+
+  ['bank_accounts','bank_transactions','money'],
+  ['journal_entries','lap_keuangan','report'],['stock_movements','kartu_stok','report'],
+  ['bank_transactions','kas_bank','report'],['sales_invoices','reports_ops','report'],
+  ['expenses','reports_ops','report'],['packing_sessions','reports_ops','report'],
+
+  ['sales_invoices','packing_sessions','broken'], // ⚠️ TIDAK sinkron
+];
+const META=Object.fromEntries(N.map(n=>[n[0],{label:n[1],kind:n[2],cat:n[3],desc:n[4]}]));
+// derive writes/journal/stock for action nodes
+function downstream(id){return E.filter(e=>e[0]===id).map(e=>({to:e[1],type:e[2]}));}
+function upstream(id){return E.filter(e=>e[1]===id).map(e=>({from:e[0],type:e[2]}));}
+
+const ETYPE={write:{c:'rgba(255,255,255,.34)',w:1.6,lbl:'tulis'},stock:{c:COLORS.buy,w:2.2,lbl:'stok'},
+  journal:{c:COLORS.conv,w:2.4,lbl:'jurnal'},money:{c:COLORS.sell,w:2.2,lbl:'kas/bank'},
+  report:{c:COLORS.report,w:1.8,lbl:'laporan'},fulfil:{c:COLORS.fulf,w:2.2,lbl:'fulfillment'},
+  broken:{c:COLORS.broken,w:2,lbl:'TIDAK sinkron'}};
+
+if(window.cytoscapeDagre) cytoscape.use(window.cytoscapeDagre);
+
+const els=[];
+N.forEach(n=>els.push({data:{id:n[0],label:n[1],kind:n[2],cat:n[3]}}));
+E.forEach((e,i)=>els.push({data:{id:'e'+i,source:e[0],target:e[1],etype:e[2]},classes:e[2]+(e[2]==='broken'?' broken':' flow')}));
+
+const cy=cytoscape({
+  container:document.getElementById('cy'),
+  elements:els,
+  wheelSensitivity:.25,
+  style:[
+    {selector:'node',style:{
+      'label':'data(label)','color':'#fff','font-size':11,'font-weight':600,
+      'text-valign':'center','text-halign':'center','text-wrap':'wrap','text-max-width':108,
+      'width':'label','height':'label','padding':'12px',
+      'background-color':e=>COLORS[e.data('cat')],'background-opacity':.16,
+      'border-width':1.6,'border-color':e=>COLORS[e.data('cat')],'border-opacity':.9,
+      'shape':e=>e.data('kind')==='action'?'round-rectangle':e.data('kind')==='report'?'round-hexagon':'barrel',
+      'transition-property':'background-opacity,border-width,opacity','transition-duration':'180ms'
+    }},
+    {selector:'node[kind="action"]',style:{'font-size':12,'border-width':2.2,'background-opacity':.22}},
+    {selector:'node[kind="report"]',style:{'background-opacity':.2}},
+    {selector:'edge',style:{
+      'curve-style':'bezier','target-arrow-shape':'triangle','arrow-scale':.9,
+      'width':e=>ETYPE[e.data('etype')].w,'line-color':e=>ETYPE[e.data('etype')].c,
+      'target-arrow-color':e=>ETYPE[e.data('etype')].c,'opacity':.5,
+      'transition-property':'opacity,width','transition-duration':'180ms'
+    }},
+    {selector:'edge.flow',style:{'line-style':'dashed','line-dash-pattern':[7,7]}},
+    {selector:'edge.broken',style:{'line-style':'dashed','line-dash-pattern':[3,5],'target-arrow-shape':'none','opacity':.9,'label':'⚠ tidak sinkron','font-size':9,'color':COLORS.broken,'text-rotation':'autorotate','text-background-color':'#07080c','text-background-opacity':.7,'text-background-padding':2}},
+    {selector:'.dim',style:{'opacity':.07}},
+    {selector:'node.focus',style:{'background-opacity':.42,'border-width':3}},
+    {selector:'edge.lit',style:{'opacity':1,'width':e=>ETYPE[e.data('etype')].w+1.4}},
+    {selector:'node.lit',style:{'opacity':1,'background-opacity':.34,'border-width':2.6}},
+  ],
+  layout:{name:'dagre',rankDir:'LR',nodeSep:26,rankSep:78,edgeSep:12}
+});
+
+document.getElementById('s-mod').textContent=N.filter(n=>n[2]==='action').length;
+document.getElementById('s-tab').textContent=N.filter(n=>n[2]==='table').length;
+document.getElementById('s-edge').textContent=E.length;
+document.getElementById('loading').style.display='none';
+
+// ---- legend (toggle layers) ----
+const legend=document.getElementById('legend');
+const hidden=new Set();
+Object.keys(COLORS).forEach(cat=>{
+  const r=document.createElement('div');r.className='row';r.dataset.cat=cat;
+  r.innerHTML=`<span class="swatch" style="color:${COLORS[cat]};background:${COLORS[cat]}"></span>${CATLABEL[cat]}`;
+  r.onclick=()=>{ r.classList.toggle('off');
+    if(hidden.has(cat))hidden.delete(cat);else hidden.add(cat);
+    cy.nodes().forEach(n=>{ n.style('display', hidden.has(n.data('cat'))?'none':'element'); });
+  };
+  legend.appendChild(r);
+});
+
+// ---- edge flow animation ----
+let off=0;
+(function tick(){ off-=0.55; cy.batch(()=>{ cy.edges('.flow').style('line-dash-offset',off); }); requestAnimationFrame(tick); })();
+
+// ---- focus / highlight neighborhood ----
+function clearFocus(){ cy.elements().removeClass('dim lit focus'); }
+function focusNode(node){
+  const hood=node.closedNeighborhood().closedNeighborhood();
+  cy.batch(()=>{
+    cy.elements().addClass('dim');
+    hood.removeClass('dim').addClass('lit');
+    node.removeClass('dim').addClass('focus');
+  });
+  openPanel(node.id());
+  cy.animate({fit:{eles:hood,padding:80}},{duration:420,easing:'ease-in-out-cubic'});
+}
+
+// ---- detail panel ----
+const panel=document.getElementById('panel');
+function chip(t){return `<span>${t}</span>`;}
+function openPanel(id){
+  const m=META[id]; if(!m)return;
+  document.getElementById('p-title').textContent=m.label;
+  document.getElementById('p-kind').textContent=({action:'Modul / aksi',table:'Tabel database',report:'Halaman laporan'})[m.kind];
+  const tag=document.getElementById('p-tag');
+  tag.textContent=CATLABEL[m.cat]; tag.style.background=COLORS[m.cat]; tag.style.color=m.cat==='conv'?'#241a00':'#fff';
+  const ds=downstream(id), us=upstream(id);
+  const posts=t=>ds.some(d=>d.type===t)||us.some(d=>d.type===t);
+  let html=`<div class="sec"><p>${m.desc}</p></div>`;
+  if(m.kind==='action'){
+    html+=`<div class="sec"><h5>Efek (1 aksi)</h5><div class="flags">
+      <span class="flag ${posts('journal')?'on':'off'}" style="${posts('journal')?'background:'+COLORS.conv:''}">Jurnal</span>
+      <span class="flag ${posts('stock')?'on':'off'}" style="${posts('stock')?'background:'+COLORS.buy:''}">Stok</span>
+      <span class="flag ${posts('money')?'on':'off'}" style="${posts('money')?'background:'+COLORS.sell:''}">Kas/Bank</span>
+    </div></div>`;
+  }
+  if(ds.length){ html+=`<div class="sec"><h5>Menulis / mengalir ke →</h5><div class="lst">`+
+    ds.map(d=>chip(`${META[d.to]?META[d.to].label:d.to} · ${ETYPE[d.type].lbl}`)).join('')+`</div></div>`; }
+  if(us.length){ html+=`<div class="sec"><h5>← Diisi oleh</h5><div class="lst">`+
+    us.map(d=>chip(`${META[d.from]?META[d.from].label:d.from} · ${ETYPE[d.type].lbl}`)).join('')+`</div></div>`; }
+  if(id==='packing_sessions'||id==='terjual'||id==='sales_invoices'){
+    html+=`<div class="sec"><div class="warnbox">⚠️ <b>Silo:</b> jalur fulfillment (packing→Terjual) TIDAK nyambung ke jalur akuntansi (sales_invoices→Laporan). Penjualan POS tidak muncul di Terjual; hati-hati double-count.</div></div>`;
+  }
+  document.getElementById('p-body').innerHTML=html;
+  panel.classList.add('open');
+}
+document.getElementById('px').onclick=()=>{panel.classList.remove('open');clearFocus();cy.animate({fit:{eles:cy.elements(),padding:60}},{duration:380});};
+
+cy.on('tap','node',e=>focusNode(e.target));
+cy.on('tap',e=>{ if(e.target===cy){ panel.classList.remove('open'); clearFocus(); } });
+cy.on('mouseover','node',e=>{ if(!cy.elements().hasClass('focus')) e.target.closedNeighborhood().addClass('lit'); });
+cy.on('mouseout','node',e=>{ if(!cy.elements().hasClass('focus')) cy.elements().removeClass('lit'); });
+
+// ---- presets ----
+const PRESETS={
+  'Semua':null,
+  'Penjualan POS':['pos','sales_invoices','customer_payments','stock_movements','journal_entries','bank_accounts','bank_transactions','products','customers','lap_keuangan','kartu_stok','kas_bank','reports_ops'],
+  'Pembelian → Terima':['po','receive','products','purchase_invoices','vendor_payments','stock_movements','journal_entries','bank_accounts','bank_transactions','suppliers','lap_keuangan'],
+  'Silo Fulfillment':['outbound','packing_sessions','terjual','returns','stock_movements','sales_invoices'],
+  'Akuntansi (jurnal)':['journal_entries','lap_keuangan','sales_invoices','purchase_invoices','customer_payments','vendor_payments','expenses','pos','receive'],
+};
+const presetBar=document.getElementById('presets');
+Object.keys(PRESETS).forEach((k,i)=>{
+  const c=document.createElement('div');c.className='chip'+(i===0?' on':'');c.textContent=k;
+  c.onclick=()=>{ document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on')); c.classList.add('on');
+    const ids=PRESETS[k]; clearFocus(); panel.classList.remove('open');
+    if(!ids){ cy.animate({fit:{eles:cy.elements(),padding:60}},{duration:420}); return; }
+    const set=cy.collection(ids.map(id=>cy.getElementById(id)));
+    const sub=set.union(set.edgesWith(set));
+    cy.batch(()=>{ cy.elements().addClass('dim'); sub.removeClass('dim').addClass('lit'); });
+    cy.animate({fit:{eles:sub,padding:70}},{duration:460,easing:'ease-in-out-cubic'});
+  };
+  presetBar.appendChild(c);
+});
+
+// ---- search ----
+document.getElementById('q').addEventListener('input',ev=>{
+  const v=ev.target.value.trim().toLowerCase(); if(!v){clearFocus();return;}
+  const hit=cy.nodes().filter(n=>n.data('label').toLowerCase().includes(v)||n.id().includes(v));
+  cy.batch(()=>{ cy.elements().addClass('dim'); hit.removeClass('dim').addClass('lit'); });
+  if(hit.length) cy.animate({fit:{eles:hit,padding:120}},{duration:300});
+});
+document.getElementById('reset').onclick=()=>{ document.getElementById('q').value='';
+  document.querySelectorAll('.chip').forEach((x,i)=>x.classList.toggle('on',i===0));
+  hidden.clear(); document.querySelectorAll('.legend .row').forEach(r=>r.classList.remove('off'));
+  cy.nodes().style('display','element'); clearFocus(); panel.classList.remove('open');
+  cy.animate({fit:{eles:cy.elements(),padding:60}},{duration:420});
+};
+cy.ready(()=>cy.fit(cy.elements(),60));
+</script>
+</body>
+</html>
