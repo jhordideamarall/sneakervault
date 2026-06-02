@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition, useEffect } from "react";
+import { useState, useMemo, useTransition, useEffect, type ChangeEvent } from "react";
 import {
   Button,
   Input,
@@ -21,6 +21,7 @@ import {
   Clock,
 } from "lucide-react";
 import { createProduct, searchProductsFuzzy } from "@/lib/actions/products";
+import { createClient } from "@sneakervault/supabase/client";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
 import { ExportButtons } from "@/components/export-buttons";
@@ -700,6 +701,31 @@ function AddProductForm({
     image_url: "",
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [uploading, setUploading] = useState(false);
+
+  async function handlePhotoUpload(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.push("File harus berupa gambar", "error");
+      return;
+    }
+    setUploading(true);
+    const supabase = createClient();
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+    const path = `products/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage
+      .from("product-photos")
+      .upload(path, file, { upsert: false, cacheControl: "3600" });
+    if (error) {
+      toast.push(`Gagal upload foto: ${error.message}`, "error");
+      setUploading(false);
+      return;
+    }
+    const { data } = supabase.storage.from("product-photos").getPublicUrl(path);
+    setForm((f) => ({ ...f, image_url: data.publicUrl }));
+    setUploading(false);
+  }
 
   function handleSubmit() {
     setFieldErrors({});
@@ -793,16 +819,51 @@ function AddProductForm({
           />
         </div>
         <div className="sm:col-span-3">
-          <FieldLabel htmlFor="add-image">URL Foto Produk</FieldLabel>
+          <FieldLabel htmlFor="add-image">Foto Produk</FieldLabel>
+          <div className="flex items-center gap-3">
+            <label
+              className={cn(
+                "inline-flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm text-white/80 transition cursor-pointer hover:bg-white/[0.08]",
+                uploading && "pointer-events-none opacity-50",
+              )}
+            >
+              {uploading ? "Mengunggah…" : "Upload dari galeri / HP"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoUpload}
+                disabled={uploading}
+              />
+            </label>
+            {form.image_url ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={form.image_url}
+                  alt="Pratinjau"
+                  className="size-11 rounded-lg border border-white/10 object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, image_url: "" })}
+                  className="text-[11px] text-white/40 hover:text-white/70"
+                >
+                  Hapus
+                </button>
+              </>
+            ) : null}
+          </div>
           <Input
             id="add-image"
             type="url"
             value={form.image_url}
             onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-            placeholder="https://… (paste link gambar dari Google)"
+            placeholder="atau paste link gambar…"
+            className="mt-2"
           />
           <p className="mt-1 text-[11px] text-white/40">
-            Paste URL langsung dari Google Image atau galeri toko.
+            Upload file dari galeri/HP, atau paste URL gambar.
           </p>
         </div>
         {canEditPrice && (
