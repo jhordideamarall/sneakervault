@@ -127,7 +127,7 @@ export default function PanduanPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">Panduan Pemakaian Lengkap</h1>
             <p className="mt-0.5 text-sm text-white/55">
-              Semua modul, alur kerja, dan fitur SneakerVault (Dewins.id) — dari setup awal sampai laporan keuangan otomatis.
+              Semua modul, alur kerja, dan fitur SneakerVault (Dewinst.id) — dari setup awal sampai laporan keuangan otomatis.
             </p>
           </div>
         </div>

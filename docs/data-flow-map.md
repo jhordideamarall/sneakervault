@@ -1,4 +1,4 @@
-# Peta Alur Data — SneakerVault / Dewins.id
+# Peta Alur Data — SneakerVault / Dewinst.id
 
 > Tujuan: lihat **mana data yang berdiri sendiri (standalone)** dan **mana yang saling terintegrasi**, supaya testing tidak bingung.
 > Dibuat dari pembacaan kode asli (`apps/web/src/lib/actions/*`), bukan asumsi. Diagram pakai **Mermaid** (otomatis ter-render di GitHub / VS Code).

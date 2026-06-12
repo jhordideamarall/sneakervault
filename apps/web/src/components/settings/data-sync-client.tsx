@@ -173,7 +173,7 @@ const IMPORTS: Record<DataSyncImportKind, Config> = {
         type: "bank",
         bank_name: "BCA",
         account_number: "1234567890",
-        account_holder: "Dewins",
+        account_holder: "Dewinst",
         opening_balance: 25000000,
         currency: "IDR",
         is_default: true,

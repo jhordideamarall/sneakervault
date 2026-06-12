@@ -251,7 +251,7 @@ export function InventoryClient({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ExportButtons
-            title="Inventori Dewins.id"
+            title="Inventori Dewinst.id"
             sheetName="Inventori"
             columns={[
               "Brand",

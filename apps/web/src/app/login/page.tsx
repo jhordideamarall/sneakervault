@@ -21,7 +21,7 @@ export default async function LoginPage({
               D.
             </div>
             <h1 className="mt-8 max-w-sm text-4xl font-semibold leading-tight tracking-normal text-white">
-              Dewins.id
+              Dewinst.id
             </h1>
             <p className="mt-4 max-w-sm text-sm leading-6 text-white/55">
               Operasi gudang, packing, return, dan finance dalam satu dashboard internal.
@@ -48,7 +48,7 @@ export default async function LoginPage({
               <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-sm font-semibold">
                 D.
               </div>
-              <h1 className="mt-5 text-2xl font-semibold text-white">Dewins.id</h1>
+              <h1 className="mt-5 text-2xl font-semibold text-white">Dewinst.id</h1>
               <p className="mt-2 text-sm text-white/50">Masuk ke sistem gudang</p>
             </div>
 

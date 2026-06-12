@@ -25,7 +25,7 @@ export interface ExportParams {
   period?: string;
 }
 
-const COMPANY = "Dewins.id";
+const COMPANY = "Dewinst.id";
 
 function formatCell(c: string | number | null | undefined): string {
   if (c == null) return "";

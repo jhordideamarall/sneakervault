@@ -3,8 +3,8 @@ import "./globals.css";
 import { ToastProvider } from "@/components/toast";
 
 export const metadata: Metadata = {
-  title: "Dewins.id",
-  description: "Sistem manajemen inventory & keuangan Dewins.id",
+  title: "Dewinst.id",
+  description: "Sistem manajemen inventory & keuangan Dewinst.id",
 };
 
 export default function RootLayout({

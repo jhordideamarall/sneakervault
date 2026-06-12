@@ -1,7 +1,7 @@
 /**
  * WIB (Waktu Indonesia Barat) timezone utilities.
  *
- * Dewins.id targets Indonesia. We hardcode WIB = UTC+7 (no DST, fixed offset).
+ * Dewinst.id targets Indonesia. We hardcode WIB = UTC+7 (no DST, fixed offset).
  *
  * Rules of thumb:
  * - All range filters sent to Supabase MUST include explicit "+07:00" offset,

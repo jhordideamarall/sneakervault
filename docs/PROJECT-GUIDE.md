@@ -8,7 +8,7 @@
 
 ## 1. Apa Ini
 
-**SneakerVault** (brand UI: "Dewins.id") — sistem manajemen gudang + akuntansi
+**SneakerVault** (brand UI: "Dewinst.id") — sistem manajemen gudang + akuntansi
 sneaker, pengganti Accurate Online. Mengelola inventori, penjualan omnichannel
 (POS offline + marketplace), pembelian, kas & bank, buku besar (SAK EMKM), dan
 laporan keuangan. Fokus terbaru: **sinkronisasi marketplace berbasis file**

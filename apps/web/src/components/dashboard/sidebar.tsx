@@ -278,7 +278,7 @@ export function Sidebar({
     <aside className="flex h-full w-full flex-col md:flex overflow-hidden @container">
       <div className="px-6 @max-[120px]:px-0 pt-7 pb-6 overflow-hidden flex items-center @max-[120px]:justify-center min-h-[72px]">
         <span className="text-[15px] font-semibold tracking-tight text-white/90 truncate block @max-[120px]:hidden">
-          Dewins.id
+          Dewinst.id
         </span>
         <span className="text-[15px] font-bold tracking-tighter text-white/90 hidden @max-[120px]:block">
           D.
