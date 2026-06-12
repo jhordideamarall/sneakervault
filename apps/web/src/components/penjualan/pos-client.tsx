@@ -298,10 +298,21 @@ export function PosClient({
 
         <div className="flex-1 overflow-y-auto px-4 pb-6">
           {visibleGroups.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 text-center">
+            <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-6 text-center">
               <Package className="mb-3 size-10 text-slate-300" />
-              <p className="text-sm font-bold text-slate-700">Produk tidak ditemukan</p>
-              <p className="mt-1 text-xs text-slate-400">Coba ubah kata kunci atau brand.</p>
+              {products.length === 0 ? (
+                <>
+                  <p className="text-sm font-bold text-slate-700">Belum ada produk di sistem</p>
+                  <p className="mt-1 max-w-xs text-xs text-slate-400">
+                    Tambahkan stok lewat Gudang → Barang Masuk, atau import data di Pengaturan → Sinkronisasi Data.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-bold text-slate-700">Produk tidak ditemukan</p>
+                  <p className="mt-1 text-xs text-slate-400">Coba ubah kata kunci atau brand.</p>
+                </>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
