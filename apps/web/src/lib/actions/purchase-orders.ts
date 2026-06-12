@@ -78,11 +78,16 @@ export async function createPurchaseOrder(input: unknown) {
 
   const lineRows = parsed.data.lines.map((l) => ({
     po_id: po.id,
-    product_id: l.product_id,
+    product_id: l.product_id ?? null,
     ordered_qty: l.ordered_qty,
     unit_cost: l.unit_cost,
     subtotal: l.ordered_qty * l.unit_cost,
     notes: l.notes || null,
+    new_brand: l.product_id ? null : l.new_brand ?? null,
+    new_model: l.product_id ? null : l.new_model ?? null,
+    new_size: l.product_id ? null : l.new_size ?? null,
+    new_color: l.product_id ? null : l.new_color ?? null,
+    new_sku: l.product_id ? null : l.new_sku ?? null,
   }));
 
   const { error: linesErr } = await supabase
@@ -256,11 +261,16 @@ export async function updatePurchaseOrder(id: string, input: unknown) {
   await supabase.from("purchase_order_lines").delete().eq("po_id", id);
   const lineRows = parsed.data.lines.map((l) => ({
     po_id: id,
-    product_id: l.product_id,
+    product_id: l.product_id ?? null,
     ordered_qty: l.ordered_qty,
     unit_cost: l.unit_cost,
     subtotal: l.ordered_qty * l.unit_cost,
     notes: l.notes || null,
+    new_brand: l.product_id ? null : l.new_brand ?? null,
+    new_model: l.product_id ? null : l.new_model ?? null,
+    new_size: l.product_id ? null : l.new_size ?? null,
+    new_color: l.product_id ? null : l.new_color ?? null,
+    new_sku: l.product_id ? null : l.new_sku ?? null,
   }));
   const { error: linesErr } = await supabase
     .from("purchase_order_lines")

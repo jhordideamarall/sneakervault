@@ -5,8 +5,9 @@ import { approveDelete, rejectDelete } from "@/lib/actions/admin";
 import { Badge, Button, Card, Input } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
-import { 
-  Trash2, 
+import { DELETE_REQUEST_STATUS_TONES as statusTones } from "@sneakervault/shared";
+import {
+  Trash2,
   CheckCircle2, 
   XCircle, 
   Calendar, 
@@ -28,12 +29,6 @@ type Req = {
   review_notes: string | null;
   reviewed_at: string | null;
   profiles?: { full_name: string } | null;
-};
-
-const statusTones: Record<string, "warning" | "success" | "danger"> = {
-  pending: "warning",
-  approved: "success",
-  rejected: "danger",
 };
 
 export function DeleteRequestsClient({ requests }: { requests: Req[] }) {

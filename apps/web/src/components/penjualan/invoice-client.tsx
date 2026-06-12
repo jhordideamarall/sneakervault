@@ -10,6 +10,7 @@ import {
   Alert,
 } from "@sneakervault/ui";
 import { QuickTip } from "@/components/ui/quick-tip";
+import { formatRupiah as fmtRupiah, formatDate } from "@/lib/format";
 import {
   CUSTOMER_CHANNELS,
   SALES_INVOICE_STATUS_LABELS,
@@ -94,17 +95,8 @@ const emptyForm = (): FormState => ({
   lines: [],
 });
 
-function fmtRupiah(n: number): string {
-  return `Rp ${Math.round(n).toLocaleString("id-ID")}`;
-}
-
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return iso ? formatDate(iso) : "—";
 }
 
 const channelLabel = (c: CustomerChannel): string =>

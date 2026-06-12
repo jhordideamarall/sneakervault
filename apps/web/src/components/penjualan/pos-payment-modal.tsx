@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { cn, NumberInput } from "@sneakervault/ui";
+import { formatRupiah as rp } from "@/lib/format";
 import type { BankAccountRow } from "@/lib/queries";
-
-const rp = (v: number) => `Rp ${Number(v).toLocaleString("id-ID")}`;
 
 const PAYMENTS = [
   { value: "cash", label: "Tunai" },

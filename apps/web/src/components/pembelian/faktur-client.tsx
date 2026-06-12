@@ -17,6 +17,7 @@ import {
 } from "@sneakervault/shared";
 import type { PurchaseInvoiceStatus } from "@sneakervault/shared";
 import { useToast } from "@/components/toast";
+import { formatRupiah as fmtRupiah, formatDate } from "@/lib/format";
 import {
   createPurchaseInvoice,
   updatePurchaseInvoice,
@@ -81,17 +82,8 @@ const emptyForm = (): FormState => ({
   attachment_url: "",
 });
 
-function fmtRupiah(n: number): string {
-  return `Rp ${Math.round(n).toLocaleString("id-ID")}`;
-}
-
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return iso ? formatDate(iso) : "—";
 }
 
 function daysUntil(iso: string | null): number | null {

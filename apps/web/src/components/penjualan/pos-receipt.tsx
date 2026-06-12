@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Printer, CheckCircle2, RotateCcw, X } from "lucide-react";
 import { cn } from "@sneakervault/ui";
+import { formatRupiah as rp, formatDateTime as formatDate } from "@/lib/format";
 import type { ReceiptSettings } from "@/lib/receipt";
 
 export type { ReceiptSettings } from "@/lib/receipt";
@@ -22,17 +23,6 @@ export type ReceiptSale = {
   change: number;
 };
 
-const rp = (v: number) => `Rp ${Number(v).toLocaleString("id-ID")}`;
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export function PosReceipt({
   sale,

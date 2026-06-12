@@ -1,5 +1,6 @@
 import { Package } from "lucide-react";
 import { cn } from "@sneakervault/ui";
+import { formatRupiah as rp } from "@/lib/format";
 
 export type PosProduct = {
   id: string;
@@ -25,8 +26,6 @@ export type PosGroup = {
   totalStock: number;
   variants: PosProduct[];
 };
-
-const rp = (v: number) => `Rp ${Number(v).toLocaleString("id-ID")}`;
 
 /**
  * One card per model+color, in the aegis-pos visual language (font-black,

@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@sneakervault/ui";
 import type { Role } from "@sneakervault/shared";
 import { routePermissions } from "@/config/permissions";
+import type { SidebarSignals } from "@/lib/sidebar-signals";
 import { logout } from "@/lib/actions/auth";
 import {
   LayoutDashboard,
@@ -35,11 +36,13 @@ import {
   FileText,
   Banknote,
   Upload,
+  Download,
   ArrowDownLeft,
   ArrowUpRight,
   CalendarClock,
   Calculator,
   Database,
+  LifeBuoy,
 } from "lucide-react";
 import { MailInbox } from "./mail/mail-inbox";
 import {
@@ -100,6 +103,8 @@ const navGroups: NavGroup[] = [
       { href: "/penjualan/invoice", label: "Invoice Penjualan", icon: i(FileText) },
       { href: "/penjualan/penerimaan-kas", label: "Penerimaan Kas", icon: i(Wallet) },
       { href: "/penjualan/import-marketplace", label: "Import Marketplace", icon: i(Upload) },
+      { href: "/penjualan/export-stok", label: "Export Stok", icon: i(Download) },
+      { href: "/penjualan/settlement", label: "Settlement", icon: i(Wallet) },
       { href: "/sold", label: "Terjual", icon: i(DollarSign) },
     ],
   },
@@ -111,6 +116,7 @@ const navGroups: NavGroup[] = [
       { href: "/inventory", label: "Inventori", icon: i(Package) },
       { href: "/inbound", label: "Barang Masuk", icon: i(QrCode) },
       { href: "/inventory/opname", label: "Stock Opname", icon: i(ClipboardList) },
+      { href: "/barcode-generate", label: "Generate Barcode", icon: i(QrCode) },
       { href: "/outbound", label: "Packing / Outbound", icon: i(PackageMinus) },
       { href: "/returns", label: "Retur", icon: i(RotateCcw) },
     ],
@@ -162,6 +168,7 @@ const navGroups: NavGroup[] = [
     label: "Audit & Pengaturan",
     icon: i(Settings),
     items: [
+      { href: "/panduan", label: "Panduan Pemakaian", icon: i(LifeBuoy) },
       { href: "/activity-log", label: "Activity Log", icon: i(ScrollText) },
       { href: "/delete-requests", label: "Req. Hapus", icon: i(Trash2) },
       { href: "/settings/data-sync", label: "Sinkronisasi Data", icon: i(Database) },
@@ -208,13 +215,43 @@ function NavSpinner() {
   );
 }
 
+function SignalDot({ urgent }: { urgent: boolean }) {
+  return (
+    <span
+      className={cn(
+        "size-1.5 flex-shrink-0 rounded-full",
+        urgent ? "bg-red-500" : "bg-amber-400",
+      )}
+    />
+  );
+}
+
+/** Most-urgent signal across a group's items (for the collapsed-group dot). */
+function groupSignal(
+  group: NavGroup,
+  signals?: SidebarSignals,
+): { urgent: boolean } | null {
+  if (!signals) return null;
+  let found: { urgent: boolean } | null = null;
+  for (const it of group.items) {
+    const s = signals[it.href];
+    if (s) {
+      if (s.urgent) return { urgent: true };
+      found = { urgent: false };
+    }
+  }
+  return found;
+}
+
 export function Sidebar({
   roles,
   userId,
+  signals,
 }: {
   roles: Role[];
   fullName?: string;
   userId: string;
+  signals?: SidebarSignals;
 }) {
   const pathname = usePathname();
   const groups = filterGroupsByRole(roles);
@@ -255,6 +292,7 @@ export function Sidebar({
             const hasActive = group.items.some((it) =>
               pathname.startsWith(it.href),
             );
+            const gs = groupSignal(group, signals);
 
             return (
               <li key={group.id}>
@@ -271,6 +309,7 @@ export function Sidebar({
                   <span className="flex-1 text-left @max-[120px]:hidden">
                     {group.label}
                   </span>
+                  {!isOpen && gs ? <SignalDot urgent={gs.urgent} /> : null}
                   <motion.span
                     animate={{ rotate: isOpen ? 90 : 0 }}
                     transition={{ duration: 0.15 }}
@@ -291,6 +330,7 @@ export function Sidebar({
                     >
                       {group.items.map((item) => {
                         const active = pathname === item.href || pathname.startsWith(item.href + "/");
+                        const sig = signals?.[item.href];
                         return (
                           <li key={item.href}>
                             <Link href={item.href}>
@@ -313,6 +353,7 @@ export function Sidebar({
                                 <span className="flex-1 truncate @max-[120px]:hidden">
                                   {item.label}
                                 </span>
+                                {sig ? <SignalDot urgent={sig.urgent} /> : null}
                                 {item.badge ? (
                                   <span
                                     className={cn(

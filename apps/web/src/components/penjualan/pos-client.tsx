@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn, NumberInput } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
+import { formatRupiah as rp } from "@/lib/format";
 import { posCheckout } from "@/lib/actions/pos";
 import type { BankAccountRow, CustomerRow } from "@/lib/queries";
 import {
@@ -34,7 +35,6 @@ const PAYMENT_LABELS: Record<string, string> = {
   other: "QRIS",
 };
 
-const rp = (v: number) => `Rp ${Number(v).toLocaleString("id-ID")}`;
 const today = () => new Date().toISOString().slice(0, 10);
 
 function actionError(result: unknown): string | null {

@@ -25,6 +25,7 @@ import {
   PenLine,
   Pencil,
 } from "lucide-react";
+import { formatRupiah as fmtRupiah, formatDate as fmtDate } from "@/lib/format";
 
 const sourceLabel: Record<string, string> = {
   manual: "Penyesuaian Manual",
@@ -38,16 +39,6 @@ const sourceLabel: Record<string, string> = {
   other: "Lainnya",
 };
 
-function fmtRupiah(n: number): string {
-  return `Rp ${Math.round(n).toLocaleString("id-ID")}`;
-}
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }

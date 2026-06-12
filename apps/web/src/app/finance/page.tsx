@@ -19,19 +19,9 @@ import {
   ArrowUpRight,
   Sparkles,
 } from "lucide-react";
+import { formatRupiah as fmtRupiah, formatRupiahShort as fmtRupiahShort } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
-
-function fmtRupiah(n: number): string {
-  return `Rp ${Math.round(n).toLocaleString("id-ID")}`;
-}
-
-function fmtRupiahShort(n: number): string {
-  if (n >= 1_000_000_000) return `Rp ${(n / 1_000_000_000).toFixed(1)} M`;
-  if (n >= 1_000_000) return `Rp ${(n / 1_000_000).toFixed(1)} jt`;
-  if (n >= 1_000) return `Rp ${(n / 1_000).toFixed(0)} rb`;
-  return `Rp ${n.toLocaleString("id-ID")}`;
-}
 
 export default async function FinancePage() {
   const now = nowWIB();

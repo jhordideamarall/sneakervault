@@ -150,7 +150,7 @@ export async function getPackingSessionsToday(userId?: string): Promise<unknown[
 
 // ─── Dashboard (Owner) ─────────────────────────────────────
 export async function getDashboardStats() {
-  await requireOwner();
+  await requireOwnerOrFinance();
   const supabase = await createClient();
 
   const [stockRes, soldRes, returnsRes, pendingOrdersRes] = await Promise.all([
@@ -190,7 +190,7 @@ export async function getDashboardStats() {
 }
 
 export async function getBestsellers(limit?: number) {
-  await requireOwner();
+  await requireOwnerOrFinance();
   const supabase = await createClient();
   const { data } = await supabase
     .from("packing_items")
@@ -362,8 +362,13 @@ export async function getPurchaseOrders(opts?: {
 
 export type PoLineRow = {
   id: string;
-  product_id: string;
+  product_id: string | null;
   product_label: string;
+  new_brand?: string | null;
+  new_model?: string | null;
+  new_size?: number | null;
+  new_color?: string | null;
+  new_sku?: string | null;
   ordered_qty: number;
   received_qty: number;
   unit_cost: number;
@@ -400,7 +405,7 @@ export async function getPurchaseOrderById(
   const { data } = await supabase
     .from("purchase_orders")
     .select(
-      "id, po_number, supplier_id, order_date, expected_date, status, subtotal, tax, shipping, total, notes, created_at, approved_at, payment_type, dp_amount, dp_bank_account_id, suppliers:supplier_id(name), bank:dp_bank_account_id(name), purchase_order_lines(id, product_id, ordered_qty, received_qty, unit_cost, subtotal, notes, products:product_id(brand, model, sku, size, color))",
+      "id, po_number, supplier_id, order_date, expected_date, status, subtotal, tax, shipping, total, notes, created_at, approved_at, payment_type, dp_amount, dp_bank_account_id, suppliers:supplier_id(name), bank:dp_bank_account_id(name), purchase_order_lines(id, product_id, ordered_qty, received_qty, unit_cost, subtotal, notes, new_brand, new_model, new_size, new_color, new_sku, products:product_id(brand, model, sku, size, color))",
     )
     .eq("id", id)
     .single();
@@ -426,12 +431,17 @@ export async function getPurchaseOrderById(
     bank: { name: string } | null;
     purchase_order_lines: Array<{
       id: string;
-      product_id: string;
+      product_id: string | null;
       ordered_qty: number;
       received_qty: number;
       unit_cost: number;
       subtotal: number;
       notes: string | null;
+      new_brand: string | null;
+      new_model: string | null;
+      new_size: number | null;
+      new_color: string | null;
+      new_sku: string | null;
       products: {
         brand: string;
         model: string;
@@ -465,7 +475,14 @@ export async function getPurchaseOrderById(
       product_id: l.product_id,
       product_label: l.products
         ? `${l.products.brand} ${l.products.model} ${l.products.color} • Size ${Number(l.products.size)} • ${l.products.sku}`
-        : "(produk dihapus)",
+        : l.new_brand
+          ? `${l.new_brand} ${l.new_model} ${l.new_color ?? ""} • Size ${Number(l.new_size)} • ${l.new_sku} (baru)`
+          : "(produk dihapus)",
+      new_brand: l.new_brand,
+      new_model: l.new_model,
+      new_size: l.new_size != null ? Number(l.new_size) : null,
+      new_color: l.new_color,
+      new_sku: l.new_sku,
       ordered_qty: l.ordered_qty,
       received_qty: l.received_qty,
       unit_cost: Number(l.unit_cost),
@@ -1813,8 +1830,8 @@ export async function getAccountLedger(args: {
       "id, debit, credit, description, journal_entries!inner(id, entry_number, entry_date, description, source_type, source_id, status)",
     )
     .eq("account_id", args.account_id)
-    .order("entry_date", { foreignTable: "journal_entries", ascending: true })
-    .order("created_at", { foreignTable: "journal_entries", ascending: true });
+    .order("entry_date", { referencedTable: "journal_entries", ascending: true })
+    .order("created_at", { referencedTable: "journal_entries", ascending: true });
   if (args.from) q = q.gte("journal_entries.entry_date", args.from);
   if (args.to) q = q.lte("journal_entries.entry_date", args.to);
 
@@ -1980,7 +1997,7 @@ function getMonthStart() {
 }
 
 export async function getMonthlySales(selectedMonth?: string, selectedDate?: string) {
-  await requireOwner();
+  await requireOwnerOrFinance();
   const supabase = await createClient();
 
   // Use packing_sessions.completed_at as the sale timestamp — consistent with
@@ -2156,7 +2173,7 @@ export async function getMonthlySales(selectedMonth?: string, selectedDate?: str
 
   // ─── ALL-TIME WEEKLY VIEW ─────────────────────────────────────────────
   const getWeekKey = (y: number, m: number, d: number) => `${y}-${m}-${Math.ceil(d / 7)}`;
-  const getWeekLabel = (y: number, m: number, d: number) => `${monthNames[m]} W${Math.ceil(d / 7)}`;
+  const getWeekLabel = (_y: number, m: number, d: number) => `${monthNames[m]} W${Math.ceil(d / 7)}`;
 
   const weeks: Record<string, Record<string, number>> = {};
 

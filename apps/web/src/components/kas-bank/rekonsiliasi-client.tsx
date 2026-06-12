@@ -4,6 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import { Button, Card, Badge } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
+import { formatRupiah, formatDate } from "@/lib/format";
 import {
   Upload,
   CheckCircle2,
@@ -283,7 +284,7 @@ export function RekonsiliasiClient({ bankAccounts }: Props) {
                  >
                     <option value="">-- Pilih Akun --</option>
                     {bankAccounts.filter(b => b.type !== 'cash').map(b => (
-                       <option key={b.id} value={b.id}>{b.name} (Rp {b.current_balance.toLocaleString()})</option>
+                       <option key={b.id} value={b.id}>{b.name} ({formatRupiah(b.current_balance)})</option>
                     ))}
                  </select>
               </div>
@@ -380,7 +381,7 @@ export function RekonsiliasiClient({ bankAccounts }: Props) {
                              <div className="flex justify-between items-center">
                                 <div>
                                    <div className="flex items-center gap-2 text-xs text-white/40">
-                                      <span>{new Date(it.transaction_date).toLocaleDateString()}</span>
+                                      <span>{formatDate(it.transaction_date)}</span>
                                       <span>•</span>
                                       <span className="uppercase">{it.type}</span>
                                    </div>

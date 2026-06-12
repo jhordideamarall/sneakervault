@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Alert,
+  Badge,
   Button,
   FieldLabel,
   Input,
@@ -12,6 +13,11 @@ import {
   cn,
 } from "@sneakervault/ui";
 import { createClient as createSupabaseBrowserClient } from "@sneakervault/supabase/client";
+import {
+  EXPENSE_STATUS_LABELS as statusLabel,
+  EXPENSE_STATUS_TONES,
+} from "@sneakervault/shared";
+import { formatRupiah, formatDate } from "@/lib/format";
 import type {
   BankAccountRow,
   BankTransactionRow,
@@ -70,22 +76,6 @@ const tabs: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
   { id: "mutasi", label: "Mutasi Keluar", icon: <Banknote size={15} /> },
 ];
 
-const statusLabel: Record<ExpenseRow["status"], string> = {
-  draft: "Draft",
-  approved: "Approved",
-  paid: "Paid",
-  rejected: "Rejected",
-  voided: "Voided",
-};
-
-const statusTone: Record<ExpenseRow["status"], string> = {
-  draft: "border-white/10 bg-white/[0.04] text-white/60",
-  approved: "border-sky-500/20 bg-sky-500/10 text-sky-300",
-  paid: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-  rejected: "border-rose-500/20 bg-rose-500/10 text-rose-300",
-  voided: "border-amber-500/20 bg-amber-500/10 text-amber-300",
-};
-
 const paymentLabels: Record<ExpenseFormState["payment_method"], string> = {
   cash: "Cash",
   bank_transfer: "Transfer",
@@ -97,17 +87,6 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function formatRupiah(value: number) {
-  return `Rp ${Math.round(value).toLocaleString("id-ID")}`;
-}
-
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 function firstError(error: unknown) {
   if (!error) return "Terjadi kesalahan";
@@ -489,14 +468,9 @@ export function ExpensesClient({
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full border px-2 py-1 text-xs font-medium",
-                            statusTone[expense.status],
-                          )}
-                        >
+                        <Badge tone={EXPENSE_STATUS_TONES[expense.status] ?? "neutral"}>
                           {statusLabel[expense.status]}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="px-4 py-3">
                         {expense.receipt_path ? (

@@ -1,21 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@sneakervault/supabase/server";
-
-const statusStyle: Record<string, string> = {
-  packing: "bg-blue-500/10 text-blue-400 border border-blue-500/20",
-  shipped: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
-  completed: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
-  has_return: "bg-red-500/10 text-red-400 border border-red-500/20",
-  cancelled: "bg-white/5 text-white/30 border border-white/10",
-};
-
-const statusLabel: Record<string, string> = {
-  packing: "Packing",
-  shipped: "Dikirim",
-  completed: "Selesai",
-  has_return: "Retur",
-  cancelled: "Batal",
-};
+import { Badge } from "@sneakervault/ui";
+import { ORDER_STATUS_LABELS, ORDER_STATUS_TONES } from "@sneakervault/shared";
 
 export async function RecentOrdersTable() {
   const supabase = await createClient();
@@ -68,9 +54,9 @@ export async function RecentOrdersTable() {
                 <td className="px-6 py-3 text-[12px] text-white/40">{profile?.full_name ?? "—"}</td>
                 <td className="px-6 py-3 text-[12px] text-white/40">{itemCount} pcs</td>
                 <td className="px-6 py-3 text-right">
-                  <span className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${statusStyle[s.status] ?? statusStyle.cancelled}`}>
-                    {statusLabel[s.status] ?? s.status}
-                  </span>
+                  <Badge tone={ORDER_STATUS_TONES[s.status] ?? "neutral"} className="text-[10px] font-bold uppercase">
+                    {ORDER_STATUS_LABELS[s.status] ?? s.status}
+                  </Badge>
                 </td>
               </tr>
             );

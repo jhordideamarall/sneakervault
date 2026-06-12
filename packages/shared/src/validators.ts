@@ -180,12 +180,26 @@ export const bankAccountInputSchema = z.object({
 export type BankAccountInput = z.infer<typeof bankAccountInputSchema>;
 
 // ─── Purchase Order (Phase 2) ──────────────────────────────
-export const poLineInputSchema = z.object({
-  product_id: z.string().uuid(),
-  ordered_qty: z.coerce.number().int().positive(),
-  unit_cost: z.coerce.number().nonnegative(),
-  notes: z.string().optional(),
-});
+export const poLineInputSchema = z
+  .object({
+    // Existing product line OR a manual new-product line (created on receive).
+    product_id: z.string().uuid().optional(),
+    ordered_qty: z.coerce.number().int().positive(),
+    unit_cost: z.coerce.number().nonnegative(),
+    notes: z.string().optional(),
+    // New product spec (used when product_id is absent):
+    new_brand: z.string().trim().optional(),
+    new_model: z.string().trim().optional(),
+    new_size: z.coerce.number().optional(),
+    new_color: z.string().trim().optional(),
+    new_sku: z.string().trim().optional(),
+  })
+  .refine(
+    (l) =>
+      !!l.product_id ||
+      (!!l.new_brand && !!l.new_model && l.new_size != null && !!l.new_sku),
+    { message: "Item baru wajib isi brand, model, size, dan SKU" },
+  );
 
 export const poPaymentTypeSchema = z.enum(["credit", "cash", "dp"]);
 export type PoPaymentType = z.infer<typeof poPaymentTypeSchema>;

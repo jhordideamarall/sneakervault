@@ -17,20 +17,14 @@ import type {
   StockOpnameSessionRow,
 } from "@/lib/queries";
 import { Check, ClipboardCheck, Play, Save, X } from "lucide-react";
+import {
+  STOCK_OPNAME_STATUS_LABELS,
+  STOCK_OPNAME_STATUS_TONES,
+} from "@sneakervault/shared";
+import { formatRupiah as formatRp } from "@/lib/format";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function statusTone(status: StockOpnameSessionRow["status"]) {
-  if (status === "approved") return "success";
-  if (status === "review") return "warning";
-  if (status === "cancelled") return "danger";
-  return "info";
-}
-
-function formatRp(value: number) {
-  return `Rp ${Number(value).toLocaleString("id-ID")}`;
 }
 
 function actionError(result: unknown): string | null {
@@ -222,8 +216,8 @@ export function StockOpnameClient({
                         {session.opname_date} · {session.counted_lines}/{session.total_lines} item
                       </p>
                     </div>
-                    <Badge tone={statusTone(session.status)}>
-                      {session.status}
+                    <Badge tone={STOCK_OPNAME_STATUS_TONES[session.status] ?? "neutral"}>
+                      {STOCK_OPNAME_STATUS_LABELS[session.status] ?? session.status}
                     </Badge>
                   </div>
                 </Link>
@@ -250,7 +244,7 @@ export function StockOpnameClient({
                     <h2 className="font-mono text-lg font-semibold text-white">
                       {detail.opname_number}
                     </h2>
-                    <Badge tone={statusTone(detail.status)}>{detail.status}</Badge>
+                    <Badge tone={STOCK_OPNAME_STATUS_TONES[detail.status] ?? "neutral"}>{STOCK_OPNAME_STATUS_LABELS[detail.status] ?? detail.status}</Badge>
                   </div>
                   <p className="mt-1 text-sm text-white/40">
                     {detail.opname_date} · {summary.counted}/{summary.total} item dihitung

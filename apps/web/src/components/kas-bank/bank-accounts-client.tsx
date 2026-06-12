@@ -13,6 +13,7 @@ import {
 import { BANK_ACCOUNT_TYPES } from "@sneakervault/shared";
 import type { BankAccountType } from "@sneakervault/shared";
 import { useToast } from "@/components/toast";
+import { formatRupiah as fmtRupiah } from "@/lib/format";
 import {
   createBankAccount,
   updateBankAccount,
@@ -61,10 +62,6 @@ const typeTone: Record<BankAccountType, string> = {
 
 const typeLabel = (t: BankAccountType): string =>
   BANK_ACCOUNT_TYPES.find((b) => b.value === t)?.label ?? t;
-
-function fmtRupiah(n: number): string {
-  return `Rp ${Math.round(n).toLocaleString("id-ID")}`;
-}
 
 export function BankAccountsClient({
   accounts,

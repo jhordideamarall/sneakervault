@@ -1,4 +1,3 @@
-import { Upload } from "lucide-react";
 import { ImportMarketplaceClient } from "@/components/penjualan/import-marketplace-client";
 
 export default function ImportMarketplacePage() {
@@ -9,7 +8,7 @@ export default function ImportMarketplacePage() {
           Import Laporan Marketplace
         </h1>
         <p className="text-white/50">
-          Tarik laporan penjualan Shopee & TikTok dari Excel/CSV — parser deterministik jadi invoice & jurnal.
+          Tarik laporan pesanan Shopee, Tokopedia & TikTok dari Excel/CSV — review cocok/tidak cocok dulu, lalu jadi invoice & jurnal.
         </p>
       </div>
 

@@ -38,7 +38,7 @@ export async function receivePurchaseOrder(input: unknown) {
 
   const { data: poLines, error: linesErr } = await supabase
     .from("purchase_order_lines")
-    .select("id, product_id, ordered_qty, received_qty, unit_cost")
+    .select("id, product_id, ordered_qty, received_qty, unit_cost, new_brand, new_model, new_size, new_color, new_sku")
     .eq("po_id", po_id);
   if (linesErr || !poLines)
     return { error: { _form: ["Gagal membaca line PO"] } };
@@ -68,9 +68,54 @@ export async function receivePurchaseOrder(input: unknown) {
         },
       };
     }
+
+    // Manual/new-product line: product doesn't exist yet — create it (or match an
+    // existing SKU), then persist product_id onto the line so it syncs to
+    // inventory now and future receives reuse it.
+    let productId = ln.product_id as string | null;
+    if (!productId) {
+      const sku = (ln.new_sku ?? "").trim();
+      if (!sku || !ln.new_brand || !ln.new_model || ln.new_size == null) {
+        return { error: { _form: ["Item baru PO tidak lengkap (brand/model/size/SKU)"] } };
+      }
+      const { data: existingProd } = await supabase
+        .from("products")
+        .select("id")
+        .eq("sku", sku)
+        .maybeSingle();
+      if (existingProd) {
+        productId = existingProd.id;
+      } else {
+        const { data: created, error: cErr } = await supabase
+          .from("products")
+          .insert({
+            brand: ln.new_brand,
+            model: ln.new_model,
+            size: ln.new_size,
+            color: ln.new_color ?? null,
+            sku,
+            barcode: sku,
+            hpp: 0,
+            sell_price: Number(ln.unit_cost),
+            price_offline: Number(ln.unit_cost),
+            quantity: 0,
+            is_active: true,
+            first_inbound_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+        if (cErr) return { error: { _form: [`Gagal membuat produk ${sku}: ${cErr.message}`] } };
+        productId = created.id;
+      }
+      await supabase
+        .from("purchase_order_lines")
+        .update({ product_id: productId })
+        .eq("id", ln.id);
+    }
+
     toProcess.push({
       line_id: ln.id,
-      product_id: ln.product_id,
+      product_id: productId as string,
       receive_qty: r.receive_qty,
       unit_cost: Number(ln.unit_cost),
       new_received: ln.received_qty + r.receive_qty,

@@ -14,6 +14,7 @@ import { QuickTip } from "@/components/ui/quick-tip";
 import { PO_STATUS_LABELS, PO_STATUS_TONES } from "@sneakervault/shared";
 import type { PoStatus } from "@sneakervault/shared";
 import { useToast } from "@/components/toast";
+import { formatRupiah as fmtRupiah, formatDate as fmtDate } from "@/lib/format";
 import {
   createPurchaseOrder,
   approvePurchaseOrder,
@@ -45,11 +46,27 @@ import {
 type SupplierOpt = { id: string; name: string };
 
 type FormLine = {
-  product_id: string;
+  product_id: string | null;
   product_label: string;
   ordered_qty: number;
   unit_cost: number;
   notes: string;
+  // Manual new-product line (product_id null) — created on receive.
+  new_brand?: string;
+  new_model?: string;
+  new_size?: number;
+  new_color?: string;
+  new_sku?: string;
+};
+
+export type ManualLineInput = {
+  brand: string;
+  model: string;
+  size: number;
+  color: string;
+  sku: string;
+  unit_cost: number;
+  ordered_qty: number;
 };
 
 type FormState = {
@@ -86,17 +103,6 @@ const emptyForm = (): FormState => ({
   dp_bank_account_id: "",
 });
 
-function fmtRupiah(n: number): string {
-  return `Rp ${Math.round(n).toLocaleString("id-ID")}`;
-}
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 export function PurchaseOrderClient({
   orders,
@@ -193,6 +199,11 @@ export function PurchaseOrderClient({
         ordered_qty: l.ordered_qty,
         unit_cost: l.unit_cost,
         notes: l.notes ?? "",
+        new_brand: l.new_brand ?? undefined,
+        new_model: l.new_model ?? undefined,
+        new_size: l.new_size ?? undefined,
+        new_color: l.new_color ?? undefined,
+        new_sku: l.new_sku ?? undefined,
       })),
       payment_type: po.payment_type,
       dp_mode: "percent",
@@ -238,6 +249,27 @@ export function PurchaseOrderClient({
         },
       ],
     });
+  }
+
+  function addManualLine(m: ManualLineInput) {
+    setForm((f) => ({
+      ...f,
+      lines: [
+        ...f.lines,
+        {
+          product_id: null,
+          product_label: `${m.brand} ${m.model} ${m.color} • Size ${m.size} • ${m.sku} (baru)`,
+          ordered_qty: m.ordered_qty,
+          unit_cost: m.unit_cost,
+          notes: "",
+          new_brand: m.brand,
+          new_model: m.model,
+          new_size: m.size,
+          new_color: m.color || undefined,
+          new_sku: m.sku,
+        },
+      ],
+    }));
   }
 
   function removeLine(idx: number) {
@@ -297,10 +329,15 @@ export function PurchaseOrderClient({
       shipping: form.shipping,
       notes: form.notes || undefined,
       lines: form.lines.map((l) => ({
-        product_id: l.product_id,
+        product_id: l.product_id ?? undefined,
         ordered_qty: l.ordered_qty,
         unit_cost: l.unit_cost,
         notes: l.notes || undefined,
+        new_brand: l.product_id ? undefined : l.new_brand,
+        new_model: l.product_id ? undefined : l.new_model,
+        new_size: l.product_id ? undefined : l.new_size,
+        new_color: l.product_id ? undefined : l.new_color,
+        new_sku: l.product_id ? undefined : l.new_sku,
       })),
       payment_type: form.payment_type,
       dp_amount: computedDpAmount,
@@ -568,6 +605,7 @@ export function PurchaseOrderClient({
           onClose={close}
           onSave={handleSave}
           onAddLine={addLine}
+          onAddManual={addManualLine}
           onRemoveLine={removeLine}
           onUpdateLine={updateLine}
         />
@@ -603,6 +641,7 @@ function FormModal({
   onClose,
   onSave,
   onAddLine,
+  onAddManual,
   onRemoveLine,
   onUpdateLine,
 }: {
@@ -620,11 +659,32 @@ function FormModal({
   onClose: () => void;
   onSave: () => void;
   onAddLine: (p: ProductPickerRow) => void;
+  onAddManual: (m: ManualLineInput) => void;
   onRemoveLine: (idx: number) => void;
   onUpdateLine: (idx: number, patch: Partial<FormLine>) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
+  const [pickerTab, setPickerTab] = useState<"existing" | "manual">("existing");
+  const [manual, setManual] = useState({ brand: "", model: "", size: "", color: "", sku: "", unit_cost: "", qty: "1" });
+
+  function submitManual() {
+    const size = Number(manual.size);
+    const qty = Math.max(1, Number(manual.qty) || 1);
+    if (!manual.brand.trim() || !manual.model.trim() || !manual.sku.trim() || !manual.size) return;
+    onAddManual({
+      brand: manual.brand.trim(),
+      model: manual.model.trim(),
+      size,
+      color: manual.color.trim(),
+      sku: manual.sku.trim(),
+      unit_cost: Number(manual.unit_cost) || 0,
+      ordered_qty: qty,
+    });
+    setManual({ brand: "", model: "", size: "", color: "", sku: "", unit_cost: "", qty: "1" });
+    setPickerTab("existing");
+    setPickerOpen(false);
+  }
 
   const filteredProducts = useMemo(() => {
     const q = pickerSearch.trim().toLowerCase();
@@ -683,6 +743,11 @@ function FormModal({
                 ))}
               </Select>
               <FieldError message={fieldErrors.supplier_id} />
+              {suppliers.length === 0 ? (
+                <p className="mt-1.5 text-[11px] text-amber-300/80">
+                  Belum ada vendor. Tambah dulu di <span className="font-medium">Master Data → Supplier</span>.
+                </p>
+              ) : null}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -728,52 +793,97 @@ function FormModal({
 
             {pickerOpen ? (
               <div className="border-b border-white/[0.06] bg-[#1f1f1f] p-3 space-y-2">
-                <div className="relative">
-                  <Search
-                    size={14}
-                    strokeWidth={1.8}
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40"
-                  />
-                  <Input
-                    autoFocus
-                    placeholder="Cari brand, model, SKU, atau barcode…"
-                    value={pickerSearch}
-                    onChange={(e) => setPickerSearch(e.target.value)}
-                    className="pl-9"
-                  />
+                <div className="flex gap-1 rounded-lg bg-[#262626] p-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setPickerTab("existing")}
+                    className={`flex-1 rounded-md px-3 py-1.5 font-medium transition-colors ${pickerTab === "existing" ? "bg-white/[0.1] text-white" : "text-white/45 hover:text-white/70"}`}
+                  >
+                    Produk Ada
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPickerTab("manual")}
+                    className={`flex-1 rounded-md px-3 py-1.5 font-medium transition-colors ${pickerTab === "manual" ? "bg-white/[0.1] text-white" : "text-white/45 hover:text-white/70"}`}
+                  >
+                    Tulis Manual (barang baru)
+                  </button>
                 </div>
-                <div className="max-h-60 overflow-y-auto rounded border border-white/[0.04] bg-[#262626]">
-                  {filteredProducts.length === 0 ? (
-                    <div className="px-4 py-6 text-center text-sm text-white/40">
-                      Tidak ada produk cocok.
+
+                {pickerTab === "existing" ? (
+                  <>
+                    <div className="relative">
+                      <Search
+                        size={14}
+                        strokeWidth={1.8}
+                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40"
+                      />
+                      <Input
+                        autoFocus
+                        placeholder="Cari brand, model, SKU, atau barcode…"
+                        value={pickerSearch}
+                        onChange={(e) => setPickerSearch(e.target.value)}
+                        className="pl-9"
+                      />
                     </div>
-                  ) : (
-                    filteredProducts.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => {
-                          onAddLine(p);
-                          setPickerSearch("");
-                        }}
-                        className="flex w-full items-center justify-between border-b border-white/[0.04] px-3 py-2 text-left text-sm last:border-0 hover:bg-white/[0.04]"
-                      >
-                        <div>
-                          <div className="text-white">
-                            {p.brand} {p.model}{" "}
-                            <span className="text-white/50">
-                              · {p.color} · Size {p.size}
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-white/40">
-                            SKU {p.sku} · Stok {p.quantity} · HPP{" "}
-                            {fmtRupiah(p.hpp)}
-                          </div>
+                    <div className="max-h-60 overflow-y-auto rounded border border-white/[0.04] bg-[#262626]">
+                      {filteredProducts.length === 0 ? (
+                        <div className="px-4 py-6 text-center text-sm text-white/40">
+                          {products.length === 0
+                            ? "Belum ada produk di sistem. Pakai tab “Tulis Manual” untuk pesan barang baru — produknya dibuat otomatis saat barang diterima."
+                            : "Tidak ada produk cocok. Atau pakai “Tulis Manual”."}
                         </div>
-                        <Plus size={14} strokeWidth={2} className="text-white/40" />
-                      </button>
-                    ))
-                  )}
-                </div>
+                      ) : (
+                        filteredProducts.map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => {
+                              onAddLine(p);
+                              setPickerSearch("");
+                            }}
+                            className="flex w-full items-center justify-between border-b border-white/[0.04] px-3 py-2 text-left text-sm last:border-0 hover:bg-white/[0.04]"
+                          >
+                            <div>
+                              <div className="text-white">
+                                {p.brand} {p.model}{" "}
+                                <span className="text-white/50">
+                                  · {p.color} · Size {p.size}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-white/40">
+                                SKU {p.sku} · Stok {p.quantity} · HPP{" "}
+                                {fmtRupiah(p.hpp)}
+                              </div>
+                            </div>
+                            <Plus size={14} strokeWidth={2} className="text-white/40" />
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-[11px] leading-relaxed text-white/45">
+                      Barang baru yang belum ada di sistem. Produk dibuat otomatis & masuk inventory saat <span className="text-white/70">barang diterima</span> (Penerimaan).
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input placeholder="Brand *" value={manual.brand} onChange={(e) => setManual({ ...manual, brand: e.target.value })} />
+                      <Input placeholder="Model *" value={manual.model} onChange={(e) => setManual({ ...manual, model: e.target.value })} />
+                      <Input placeholder="Size *" type="number" value={manual.size} onChange={(e) => setManual({ ...manual, size: e.target.value })} />
+                      <Input placeholder="Warna (opsional)" value={manual.color} onChange={(e) => setManual({ ...manual, color: e.target.value })} />
+                      <Input placeholder="SKU *" value={manual.sku} onChange={(e) => setManual({ ...manual, sku: e.target.value })} />
+                      <Input placeholder="Harga beli / unit" type="number" value={manual.unit_cost} onChange={(e) => setManual({ ...manual, unit_cost: e.target.value })} />
+                      <Input placeholder="Qty" type="number" value={manual.qty} onChange={(e) => setManual({ ...manual, qty: e.target.value })} />
+                    </div>
+                    <Button
+                      onClick={submitManual}
+                      disabled={!manual.brand.trim() || !manual.model.trim() || !manual.sku.trim() || !manual.size}
+                      className="w-full gap-1.5"
+                    >
+                      <Plus size={14} strokeWidth={2} /> Tambah Item Baru
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : null}
 

@@ -4,14 +4,9 @@ import { redirect } from "next/navigation";
 import { canSeeFinancialDashboard } from "@/config/permissions";
 import type { Role } from "@sneakervault/shared";
 import { FileBarChart, TrendingUp, TrendingDown } from "lucide-react";
+import { formatRupiahAccounting as fmtRupiah } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
-
-function fmtRupiah(n: number): string {
-  const abs = Math.abs(Math.round(n));
-  const formatted = `Rp ${abs.toLocaleString("id-ID")}`;
-  return n < 0 ? `(${formatted})` : formatted;
-}
 
 const sourceCategory: Record<string, "operasi" | "investasi" | "pendanaan"> = {
   vendor_payment: "operasi",

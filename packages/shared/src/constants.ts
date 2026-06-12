@@ -194,3 +194,90 @@ export const PLATFORM_PRICE_CHANNEL: Record<Platform, PriceChannel> = {
   offline: "offline",
   other: "online", // default ke online untuk platform lain-lain
 };
+
+/**
+ * Status display maps — single source of truth for badge label + tone across
+ * modules (packing/order, return, delete request, expense, stock opname). Tone
+ * names map to the `Badge` `tone` prop. Use with `<Badge tone={MAP[status]}>`.
+ */
+export type BadgeTone =
+  | "default"
+  | "warning"
+  | "info"
+  | "success"
+  | "danger"
+  | "neutral";
+
+// Packing session / order status (packing_sessions.status)
+export const ORDER_STATUS_LABELS: Record<string, string> = {
+  packing: "Packing",
+  shipped: "Dikirim",
+  completed: "Selesai",
+  has_return: "Retur",
+  cancelled: "Batal",
+};
+export const ORDER_STATUS_TONES: Record<string, BadgeTone> = {
+  packing: "warning",
+  shipped: "info",
+  completed: "success",
+  has_return: "danger",
+  cancelled: "neutral",
+};
+
+// Return status (returns.status)
+export const RETURN_STATUS_LABELS: Record<string, string> = {
+  pending: "Menunggu Verifikasi",
+  verified: "Siap Diproses",
+  processed: "Selesai Diproses",
+  cancelled: "Dibatalkan",
+};
+export const RETURN_STATUS_TONES: Record<string, BadgeTone> = {
+  pending: "warning",
+  verified: "info",
+  processed: "success",
+  cancelled: "neutral",
+};
+
+// Delete request status (delete_requests.status)
+export const DELETE_REQUEST_STATUS_LABELS: Record<string, string> = {
+  pending: "Menunggu",
+  approved: "Disetujui",
+  rejected: "Ditolak",
+};
+export const DELETE_REQUEST_STATUS_TONES: Record<string, BadgeTone> = {
+  pending: "warning",
+  approved: "success",
+  rejected: "danger",
+};
+
+// Expense status (expenses.status)
+export const EXPENSE_STATUS_LABELS: Record<string, string> = {
+  draft: "Draft",
+  approved: "Disetujui",
+  paid: "Dibayar",
+  rejected: "Ditolak",
+  voided: "Void",
+};
+export const EXPENSE_STATUS_TONES: Record<string, BadgeTone> = {
+  draft: "neutral",
+  approved: "info",
+  paid: "success",
+  rejected: "danger",
+  voided: "warning",
+};
+
+// Stock opname session status (stock_opname_sessions.status)
+export const STOCK_OPNAME_STATUS_LABELS: Record<string, string> = {
+  open: "Dibuka",
+  counting: "Menghitung",
+  review: "Review",
+  approved: "Disetujui",
+  cancelled: "Dibatalkan",
+};
+export const STOCK_OPNAME_STATUS_TONES: Record<string, BadgeTone> = {
+  open: "info",
+  counting: "info",
+  review: "warning",
+  approved: "success",
+  cancelled: "danger",
+};

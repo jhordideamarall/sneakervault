@@ -25,6 +25,8 @@ import {
   Textarea,
 } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
+import { RETURN_STATUS_LABELS as statusLabel, RETURN_STATUS_TONES as statusTones } from "@sneakervault/shared";
+import { formatDate as formatDateBase } from "@/lib/format";
 
 type ReturnRow = Record<string, unknown> & {
   id: string;
@@ -51,32 +53,13 @@ type ReturnableItem = Record<string, unknown> & {
   packing_sessions?: { platform_order_id: string | null; platform: string } | null;
 };
 
-const statusTones: Record<string, "warning" | "info" | "success" | "neutral"> = {
-  pending: "warning",
-  verified: "info",
-  processed: "success",
-  cancelled: "neutral",
-};
-
-const statusLabel: Record<ReturnRow["status"], string> = {
-  pending: "Menunggu Verifikasi",
-  verified: "Siap Diproses",
-  processed: "Selesai Diproses",
-  cancelled: "Dibatalkan",
-};
-
 const typeLabel: Record<ReturnRow["type"], string> = {
   exchange_size: "Tukar Size",
   refund: "Refund",
 };
 
 function formatDate(value: string | null) {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return value ? formatDateBase(value) : "—";
 }
 
 function cn(...classes: Array<string | false | null | undefined>) {

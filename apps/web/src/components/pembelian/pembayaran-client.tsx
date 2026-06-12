@@ -13,6 +13,7 @@ import { PAYMENT_METHODS } from "@sneakervault/shared";
 import type { PaymentMethod } from "@sneakervault/shared";
 import { useToast } from "@/components/toast";
 import { QuickTip } from "@/components/ui/quick-tip";
+import { formatRupiah as fmtRupiah, formatDate } from "@/lib/format";
 import {
   createVendorPayment,
   reverseVendorPayment,
@@ -57,17 +58,8 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function fmtRupiah(n: number): string {
-  return `Rp ${Math.round(n).toLocaleString("id-ID")}`;
-}
-
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return iso ? formatDate(iso) : "—";
 }
 
 function daysUntil(iso: string | null): number | null {

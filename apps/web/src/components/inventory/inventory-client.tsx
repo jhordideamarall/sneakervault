@@ -10,6 +10,7 @@ import {
   Alert,
   cn,
 } from "@sneakervault/ui";
+import { formatRupiah } from "@/lib/format";
 import {
   ChevronDown,
   ChevronRight,
@@ -142,10 +143,6 @@ function groupByModel(products: Product[]): ModelGroup[] {
       ? a.model.localeCompare(b.model)
       : a.brand.localeCompare(b.brand),
   );
-}
-
-function formatRupiah(n: number): string {
-  return `Rp ${Number(n).toLocaleString("id-ID")}`;
 }
 
 function formatPriceRange(min: number, max: number): string {

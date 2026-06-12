@@ -1,5 +1,7 @@
 "use client";
 
+import { formatRupiah as formatRp } from "@/lib/format";
+
 export type ExportRow = (string | number | null | undefined)[];
 
 export interface ReportSection {
@@ -24,10 +26,6 @@ export interface ExportParams {
 }
 
 const COMPANY = "Dewins.id";
-
-function formatRp(n: number): string {
-  return `Rp ${n.toLocaleString("id-ID")}`;
-}
 
 function formatCell(c: string | number | null | undefined): string {
   if (c == null) return "";

@@ -7,6 +7,7 @@ import { Input, Select } from "@sneakervault/ui";
 import { COA_TYPE_LABELS, COA_TYPE_TONES } from "@sneakervault/shared";
 import type { AccountLedgerResult } from "@/lib/queries";
 import { QuickTip } from "@/components/ui/quick-tip";
+import { formatRupiahAccounting as fmtRupiah, formatDate as fmtDate } from "@/lib/format";
 import {
   ArrowLeft,
   Calendar,
@@ -30,19 +31,6 @@ const sourceLabel: Record<string, string> = {
   other: "Lainnya",
 };
 
-function fmtRupiah(n: number): string {
-  const abs = Math.abs(Math.round(n));
-  const formatted = `Rp ${abs.toLocaleString("id-ID")}`;
-  return n < 0 ? `(${formatted})` : formatted;
-}
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 export function AccountLedgerClient({
   result,

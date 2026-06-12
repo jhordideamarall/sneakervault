@@ -1,212 +1,135 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
-import { Button, Card, Badge, Alert } from "@sneakervault/ui";
+import { Button, Card, Badge } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
 import {
   Upload,
   FileUp,
-  Search,
   CheckCircle2,
   AlertCircle,
   ChevronRight,
-  Info,
-  Trash2,
+  Link2,
+  Search,
+  X,
 } from "lucide-react";
-import type { MarketplaceOrder, MarketplaceOrderLine } from "@/lib/actions/marketplace-import";
-import { bulkImportMarketplaceOrders } from "@/lib/actions/marketplace-import";
+import {
+  parseMarketplaceFile,
+  detectChannel,
+  type MarketplaceChannel,
+  type MarketplaceOrder,
+} from "@/lib/marketplace/parsers";
+import {
+  reconcileMarketplaceOrders,
+  commitMarketplaceOrders,
+  mapMarketplaceSku,
+  searchProductsForMapping,
+  type ReconcileResult,
+  type OrderDiff,
+  type CommitResult,
+} from "@/lib/actions/marketplace-import";
 
-type ImportState = "upload" | "preview" | "processing" | "result";
+type ImportState = "upload" | "review" | "processing" | "result";
 
-function readNumber(value: unknown): number {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  if (typeof value !== "string") return 0;
-  const cleaned = value
-    .replace(/rp/gi, "")
-    .replace(/\s/g, "")
-    .replace(/\./g, "")
-    .replace(/,/g, ".");
-  const parsed = Number(cleaned);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function readDate(value: unknown, fallback: string): string {
-  if (!value) return fallback;
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return value.toISOString().slice(0, 10);
-  }
-  const parsed = new Date(String(value));
-  return Number.isNaN(parsed.getTime())
-    ? fallback
-    : parsed.toISOString().slice(0, 10);
-}
+const CHANNELS: { id: MarketplaceChannel; label: string; dot: string; badge: string }[] = [
+  { id: "shopee", label: "Shopee", dot: "bg-orange-500", badge: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
+  { id: "tokopedia", label: "Tokopedia", dot: "bg-emerald-500", badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
+  { id: "tiktok", label: "TikTok", dot: "bg-pink-500", badge: "bg-pink-500/10 text-pink-400 border-pink-500/20" },
+];
 
 export function ImportMarketplaceClient() {
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [state, setState] = useState<ImportState>("upload");
+  const [channel, setChannel] = useState<MarketplaceChannel>("shopee");
+  const [fileName, setFileName] = useState<string>("");
   const [orders, setOrders] = useState<MarketplaceOrder[]>([]);
-  const [platform, setPlatform] = useState<"shopee" | "tiktok" | null>(null);
-  const [result, setResult] = useState<{
-    success: number;
-    skipped: number;
-    errors: { order_id: string; reason: string }[];
-  } | null>(null);
+  const [diff, setDiff] = useState<ReconcileResult | null>(null);
+  const [result, setResult] = useState<CommitResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const channelMeta = CHANNELS.find((c) => c.id === channel)!;
 
   function reset() {
     setState("upload");
     setOrders([]);
-    setPlatform(null);
+    setDiff(null);
     setResult(null);
+    setFileName("");
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function runReconcile(ch: MarketplaceChannel, ords: MarketplaceOrder[]) {
+    const r = await reconcileMarketplaceOrders(ch, ords);
+    setDiff(r);
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    setFileName(file.name);
 
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const data = ev.target?.result;
       if (!data) return;
-
       try {
         const XLSX = await import("xlsx");
         const isCsv = file.name.toLowerCase().endsWith(".csv");
         const wb = XLSX.read(data, { type: isCsv ? "string" : "array" });
         const sheetName = wb.SheetNames[0];
-        if (!sheetName) {
+        const sheet = sheetName ? wb.Sheets[sheetName] : undefined;
+        if (!sheet) {
           toast.push("File Excel tidak valid", "error");
           return;
         }
-
-        const sheet = wb.Sheets[sheetName];
-        if (!sheet) {
-          toast.push("Sheet tidak ditemukan", "error");
-          return;
-        }
-
-        const rows = XLSX.utils.sheet_to_json(sheet, {
-          raw: false,
-          defval: "",
-        }) as Record<string, unknown>[];
-
+        const rows = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: "" }) as Record<string, unknown>[];
         if (rows.length === 0) {
           toast.push("File kosong", "error");
           return;
         }
 
-        // Auto-detect platform
-        const firstRow = rows[0];
-        if (!firstRow) {
-          toast.push("Tidak ada baris data", "error");
-          return;
-        }
-        const firstRowKeys = Object.keys(firstRow);
-        let detected: "shopee" | "tiktok" | null = null;
-        if (firstRowKeys.includes("No. Pesanan") || firstRowKeys.includes("Order ID Shopee")) {
-          detected = "shopee";
-        } else if (firstRowKeys.includes("Order ID") && firstRowKeys.includes("Seller SKU")) {
-          detected = "tiktok";
+        // Auto-detect is a validation aid against the selected channel tab.
+        const detected = detectChannel(rows);
+        if (detected && detected !== channel && !(detected === "tiktok" && channel === "tokopedia")) {
+          toast.push(`File terdeteksi ${detected.toUpperCase()}, tapi tab ${channelMeta.label} dipilih. Cek lagi.`, "error");
         }
 
-        if (!detected) {
-          toast.push("Format file tidak dikenali sebagai Shopee atau TikTok", "error");
+        const parsed = parseMarketplaceFile(channel, rows);
+        if (parsed.length === 0) {
+          toast.push("Tidak ada order valid terbaca. Pastikan tab channel sesuai file.", "error");
           return;
         }
 
-        setPlatform(detected);
-
-        // Map rows to MarketplaceOrder
-        const mappedOrders = new Map<string, MarketplaceOrder>();
-
-        rows.forEach((row) => {
-          let orderId = "";
-          let customerName = "Marketplace Customer";
-          let sku = "";
-          let qty = 0;
-          let unitPrice = 0;
-          let productName = "";
-          let orderDateVal = new Date().toISOString().split("T")[0] as string;
-          let shipping = 0;
-          let discount = 0;
-          let adminFee = 0;
-
-          if (detected === "shopee") {
-            orderId = String(row["No. Pesanan"] || "");
-            customerName = String(row["Username (Pembeli)"] || "Shopee User");
-            sku = String(row["No. Referensi SKU"] || "").trim();
-            qty = readNumber(row["Jumlah"]);
-            unitPrice = readNumber(row["Harga Asli"]);
-            productName = String(row["Nama Produk"] || "");
-            orderDateVal = readDate(row["Waktu Pesanan Dibuat"], orderDateVal);
-            shipping = readNumber(row["Ongkos Kirim Dibayar Pembeli"]);
-            discount = Math.abs(readNumber(row["Diskon Dari Penjual"]));
-            adminFee = readNumber(row["Biaya Administrasi"]);
-          } else if (detected === "tiktok") {
-            orderId = String(row["Order ID"] || "");
-            customerName = String(row["Buyer Username"] || "TikTok User");
-            sku = String(row["Seller SKU"] || "").trim();
-            qty = readNumber(row["Quantity"]);
-            unitPrice = readNumber(row["SKU Unit Original Price"]);
-            productName = String(row["Product Name"] || "");
-            orderDateVal = readDate(row["Order Creation Time"], orderDateVal);
-            shipping = readNumber(row["Shipping Fee"]);
-            discount = Math.abs(readNumber(row["Seller Discount"]));
-          }
-
-          if (!orderId || !sku || qty <= 0) return;
-
-          if (!mappedOrders.has(orderId)) {
-            mappedOrders.set(orderId, {
-              order_id: orderId,
-              customer_name: customerName,
-              order_date: orderDateVal,
-              channel: detected!,
-              lines: [],
-              shipping_fee: shipping,
-              discount: discount,
-              admin_fee: adminFee,
-            });
-          }
-
-          const order = mappedOrders.get(orderId)!;
-          // Add line
-          order.lines.push({
-            sku,
-            qty,
-            unit_price: unitPrice,
-            product_name: productName,
-          });
-          
-          // Accumulate totals if multiple lines have different headers? 
-          // Usually headers are same per row in these exports.
+        setOrders(parsed);
+        startTransition(async () => {
+          await runReconcile(channel, parsed);
+          setState("review");
         });
-
-        setOrders(Array.from(mappedOrders.values()));
-        setState("preview");
-      } catch (err) {
+      } catch {
         toast.push("Gagal memproses file", "error");
       }
     };
-    if (file.name.toLowerCase().endsWith(".csv")) {
-      reader.readAsText(file);
-    } else {
-      reader.readAsArrayBuffer(file);
-    }
+    if (file.name.toLowerCase().endsWith(".csv")) reader.readAsText(file);
+    else reader.readAsArrayBuffer(file);
   }
 
-  function handleImport() {
+  function handleCommit() {
     startTransition(async () => {
-      const r = await bulkImportMarketplaceOrders(orders);
+      setState("processing");
+      const r = await commitMarketplaceOrders(channel, orders, fileName);
       setResult(r);
       setState("result");
-      if (r.success > 0) {
-        toast.push(`${r.success} order berhasil diimport`, "success");
-      }
+      if (r.success > 0) toast.push(`${r.success} order berhasil diimport`, "success");
+    });
+  }
+
+  async function handleMapped() {
+    // Re-reconcile after a manual SKU map so statuses refresh.
+    startTransition(async () => {
+      await runReconcile(channel, orders);
     });
   }
 
@@ -217,16 +140,35 @@ export function ImportMarketplaceClient() {
           <div className="mb-4 rounded-full bg-white/5 p-4 text-white/40">
             <Upload size={32} />
           </div>
-          <h2 className="mb-2 text-lg font-semibold text-white">
-            Upload Laporan Penjualan
-          </h2>
-          <p className="mb-8 max-w-sm text-sm text-white/50">
-            Pilih file Excel/CSV laporan pesanan dari Shopee Seller Center atau TikTok Shop Seller Center.
+          <h2 className="mb-2 text-lg font-semibold text-white">Import Pesanan Marketplace</h2>
+          <p className="mb-6 max-w-sm text-sm text-white/50">
+            Pilih marketplace sumber, lalu upload file laporan pesanan. Data akan
+            direview dulu (cocok / tidak cocok) sebelum disimpan.
           </p>
+
+          {/* Channel selector = explicit import source label */}
+          <div className="mb-8 flex gap-2 rounded-lg border border-white/[0.06] bg-[#262626] p-1.5">
+            {CHANNELS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setChannel(c.id)}
+                className={
+                  "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors " +
+                  (channel === c.id
+                    ? "bg-white/[0.1] text-white"
+                    : "text-white/45 hover:bg-white/[0.04] hover:text-white/70")
+                }
+              >
+                <span className={`h-2 w-2 rounded-full ${c.dot}`} />
+                {c.label}
+              </button>
+            ))}
+          </div>
 
           <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-semibold text-black transition-all hover:bg-white/90 active:scale-95">
             <FileUp size={18} />
-            Pilih File
+            Upload File {channelMeta.label}
             <input
               ref={fileInputRef}
               type="file"
@@ -235,186 +177,312 @@ export function ImportMarketplaceClient() {
               className="hidden"
             />
           </label>
-
-          <div className="mt-8 flex gap-4 text-xs text-white/30">
-            <div className="flex items-center gap-1.5">
-              <div className="h-1.5 w-1.5 rounded-full bg-orange-500" />
-              Shopee Excel/CSV
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="h-1.5 w-1.5 rounded-full bg-pink-500" />
-              TikTok Excel/CSV
-            </div>
-          </div>
+          <p className="mt-4 text-xs text-white/30">Format Excel/CSV dari {channelMeta.label} Seller Center</p>
         </Card>
       )}
 
-      {state === "preview" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Badge tone="default" className="text-white/60">
-                Preview Import
-              </Badge>
-              <h2 className="text-xl font-bold text-white">
-                {orders.length} Order Terdeteksi
-              </h2>
-              <Badge
-                className={
-                  platform === "shopee"
-                    ? "bg-orange-500/10 text-orange-400 border-orange-500/20"
-                    : "bg-pink-500/10 text-pink-400 border-pink-500/20"
-                }
-              >
-                {platform?.toUpperCase()}
-              </Badge>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="ghost" onClick={reset}>
-                Batal
-              </Button>
-              <Button onClick={handleImport} disabled={pending}>
-                {pending ? "Mengimport..." : "Konfirmasi Import"}
-                <ChevronRight size={16} className="ml-1" />
-              </Button>
-            </div>
-          </div>
+      {state === "review" && diff && (
+        <ReviewDiff
+          diff={diff}
+          channel={channel}
+          channelBadge={channelMeta.badge}
+          channelLabel={channelMeta.label}
+          fileName={fileName}
+          pending={pending}
+          onCancel={reset}
+          onCommit={handleCommit}
+          onMapped={handleMapped}
+        />
+      )}
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {orders.slice(0, 12).map((order) => (
-              <Card key={order.order_id} className="group relative overflow-hidden border-white/[0.04] bg-[#262626] p-4">
-                <div className="mb-3 flex items-start justify-between">
-                  <div className="space-y-0.5">
-                    <div className="text-[10px] font-medium uppercase tracking-wider text-white/30">
-                      ID Pesanan
-                    </div>
-                    <div className="font-mono text-xs font-semibold text-white/80">
-                      {order.order_id}
-                    </div>
-                  </div>
-                  <div className="text-right space-y-0.5">
-                    <div className="text-[10px] font-medium uppercase tracking-wider text-white/30">
-                      Tanggal
-                    </div>
-                    <div className="text-xs font-medium text-white/60">
-                      {order.order_date}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mb-4 space-y-2">
-                  {order.lines.map((line, i) => (
-                    <div key={i} className="flex justify-between gap-4">
-                      <div className="flex-1 overflow-hidden">
-                        <div className="truncate text-xs text-white/80" title={line.product_name}>
-                          {line.product_name}
-                        </div>
-                        <div className="font-mono text-[10px] text-white/40">
-                          {line.sku}
-                        </div>
-                      </div>
-                      <div className="text-right text-xs font-medium text-white/70">
-                        {line.qty}x
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t border-white/[0.04] pt-3">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-white/40">Total Tagihan</span>
-                    <span className="font-bold text-white">
-                      Rp {(
-                        order.lines.reduce((a, b) => a + b.qty * b.unit_price, 0) -
-                        order.discount +
-                        order.shipping_fee -
-                        order.admin_fee
-                      ).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </Card>
-            ))}
-            {orders.length > 12 && (
-              <div className="flex items-center justify-center rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center sm:col-span-2 lg:col-span-3">
-                <div className="text-sm text-white/30">
-                  + {orders.length - 12} order lainnya tidak ditampilkan di preview
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+      {state === "processing" && (
+        <Card className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-4 size-10 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+          <p className="text-sm text-white/50">Menyimpan order ke sistem…</p>
+        </Card>
       )}
 
       {state === "result" && result && (
-        <div className="mx-auto max-w-2xl space-y-6">
-          <Card className="border-white/[0.06] bg-[#262626] p-8 text-center">
-            <div className="mb-4 flex justify-center">
-              {result.errors.length === 0 ? (
-                <div className="rounded-full bg-emerald-500/10 p-4 text-emerald-500">
-                  <CheckCircle2 size={48} />
-                </div>
-              ) : (
-                <div className="rounded-full bg-amber-500/10 p-4 text-amber-500">
-                  <AlertCircle size={48} />
-                </div>
-              )}
-            </div>
-            <h2 className="mb-2 text-2xl font-bold text-white">
-              Import Selesai
-            </h2>
-            <p className="mb-8 text-white/50">
-              Hasil pemrosesan laporan {platform?.toUpperCase()}.
-            </p>
+        <ResultView result={result} channelLabel={channelMeta.label} onReset={reset} onInvoice={() => router.push("/penjualan/invoice")} />
+      )}
+    </div>
+  );
+}
 
-            <div className="mb-8 grid grid-cols-3 gap-4">
-              <div className="rounded-xl bg-white/[0.03] p-4">
-                <div className="text-lg font-bold text-emerald-400">
-                  {result.success}
-                </div>
-                <div className="text-[10px] uppercase text-white/30">Berhasil</div>
-              </div>
-              <div className="rounded-xl bg-white/[0.03] p-4">
-                <div className="text-lg font-bold text-white/60">
-                  {result.skipped}
-                </div>
-                <div className="text-[10px] uppercase text-white/30">Dilewati</div>
-              </div>
-              <div className="rounded-xl bg-white/[0.03] p-4">
-                <div className="text-lg font-bold text-red-400">
-                  {result.errors.length}
-                </div>
-                <div className="text-[10px] uppercase text-white/30">Gagal</div>
-              </div>
-            </div>
+function statusBadge(status: OrderDiff["status"]) {
+  if (status === "ready") return <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Siap</Badge>;
+  if (status === "duplicate") return <Badge className="bg-white/[0.06] text-white/40 border-white/10">Sudah diimport</Badge>;
+  return <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20">Perlu tindakan</Badge>;
+}
 
-            {result.errors.length > 0 && (
-              <div className="mb-8 text-left space-y-2">
-                <div className="text-xs font-semibold text-white/40 uppercase tracking-wider px-1">
-                  Detail Kesalahan
-                </div>
-                <div className="max-h-60 overflow-y-auto rounded-xl bg-black/20 p-4 font-mono text-[11px] space-y-1.5">
-                  {result.errors.map((err, i) => (
-                    <div key={i} className="flex gap-3 text-white/60">
-                      <span className="text-red-400/80">[{err.order_id}]</span>
-                      <span>{err.reason}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+function ReviewDiff({
+  diff,
+  channel,
+  channelBadge,
+  channelLabel,
+  fileName,
+  pending,
+  onCancel,
+  onCommit,
+  onMapped,
+}: {
+  diff: ReconcileResult;
+  channel: MarketplaceChannel;
+  channelBadge: string;
+  channelLabel: string;
+  fileName: string;
+  pending: boolean;
+  onCancel: () => void;
+  onCommit: () => void;
+  onMapped: () => void;
+}) {
+  const { summary } = diff;
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Badge className={channelBadge}>{channelLabel}</Badge>
+          <h2 className="text-xl font-bold text-white">Review Import</h2>
+          <span className="text-xs text-white/30">{fileName}</span>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={onCancel}>Batal</Button>
+          <Button onClick={onCommit} disabled={pending || summary.ready === 0}>
+            {pending ? "Memproses…" : `Konfirmasi Import (${summary.ready})`}
+            <ChevronRight size={16} className="ml-1" />
+          </Button>
+        </div>
+      </div>
 
-            <div className="flex gap-3">
-              <Button variant="secondary" className="flex-1" onClick={reset}>
-                Import File Lain
-              </Button>
-              <Button className="flex-1" onClick={() => router.push("/penjualan/invoice")}>
-                Lihat Invoice
-              </Button>
-            </div>
-          </Card>
+      <div className="grid grid-cols-3 gap-3">
+        <SummaryStat label="Siap" value={summary.ready} tone="text-emerald-400" />
+        <SummaryStat label="Perlu tindakan" value={summary.blocked} tone="text-amber-400" />
+        <SummaryStat label="Sudah diimport" value={summary.duplicate} tone="text-white/50" />
+      </div>
+
+      {summary.unmapped_skus.length > 0 && (
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3 text-xs text-amber-200/80">
+          {summary.unmapped_skus.length} SKU belum dikenali sistem. Petakan ke produk di bawah — pemetaan akan diingat untuk import berikutnya.
         </div>
       )}
+
+      <div className="space-y-3">
+        {diff.orders.map((order) => (
+          <OrderRow key={order.order_id} order={order} channel={channel} onMapped={onMapped} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SummaryStat({ label, value, tone }: { label: string; value: number; tone: string }) {
+  return (
+    <div className="rounded-xl border border-white/[0.04] bg-[#262626] p-4">
+      <div className={`text-2xl font-bold ${tone}`}>{value}</div>
+      <div className="text-[10px] uppercase tracking-wider text-white/30">{label}</div>
+    </div>
+  );
+}
+
+function OrderRow({ order, channel, onMapped }: { order: OrderDiff; channel: MarketplaceChannel; onMapped: () => void }) {
+  const dim = order.status === "duplicate";
+  return (
+    <Card className={"border-white/[0.04] bg-[#262626] p-4 " + (dim ? "opacity-50" : "")}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs font-semibold text-white/80">{order.order_id}</span>
+          <span className="text-[11px] text-white/35">{order.order_date}</span>
+        </div>
+        {statusBadge(order.status)}
+      </div>
+      <div className="space-y-2">
+        {order.lines.map((line, i) => (
+          <LineRow key={i} line={line} channel={channel} disabled={dim} onMapped={onMapped} />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function LineRow({
+  line,
+  channel,
+  disabled,
+  onMapped,
+}: {
+  line: OrderDiff["lines"][number];
+  channel: MarketplaceChannel;
+  disabled: boolean;
+  onMapped: () => void;
+}) {
+  const [mapping, setMapping] = useState(false);
+  return (
+    <div className="rounded-lg bg-black/15 p-2.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs text-white/80" title={line.product_name}>{line.product_name || "—"}</div>
+          <div className="mt-0.5 flex items-center gap-2 font-mono text-[10px] text-white/40">
+            <span>SKU: {line.sku}</span>
+            <span>·</span>
+            <span>{line.qty}×</span>
+          </div>
+          {line.product && (
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-emerald-300/70">
+              <Link2 size={11} />
+              <span className="truncate">{line.product.label}</span>
+              {line.via === "map" && <span className="text-white/30">(dipetakan)</span>}
+            </div>
+          )}
+        </div>
+        <div className="shrink-0 text-right">
+          {line.issue === "ok" && <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">OK · stok {line.product?.quantity}</Badge>}
+          {line.issue === "low_stock" && <Badge className="bg-red-500/10 text-red-400 border-red-500/20">Stok {line.product?.quantity} &lt; {line.qty}</Badge>}
+          {line.issue === "unmapped" && !disabled && (
+            <Button size="sm" variant="secondary" onClick={() => setMapping((v) => !v)}>
+              <Search size={13} className="mr-1" /> Petakan SKU
+            </Button>
+          )}
+        </div>
+      </div>
+      {mapping && (
+        <SkuMapper
+          channel={channel}
+          marketplaceSku={line.sku}
+          onClose={() => setMapping(false)}
+          onMapped={() => {
+            setMapping(false);
+            onMapped();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function SkuMapper({
+  channel,
+  marketplaceSku,
+  onClose,
+  onMapped,
+}: {
+  channel: MarketplaceChannel;
+  marketplaceSku: string;
+  onClose: () => void;
+  onMapped: () => void;
+}) {
+  const toast = useToast();
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<Awaited<ReturnType<typeof searchProductsForMapping>>>([]);
+  const [pending, startTransition] = useTransition();
+
+  function search(value: string) {
+    setQ(value);
+    if (value.trim().length < 2) {
+      setResults([]);
+      return;
+    }
+    startTransition(async () => setResults(await searchProductsForMapping(value)));
+  }
+
+  function choose(productId: string) {
+    startTransition(async () => {
+      const r = await mapMarketplaceSku(channel, marketplaceSku, productId);
+      if (r.error) toast.push(r.error, "error");
+      else {
+        toast.push("SKU dipetakan", "success");
+        onMapped();
+      }
+    });
+  }
+
+  return (
+    <div className="mt-2 rounded-lg border border-white/10 bg-black/30 p-2.5">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[11px] text-white/40">Cari produk sistem untuk SKU <span className="font-mono text-white/60">{marketplaceSku}</span></span>
+        <button onClick={onClose} className="text-white/30 hover:text-white/60"><X size={13} /></button>
+      </div>
+      <input
+        autoFocus
+        value={q}
+        onChange={(e) => search(e.target.value)}
+        placeholder="Brand / model / SKU / barcode…"
+        className="w-full rounded-md border border-white/10 bg-[#1F1F1E] px-3 py-2 text-xs text-white placeholder:text-white/25 focus:border-white/25 focus:outline-none"
+      />
+      <div className="mt-2 max-h-44 space-y-1 overflow-y-auto">
+        {pending && <div className="px-1 py-1 text-[11px] text-white/30">Mencari…</div>}
+        {results.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => choose(p.id)}
+            className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[11px] text-white/70 hover:bg-white/[0.05]"
+          >
+            <span className="truncate">{p.label}</span>
+            <span className="shrink-0 text-white/30">stok {p.quantity}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ResultView({
+  result,
+  channelLabel,
+  onReset,
+  onInvoice,
+}: {
+  result: CommitResult;
+  channelLabel: string;
+  onReset: () => void;
+  onInvoice: () => void;
+}) {
+  return (
+    <div className="mx-auto max-w-2xl space-y-6">
+      <Card className="border-white/[0.06] bg-[#262626] p-8 text-center">
+        <div className="mb-4 flex justify-center">
+          {result.errors.length === 0 ? (
+            <div className="rounded-full bg-emerald-500/10 p-4 text-emerald-500"><CheckCircle2 size={48} /></div>
+          ) : (
+            <div className="rounded-full bg-amber-500/10 p-4 text-amber-500"><AlertCircle size={48} /></div>
+          )}
+        </div>
+        <h2 className="mb-2 text-2xl font-bold text-white">Import Selesai</h2>
+        <p className="mb-8 text-white/50">Hasil pemrosesan laporan {channelLabel}.</p>
+
+        <div className="mb-8 grid grid-cols-3 gap-4">
+          <div className="rounded-xl bg-white/[0.03] p-4">
+            <div className="text-lg font-bold text-emerald-400">{result.success}</div>
+            <div className="text-[10px] uppercase text-white/30">Berhasil</div>
+          </div>
+          <div className="rounded-xl bg-white/[0.03] p-4">
+            <div className="text-lg font-bold text-white/60">{result.skipped}</div>
+            <div className="text-[10px] uppercase text-white/30">Dilewati</div>
+          </div>
+          <div className="rounded-xl bg-white/[0.03] p-4">
+            <div className="text-lg font-bold text-red-400">{result.errors.length}</div>
+            <div className="text-[10px] uppercase text-white/30">Gagal</div>
+          </div>
+        </div>
+
+        {result.errors.length > 0 && (
+          <div className="mb-8 space-y-2 text-left">
+            <div className="px-1 text-xs font-semibold uppercase tracking-wider text-white/40">Detail Kesalahan</div>
+            <div className="max-h-60 space-y-1.5 overflow-y-auto rounded-xl bg-black/20 p-4 font-mono text-[11px]">
+              {result.errors.map((err, i) => (
+                <div key={i} className="flex gap-3 text-white/60">
+                  <span className="text-red-400/80">[{err.order_id}]</span>
+                  <span>{err.reason}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <Button variant="secondary" className="flex-1" onClick={onReset}>Import File Lain</Button>
+          <Button className="flex-1" onClick={onInvoice}>Lihat Invoice</Button>
+        </div>
+      </Card>
     </div>
   );
 }

@@ -26,19 +26,10 @@ import {
   Circle,
   Link2,
 } from "lucide-react";
+import { formatRupiah as fmtRupiah, formatDate as fmtDate } from "@/lib/format";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
-}
-function fmtRupiah(n: number): string {
-  return `Rp ${Math.round(n).toLocaleString("id-ID")}`;
-}
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 const sourceLabel: Record<string, string> = {

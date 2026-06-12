@@ -5,11 +5,14 @@ import { getCurrentUser } from "@/lib/actions/auth";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { hasRouteAccess } from "@/config/permissions";
+import { getSidebarSignals } from "@/lib/sidebar-signals";
 import type { Role } from "@sneakervault/shared";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@sneakervault/ui";
 import { MailGlobalDialog } from "@/components/dashboard/mail/mail-global-dialog";
 import { RealtimeProvider } from "@/components/dashboard/realtime-provider";
+import { ViewAsBanner } from "@/components/dashboard/view-as-banner";
 import { DateFilterProvider } from "@/lib/use-date-filter";
+import { RightPanelProvider } from "@/lib/use-right-panel";
 
 export default async function DashboardLayout({
   children,
@@ -19,16 +22,26 @@ export default async function DashboardLayout({
   const profile = await getCurrentUser();
   if (!profile) redirect("/login");
 
+  // `roles` is EFFECTIVE (owner previewing another role -> the previewed role).
+  // `real_roles` is the true set; owner keeps the always-available preview bar.
   const roles = (profile.roles ?? []) as Role[];
+  const realRoles = (profile.real_roles ?? []) as Role[];
+  const isOwner = realRoles.includes("owner");
 
   const hdrs = await headers();
   const pathname = hdrs.get("x-pathname") ?? hdrs.get("x-invoke-path") ?? "";
+  // Anti-lockout: a previewed role with no access lands on /workspace (allowed
+  // to every role), never a redirect loop or logout — the bar resets it.
   if (pathname && !hasRouteAccess(pathname, roles)) {
     redirect("/workspace");
   }
 
+  // Live activity signals (coloured dots) for sidebar menus, gated by role.
+  const signals = await getSidebarSignals(roles);
+
   return (
     <DateFilterProvider>
+    <RightPanelProvider>
     <div className="flex h-screen w-full overflow-hidden bg-[#1F1F1E] gap-2 p-2">
       <MailGlobalDialog userId={profile.id} />
       <RealtimeProvider />
@@ -38,17 +51,24 @@ export default async function DashboardLayout({
           defaultSize={15}
           className="bg-[#262626] rounded-md overflow-hidden"
         >
-          <Sidebar roles={roles} fullName={profile.full_name} userId={profile.id} />
+          <Sidebar roles={roles} fullName={profile.full_name} userId={profile.id} signals={signals} />
         </ResizablePanel>
 
         <ResizableHandle />
 
         {/* Main Content */}
-        <ResizablePanel 
+        <ResizablePanel
           defaultSize={85}
           className="bg-[#1F1F1E] rounded-md overflow-hidden"
         >
-          <MainShell>{children}</MainShell>
+          <div className="flex h-full flex-col">
+            {isOwner && (
+              <ViewAsBanner current={(profile.view_as ?? null) as Role | null} />
+            )}
+            <div className="flex-1 overflow-hidden">
+              <MainShell>{children}</MainShell>
+            </div>
+          </div>
         </ResizablePanel>
       </ResizablePanelGroup>
 
@@ -60,6 +80,7 @@ export default async function DashboardLayout({
         userId={profile.id}
       />
     </div>
+    </RightPanelProvider>
     </DateFilterProvider>
   );
   }

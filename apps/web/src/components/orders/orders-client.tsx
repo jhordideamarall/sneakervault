@@ -6,7 +6,8 @@ import { Badge, Button, Select, Card } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
 import { useLiveRefresh } from "@/lib/use-live-refresh";
-import { 
+import { ORDER_STATUS_LABELS as statusLabel, ORDER_STATUS_TONES as statusTones } from "@sneakervault/shared";
+import {
   ShoppingCart, 
   Search, 
   Truck, 
@@ -28,22 +29,6 @@ type Session = Record<string, unknown> & {
   platform_order_id: string | null;
   created_at: string;
   profiles?: { full_name: string } | null;
-};
-
-const statusTones: Record<string, "warning" | "info" | "success" | "danger" | "neutral"> = {
-  packing: "warning",
-  shipped: "info",
-  completed: "success",
-  has_return: "danger",
-  cancelled: "neutral",
-};
-
-const statusLabel: Record<string, string> = {
-  packing: "Packing",
-  shipped: "Dikirim",
-  completed: "Selesai",
-  has_return: "Retur",
-  cancelled: "Batal",
 };
 
 export function OrdersClient({

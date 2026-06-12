@@ -7,12 +7,7 @@ import { useRouter } from "next/navigation";
 import { FileBarChart, TrendingUp, TrendingDown, Printer, Download } from "lucide-react";
 import { exportToPDF, exportToExcel, type ReportSection } from "@/lib/export";
 import { QuickTip } from "@/components/ui/quick-tip";
-
-function fmtRupiah(n: number): string {
-  const abs = Math.abs(Math.round(n));
-  const formatted = `Rp ${abs.toLocaleString("id-ID")}`;
-  return n < 0 ? `(${formatted})` : formatted;
-}
+import { formatRupiahAccounting as fmtRupiah } from "@/lib/format";
 
 function sumLeaves(accounts: AccountBalance[]): number {
   const idsWithChildren = new Set(

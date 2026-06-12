@@ -11,6 +11,7 @@ import {
 import { PO_STATUS_LABELS, PO_STATUS_TONES } from "@sneakervault/shared";
 import { useToast } from "@/components/toast";
 import { QuickTip } from "@/components/ui/quick-tip";
+import { formatRupiah as fmtRupiah, formatDate as fmtDate } from "@/lib/format";
 import { receivePurchaseOrder } from "@/lib/actions/purchase-receive";
 import type { ReceivablePoRow, PoDetail } from "@/lib/queries";
 import {
@@ -33,17 +34,6 @@ type ReceiveLineForm = {
   unit_cost: number;
 };
 
-function fmtRupiah(n: number): string {
-  return `Rp ${Math.round(n).toLocaleString("id-ID")}`;
-}
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 export function PenerimaanClient({
   receivablePos,
