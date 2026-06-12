@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Button,
   Input,
+  NumberInput,
   Select,
   FieldLabel,
   FieldError,
@@ -872,7 +873,7 @@ function FormModal({
                       <Input placeholder="Size *" type="number" value={manual.size} onChange={(e) => setManual({ ...manual, size: e.target.value })} />
                       <Input placeholder="Warna (opsional)" value={manual.color} onChange={(e) => setManual({ ...manual, color: e.target.value })} />
                       <Input placeholder="SKU *" value={manual.sku} onChange={(e) => setManual({ ...manual, sku: e.target.value })} />
-                      <Input placeholder="Harga beli / unit" type="number" value={manual.unit_cost} onChange={(e) => setManual({ ...manual, unit_cost: e.target.value })} />
+                      <NumberInput align="left" placeholder="Harga beli / unit" value={manual.unit_cost} onValueChange={(n) => setManual({ ...manual, unit_cost: String(n) })} />
                       <Input placeholder="Qty" type="number" value={manual.qty} onChange={(e) => setManual({ ...manual, qty: e.target.value })} />
                     </div>
                     <Button
@@ -934,14 +935,10 @@ function FormModal({
                         />
                       </td>
                       <td className="px-3 py-2">
-                        <Input
-                          type="number"
-                          min={0}
+                        <NumberInput
                           value={l.unit_cost}
-                          onChange={(e) =>
-                            onUpdateLine(idx, {
-                              unit_cost: Math.max(0, Number(e.target.value)),
-                            })
+                          onValueChange={(n) =>
+                            onUpdateLine(idx, { unit_cost: Math.max(0, n) })
                           }
                           className="h-8 px-2"
                         />

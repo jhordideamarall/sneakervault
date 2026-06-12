@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect, useCallback } from "react";
 import { scanInbound, confirmInbound, registerProduct } from "@/lib/actions/inbound";
-import { Button, Card, Input, Select, FieldLabel, FieldError, Alert, Badge } from "@sneakervault/ui";
+import { Button, Card, Input, NumberInput, Select, FieldLabel, FieldError, Alert, Badge } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { useHardwareScanner } from "@sneakervault/barcode";
 import { CameraScanner } from "@/components/scanner/camera-scanner";
@@ -313,10 +313,10 @@ export function InboundClient({ suppliers }: { suppliers: Supplier[] }) {
                 </div>
                 <div className="space-y-2">
                   <FieldLabel required>Harga Jual (Rp)</FieldLabel>
-                  <Input 
-                    type="number" 
-                    value={regForm.sell_price} 
-                    onChange={(e) => setRegForm({ ...regForm, sell_price: Number(e.target.value) })} 
+                  <NumberInput
+                    align="left"
+                    value={regForm.sell_price}
+                    onValueChange={(n) => setRegForm({ ...regForm, sell_price: n })}
                     placeholder="0"
                   />
                   <FieldError message={fieldErrors.sell_price} />
@@ -391,7 +391,7 @@ export function InboundClient({ suppliers }: { suppliers: Supplier[] }) {
                   <FieldLabel required>Harga Modal Per Unit (HPP)</FieldLabel>
                   <div className="relative">
                     <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={16} />
-                    <Input type="number" value={form.unit_cost} onChange={(e) => setForm({ ...form, unit_cost: Number(e.target.value) })} className="pl-10" />
+                    <NumberInput align="left" value={form.unit_cost} onValueChange={(n) => setForm({ ...form, unit_cost: n })} className="pl-10" />
                   </div>
                   <FieldError message={fieldErrors.unit_cost} />
                 </div>

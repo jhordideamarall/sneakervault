@@ -9,6 +9,7 @@ import {
   FieldError,
   Alert,
   cn,
+  NumberInput,
 } from "@sneakervault/ui";
 import { formatRupiah } from "@/lib/format";
 import {
@@ -883,13 +884,12 @@ function AddProductForm({
               <FieldLabel htmlFor="add-price-online">
                 Harga Online (Rp)
               </FieldLabel>
-              <Input
+              <NumberInput
                 id="add-price-online"
-                type="number"
+                align="left"
+                placeholder="0"
                 value={form.sell_price}
-                onChange={(e) =>
-                  setForm({ ...form, sell_price: Number(e.target.value) })
-                }
+                onValueChange={(n) => setForm({ ...form, sell_price: n })}
               />
               <p className="mt-1 text-[11px] text-white/40">
                 Shopee / TikTok / marketplace
@@ -899,13 +899,12 @@ function AddProductForm({
               <FieldLabel htmlFor="add-price-offline">
                 Harga Offline (Rp)
               </FieldLabel>
-              <Input
+              <NumberInput
                 id="add-price-offline"
-                type="number"
+                align="left"
+                placeholder="0"
                 value={form.price_offline}
-                onChange={(e) =>
-                  setForm({ ...form, price_offline: Number(e.target.value) })
-                }
+                onValueChange={(n) => setForm({ ...form, price_offline: n })}
               />
               <p className="mt-1 text-[11px] text-white/40">
                 WA / transfer langsung / website
