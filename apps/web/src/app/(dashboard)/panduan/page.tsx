@@ -206,7 +206,7 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
     title: "Pembelian",
     rules: [
       {
-        menu: "Purchase Order",
+        menu: "Pembelian Barang",
         akses: "Owner, Finance",
         fungsi: "Mencatat rencana pembelian dari vendor sebelum barang masuk.",
         aturan: [
@@ -371,7 +371,7 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
           "Pilih channel eksplisit sebelum upload.",
           "Gunakan file pesanan resmi seller center, bukan template custom.",
           "SKU yang tidak dikenali harus dipetakan atau dibuat produknya dulu.",
-          "Size marketplace harus numerik; Size Lain, Default, atau kosong tidak bisa jadi SKU inventory.",
+          "Size bisa angka atau pecahan (mis. 42 2/3, 37,5); hanya Size Lain, Default, atau kosong yang dilewati.",
         ],
         efek: [
           "Baris siap membuat invoice belum terbayar.",
@@ -1052,7 +1052,7 @@ export default function PanduanPage() {
             saldo update otomatis tiap penerimaan/pengeluaran.
           </Sub>
           <Sub icon={<Truck size={15} />} title="Supplier">
-            Master Data → Supplier. Nama, kontak, dll. Dipakai di Purchase Order, Faktur Pembelian, Bayar Vendor.
+            Master Data → Supplier. Nama, kontak, dll. Dipakai di Pembelian Barang, Faktur Pembelian, Bayar Vendor.
           </Sub>
           <Sub icon={<Users size={15} />} title="Customer">
             Master Data → Customer (channel WA/Shopee/Tiktok/Offline/Website). Bisa juga dibuat langsung saat POS/Invoice.
@@ -1095,11 +1095,11 @@ export default function PanduanPage() {
         id="pembelian"
         icon={<ClipboardList size={20} />}
         title="5 · Pembelian"
-        subtitle="Purchase Order → Penerimaan → Faktur → Bayar Vendor"
+        subtitle="Pembelian Barang → Penerimaan → Faktur → Bayar Vendor"
       >
         <Steps
           steps={[
-            { title: "Purchase Order (PO)", desc: "Pilih vendor + tambah item. Pembayaran: Kredit / Bayar Lunas / DP (pilih akun bank). PO Draft → Disetujui." },
+            { title: "Pembelian Barang (PO)", desc: "Pilih vendor + tambah item. Pembayaran: Kredit / Bayar Lunas / DP (pilih akun bank). PO Draft → Disetujui." },
             { title: "Terima Barang (Penerimaan)", desc: "Saat barang datang, terima PO (boleh sebagian). Stok bertambah + HPP dihitung ulang otomatis." },
             { title: "Faktur Pembelian", desc: "Catat tagihan vendor (hutang/AP). Status Belum Dibayar → Sebagian → Lunas. Jurnal otomatis." },
             { title: "Bayar Vendor", desc: "Lunasi faktur dari kas/bank. Saldo bank turun, hutang berkurang, jurnal pembayaran otomatis." },

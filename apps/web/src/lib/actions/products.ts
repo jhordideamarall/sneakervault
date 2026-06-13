@@ -14,24 +14,39 @@ import { z } from "zod";
 import type { ProductImportChannel } from "@/lib/marketplace/product-import";
 
 const importRowSchema = z.object({
-  brand: z.string().min(1),
-  model: z.string().min(1),
-  sku: z.string().min(1),
-  size: z.coerce.number().positive(),
-  color: z.string().optional(),
-  barcode: z.string().min(1),
+  brand: z.string().trim().min(1),
+  model: z.string().trim().min(1),
+  sku: z.string().trim().min(1),
+  // Free-text size label (mis. "42 2/3"). Dipetakan ke kolom size_label;
+  // numerik `size` diturunkan trigger DB. coerce agar angka CSV (40) jadi "40".
+  size: z.coerce.string().trim().min(1),
+  color: z.string().trim().optional(),
+  // Barcode opsional — auto-generate dari SKU + size kalau kosong.
+  barcode: z.string().trim().optional(),
   quantity: z.coerce.number().int().nonnegative().default(0),
   hpp: z.coerce.number().nonnegative().default(0),
   sell_price: z.coerce.number().nonnegative().default(0),
   price_offline: z.coerce.number().nonnegative().default(0),
+  // Harga per-channel (opsional; kosong = fallback ke sell_price).
+  price_website: z.coerce.number().nonnegative().optional(),
+  price_shopee: z.coerce.number().nonnegative().optional(),
+  price_tiktok: z.coerce.number().nonnegative().optional(),
+  price_tokopedia: z.coerce.number().nonnegative().optional(),
 });
+
+/** Barcode auto-generate: unik per SKU+size, alfanumerik, scannable (Code128). */
+function autoBarcode(sku: string, sizeLabel: string) {
+  return `${sku}-${sizeLabel}`.replace(/[^A-Za-z0-9-]/g, "").toUpperCase().slice(0, 120);
+}
 
 export type ImportProductRow = z.infer<typeof importRowSchema>;
 
 const marketplaceProductImportRowSchema = importRowSchema.extend({
-  marketplace_sku: z.string().min(1),
-  marketplace_product_id: z.string().optional(),
-  marketplace_variation_id: z.string().optional(),
+  marketplace_sku: z.string().trim().min(1),
+  marketplace_product_id: z.string().trim().optional(),
+  marketplace_variation_id: z.string().trim().optional(),
+  // size numerik utk match lintas-sumber (38 1/2 & 38.5 → 38.5).
+  size_value: z.coerce.number().optional(),
 });
 
 type MarketplaceProductImportRow = z.infer<typeof marketplaceProductImportRowSchema>;
@@ -39,6 +54,7 @@ type MarketplaceProductImportRow = z.infer<typeof marketplaceProductImportRowSch
 type ParsedImportProductRow = {
   row: number;
   data: ImportProductRow;
+  seedKey: string;
 };
 
 function chunk<T>(items: T[], size: number) {
@@ -49,18 +65,56 @@ function chunk<T>(items: T[], size: number) {
   return chunks;
 }
 
+function parseSeedSize(value: unknown) {
+  const raw = String(value ?? "").trim().replace(/,/g, ".");
+  if (!raw) return null;
+
+  const mixedFraction = raw.match(/^([0-9]+) +([0-9]+)\/([0-9]+)$/);
+  if (mixedFraction) {
+    const denominator = Number(mixedFraction[3]);
+    if (denominator === 0) return null;
+    return Number(mixedFraction[1]) + Number(mixedFraction[2]) / denominator;
+  }
+
+  const pureFraction = raw.match(/^([0-9]+)\/([0-9]+)$/);
+  if (pureFraction) {
+    const denominator = Number(pureFraction[2]);
+    if (denominator === 0) return null;
+    return Number(pureFraction[1]) / denominator;
+  }
+
+  const plain = raw.match(/^[0-9]+\.?[0-9]*/)?.[0];
+  const parsed = Number(plain);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function seedSizeValue(row: { size: string; size_value?: number | null }) {
+  if (typeof row.size_value === "number" && Number.isFinite(row.size_value) && row.size_value > 0) {
+    return row.size_value;
+  }
+  return parseSeedSize(row.size);
+}
+
+function seedProductKey(sku: string, sizeNum: number) {
+  return `${sku}\u0000${Math.round(sizeNum * 100) / 100}`;
+}
+
 function importPayload(row: ImportProductRow) {
   return {
     brand: row.brand,
     model: row.model,
     sku: row.sku,
-    size: row.size,
+    size_label: row.size,
     color: row.color || null,
-    barcode: row.barcode,
+    barcode: row.barcode?.trim() || autoBarcode(row.sku, row.size),
     quantity: row.quantity,
     hpp: row.hpp,
     sell_price: row.sell_price,
     price_offline: row.price_offline || row.sell_price,
+    price_website: row.price_website ?? null,
+    price_shopee: row.price_shopee ?? null,
+    price_tiktok: row.price_tiktok ?? null,
+    price_tokopedia: row.price_tokopedia ?? null,
     is_active: true,
     first_inbound_at: row.quantity > 0 ? new Date().toISOString() : null,
   };
@@ -70,7 +124,7 @@ const createProductSchema = z.object({
   brand: z.string().min(1),
   model: z.string().min(1),
   sku: z.string().min(1),
-  size: z.coerce.number().positive(),
+  size_label: z.string().trim().min(1),
   color: z.string().optional(),
   barcode: z.string().min(1),
   sell_price: z.coerce.number().nonnegative().default(0),
@@ -125,6 +179,7 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
   const parsedRows: ParsedImportProductRow[] = [];
   const seenBarcodes = new Set<string>();
   const seenSkus = new Set<string>();
+  const seenProductKeys = new Set<string>();
 
   for (let i = 0; i < rows.length; i++) {
     const parsed = importRowSchema.safeParse(rows[i]);
@@ -138,14 +193,28 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
       continue;
     }
 
-    if (seenBarcodes.has(parsed.data.barcode) || seenSkus.has(parsed.data.sku)) {
+    // Barcode opsional → auto-generate dari SKU + size kalau kosong.
+    parsed.data.barcode =
+      parsed.data.barcode?.trim() || autoBarcode(parsed.data.sku, parsed.data.size);
+
+    const sizeNum = seedSizeValue(parsed.data);
+    if (sizeNum == null) {
+      errors.push({ row: i + 2, reason: "Size harus numerik atau pecahan valid" });
+      continue;
+    }
+    const productKey = seedProductKey(parsed.data.sku, sizeNum);
+
+    // Identitas produk = (sku, size). SKU colorway berulang antar size = variant,
+    // bukan duplikat. Dedup sama dengan unique DB: (sku, round(size, 2)).
+    if (seenProductKeys.has(productKey) || seenBarcodes.has(parsed.data.barcode)) {
       skipped++;
       continue;
     }
 
+    seenProductKeys.add(productKey);
     seenBarcodes.add(parsed.data.barcode);
     seenSkus.add(parsed.data.sku);
-    parsedRows.push({ row: i + 2, data: parsed.data });
+    parsedRows.push({ row: i + 2, data: parsed.data, seedKey: productKey });
   }
 
   if (parsedRows.length === 0) {
@@ -153,7 +222,7 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
   }
 
   const existingBarcodes = new Set<string>();
-  const existingSkus = new Set<string>();
+  const existingProductKeys = new Set<string>();
 
   for (const batch of chunk([...seenBarcodes], 100)) {
     const { data, error } = await supabase
@@ -175,7 +244,7 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
   for (const batch of chunk([...seenSkus], 100)) {
     const { data, error } = await supabase
       .from("products")
-      .select("sku")
+      .select("sku, size")
       .in("sku", batch);
     if (error) {
       return {
@@ -185,13 +254,16 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
       };
     }
     for (const product of data ?? []) {
-      if (product.sku) existingSkus.add(product.sku);
+      const sizeNum = Number(product.size);
+      if (product.sku && Number.isFinite(sizeNum) && sizeNum > 0) {
+        existingProductKeys.add(seedProductKey(product.sku, sizeNum));
+      }
     }
   }
 
   const toInsert: ParsedImportProductRow[] = [];
   for (const row of parsedRows) {
-    if (existingBarcodes.has(row.data.barcode) || existingSkus.has(row.data.sku)) {
+    if (existingProductKeys.has(row.seedKey) || existingBarcodes.has(row.data.barcode!)) {
       skipped++;
     } else {
       toInsert.push(row);
@@ -201,7 +273,7 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
   for (const batch of chunk(toInsert, 100)) {
     const { error } = await supabase
       .from("products")
-      .insert(batch.map((row) => importPayload({ ...row.data, quantity: 0, hpp: 0 })));
+      .insert(batch.map((row) => importPayload(row.data)));
 
     if (!error) {
       inserted += batch.length;
@@ -211,7 +283,7 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
     for (const row of batch) {
       const { error: rowError } = await supabase
         .from("products")
-        .insert(importPayload({ ...row.data, quantity: 0, hpp: 0 }));
+        .insert(importPayload(row.data));
       if (rowError) {
         errors.push({ row: row.row, reason: rowError.message });
       } else {
@@ -251,10 +323,11 @@ export async function bulkImportMarketplaceProducts(
   let inserted = 0;
   let skipped = 0;
   const errors: { row: number; reason: string }[] = [];
-  const parsedRows: Array<{ row: number; data: MarketplaceProductImportRow }> = [];
+  const parsedRows: Array<{ row: number; data: MarketplaceProductImportRow; seedKey: string }> = [];
   const seenSkus = new Set<string>();
   const seenBarcodes = new Set<string>();
   const seenMarketplaceSkus = new Set<string>();
+  const seenProductKeys = new Set<string>();
 
   for (let i = 0; i < rows.length; i++) {
     const parsed = marketplaceProductImportRowSchema.safeParse(rows[i]);
@@ -266,33 +339,55 @@ export async function bulkImportMarketplaceProducts(
       continue;
     }
 
+    parsed.data.barcode =
+      parsed.data.barcode?.trim() || autoBarcode(parsed.data.sku, parsed.data.size);
+
+    const sizeNum = seedSizeValue(parsed.data);
+    if (sizeNum == null) {
+      errors.push({ row: i + 2, reason: "Size harus numerik atau pecahan valid" });
+      continue;
+    }
+    const productKey = seedProductKey(parsed.data.sku, sizeNum);
+
+    // SKU = colorway (berulang antar size) → JANGAN dedup by sku. Identitas varian
+    // = (sku, round(size, 2)); marketplace_sku hanya kunci mapping per-varian.
     const duplicate =
-      seenSkus.has(parsed.data.sku) ||
+      seenProductKeys.has(productKey) ||
       seenBarcodes.has(parsed.data.barcode) ||
       seenMarketplaceSkus.has(parsed.data.marketplace_sku);
     if (duplicate) {
       skipped++;
       continue;
     }
+    seenProductKeys.add(productKey);
     seenSkus.add(parsed.data.sku);
     seenBarcodes.add(parsed.data.barcode);
     seenMarketplaceSkus.add(parsed.data.marketplace_sku);
-    parsedRows.push({ row: i + 2, data: parsed.data });
+    parsedRows.push({ row: i + 2, data: parsed.data, seedKey: productKey });
   }
 
   if (parsedRows.length === 0) return { inserted, skipped, errors };
 
-  const existingBySku = new Map<string, { id: string }>();
-  const existingByBarcode = new Map<string, { id: string }>();
+  // Match lintas-sumber: kunci = (sku + size numerik dibulatkan 2 desimal).
+  // "38 1/2" (marketplace) & "38.5" (seed internal) → 38.5 → produk SAMA → di-map (bukan dobel).
+  const existingByKey = new Map<
+    string,
+    { id: string; price_shopee: number | null; price_tiktok: number | null }
+  >();
   for (const batch of chunk([...seenSkus], 100)) {
-    const { data, error } = await supabase.from("products").select("id, sku").in("sku", batch);
+    const { data, error } = await supabase
+      .from("products")
+      .select("id, sku, size, price_shopee, price_tiktok")
+      .in("sku", batch);
     if (error) return { inserted, skipped, errors: [{ row: 1, reason: `Cek SKU gagal: ${error.message}` }, ...errors] };
-    for (const product of data ?? []) existingBySku.set(product.sku, { id: product.id });
-  }
-  for (const batch of chunk([...seenBarcodes], 100)) {
-    const { data, error } = await supabase.from("products").select("id, barcode").in("barcode", batch);
-    if (error) return { inserted, skipped, errors: [{ row: 1, reason: `Cek barcode gagal: ${error.message}` }, ...errors] };
-    for (const product of data ?? []) existingByBarcode.set(product.barcode, { id: product.id });
+    for (const p of data ?? [])
+      if (Number.isFinite(Number(p.size)) && Number(p.size) > 0) {
+        existingByKey.set(seedProductKey(p.sku, Number(p.size)), {
+          id: p.id,
+          price_shopee: p.price_shopee,
+          price_tiktok: p.price_tiktok,
+        });
+      }
   }
 
   const mapRows: Array<{
@@ -304,9 +399,10 @@ export async function bulkImportMarketplaceProducts(
     created_by: string;
     updated_at: string;
   }> = [];
-  const toInsert: Array<{ row: number; data: MarketplaceProductImportRow }> = [];
+  const toInsert: Array<{ row: number; data: MarketplaceProductImportRow; seedKey: string }> = [];
+  const priceUpdates: Array<{ id: string; patch: Record<string, number> }> = [];
   for (const row of parsedRows) {
-    const existing = existingBySku.get(row.data.sku) ?? existingByBarcode.get(row.data.barcode);
+    const existing = existingByKey.get(row.seedKey);
     if (existing) {
       skipped++;
       mapRows.push({
@@ -318,6 +414,12 @@ export async function bulkImportMarketplaceProducts(
         created_by: profile.id,
         updated_at: new Date().toISOString(),
       });
+      // Produk sudah ada (seed internal): cuma UPDATE harga channel. HPP & stok TIDAK disentuh.
+      const patch: Record<string, number> = {};
+      if (parsedChannel.data === "shopee" && row.data.price_shopee != null) patch.price_shopee = row.data.price_shopee;
+      if (parsedChannel.data === "tiktok" && row.data.price_tiktok != null) patch.price_tiktok = row.data.price_tiktok;
+      if (parsedChannel.data === "tokopedia" && row.data.price_tokopedia != null) patch.price_tokopedia = row.data.price_tokopedia;
+      if (Object.keys(patch).length > 0) priceUpdates.push({ id: existing.id, patch });
     } else {
       toInsert.push(row);
     }
@@ -328,7 +430,7 @@ export async function bulkImportMarketplaceProducts(
     const { data, error } = await supabase
       .from("products")
       .insert(payload)
-      .select("id, sku");
+      .select("id, barcode");
 
     if (error) {
       for (const row of batch) {
@@ -366,10 +468,10 @@ export async function bulkImportMarketplaceProducts(
       continue;
     }
 
-    const bySku = new Map((data ?? []).map((product) => [product.sku, product.id]));
+    const byBarcode = new Map((data ?? []).map((product) => [product.barcode, product.id]));
     inserted += data?.length ?? 0;
     for (const row of batch) {
-      const productId = bySku.get(row.data.sku);
+      const productId = byBarcode.get(row.data.barcode!);
       if (!productId) continue;
       mapRows.push({
         channel: parsedChannel.data,
@@ -392,6 +494,12 @@ export async function bulkImportMarketplaceProducts(
         if (movement.error) errors.push({ row: row.row, reason: `Stock movement: ${movement.error}` });
       }
     }
+  }
+
+  // Update harga channel pada produk internal yang ter-map (HPP & stok tetap milik internal).
+  for (const u of priceUpdates) {
+    const { error } = await supabase.from("products").update(u.patch).eq("id", u.id);
+    if (error) errors.push({ row: 1, reason: `Update harga channel gagal: ${error.message}` });
   }
 
   for (const batch of chunk(mapRows, 100)) {
@@ -472,6 +580,7 @@ export async function updateProduct(input: unknown) {
   //  - admin_gudang: can edit color, image, supplier (operational data)
   const isOwner = profile.roles?.includes("owner");
   const isFinance = profile.roles?.includes("finance");
+  const isAdminGudang = profile.roles?.includes("admin_gudang");
   const canEditPrice = isOwner || isFinance;
 
   if (!canEditPrice) {
@@ -482,6 +591,12 @@ export async function updateProduct(input: unknown) {
   // Admin gudang cannot edit supplier (locked to owner/finance)
   if (!isOwner && !isFinance) {
     delete (patch as { default_supplier_id?: string | null }).default_supplier_id;
+  }
+
+  // Size (size_label) hanya boleh diubah owner / admin_gudang (data operasional),
+  // bukan finance — selaras dengan komentar "finance can edit prices only".
+  if (!isOwner && !isAdminGudang) {
+    delete (patch as { size_label?: string }).size_label;
   }
 
   // Normalize image_url: empty string → null (DB constraint-friendly)
@@ -521,7 +636,7 @@ export async function updateProductCondition(input: unknown) {
   // Fetch product before change for notification context
   const { data: before } = await supabase
     .from("products")
-    .select("brand, model, size, condition")
+    .select("brand, model, size_label, condition")
     .eq("id", product_id)
     .maybeSingle();
 
@@ -544,7 +659,7 @@ export async function updateProductCondition(input: unknown) {
 
   // Notify owner if condition changed (untuk visibility — aktivitas di gudang)
   if (before) {
-    const productLabel = `${before.brand} ${before.model} size ${before.size}`;
+    const productLabel = `${before.brand} ${before.model} size ${before.size_label}`;
     await notifyEvent(
       {
         type: "product.condition_changed",

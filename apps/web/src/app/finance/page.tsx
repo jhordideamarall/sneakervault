@@ -172,7 +172,7 @@ export default async function FinancePage() {
           <div className="grid gap-2.5 sm:grid-cols-2">
             <RoadmapItem
               phase="Phase 2"
-              title="Purchase Order (Daftar Pembelian)"
+              title="Pembelian Barang (Daftar Pembelian)"
               description="Finance buat PO → shopkeeper cocokkan fisik → auto-generate inbound batch (tidak perlu scan ulang)."
             />
             <RoadmapItem

@@ -16,7 +16,8 @@ import { z } from "zod";
 
 export type { MarketplaceChannel, MarketplaceOrder, MarketplaceOrderLine } from "@/lib/marketplace/parsers";
 
-const ROLES = ["owner", "finance", "admin_online"] as const;
+// Impor pesanan = data keuangan → hanya owner & finance (Mei). Bukan admin_online.
+const ROLES = ["owner", "finance"] as const;
 
 type ResolvedProduct = {
   id: string;

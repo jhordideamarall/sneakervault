@@ -47,6 +47,7 @@ type Product = {
   model: string;
   sku: string;
   size: number;
+  size_label: string;
   color: string | null;
   barcode: string;
   quantity: number;
@@ -85,7 +86,9 @@ type InventorySummary = {
 function groupByModel(products: Product[]): ModelGroup[] {
   const map = new Map<string, ModelGroup>();
   for (const p of products) {
-    const key = `${p.brand}::${p.model}`;
+    // Variant dikelompokkan per SKU (colorway). SKU = jangkar; size = variant.
+    // Nama model boleh beda antar baris — yang menentukan grup adalah SKU.
+    const key = p.sku;
     let group = map.get(key);
     if (!group) {
       group = {
@@ -289,7 +292,7 @@ export function InventoryClient({
               return [
                 p.brand,
                 p.model,
-                p.size,
+                p.size_label,
                 p.sku,
                 p.barcode,
                 p.quantity,
@@ -471,7 +474,7 @@ export function InventoryClient({
           open={true}
           onOpenChange={(o) => !o && setConditionEditing(null)}
           productId={conditionEditing.id}
-          productLabel={`${conditionEditing.brand} ${conditionEditing.model} — size ${conditionEditing.size}`}
+          productLabel={`${conditionEditing.brand} ${conditionEditing.model} — size ${conditionEditing.size_label}`}
           currentCondition={conditionEditing.condition}
         />
       )}
@@ -629,7 +632,7 @@ function ModelGroupRow({
               <tbody className="divide-y divide-white/[0.04]">
                 {group.variants.map((v) => (
                   <tr key={v.id} className="transition-colors hover:bg-white/[0.02]">
-                    <td className="py-2.5 font-semibold text-white">{v.size}</td>
+                    <td className="py-2.5 font-semibold text-white">{v.size_label}</td>
                     <td className="py-2.5 font-mono text-[11px] text-white/50">
                       {v.sku}
                     </td>
@@ -780,7 +783,7 @@ function AddProductForm({
         brand: form.brand,
         model: form.model,
         sku: form.sku,
-        size: Number(form.size),
+        size_label: form.size,
         color: form.color,
         barcode: form.barcode,
         hpp: canEditPrice ? form.hpp : 0,
@@ -839,11 +842,10 @@ function AddProductForm({
           <FieldLabel htmlFor="add-size">Size</FieldLabel>
           <Input
             id="add-size"
-            type="number"
-            step="0.5"
+            type="text"
             value={form.size}
             onChange={(e) => setForm({ ...form, size: e.target.value })}
-            placeholder="42"
+            placeholder="42 atau 42 2/3"
           />
         </div>
         <div>

@@ -23,7 +23,7 @@ type Result = {
 
 type Source = "internal" | ProductImportChannel;
 
-const REQUIRED_COLUMNS = ["brand", "model", "sku", "size", "barcode", "hpp"] as const;
+const REQUIRED_COLUMNS = ["brand", "model", "sku", "size"] as const;
 
 const SOURCES: Array<{
   id: Source;
@@ -64,11 +64,14 @@ function sourceDescription(source: Source) {
   if (source === "internal") {
     return (
       <>
-        Upload Excel/CSV master produk internal dengan kolom{" "}
+        Upload Excel/CSV master produk dengan kolom{" "}
         <span className="font-mono text-white/70">
-          brand, model, sku, size, color, barcode, hpp, sell_price, price_offline
+          brand, model, sku, size, color, quantity, hpp, sell_price, price_offline,
+          price_website, price_shopee, price_tiktok, price_tokopedia
         </span>
-        . Barcode/SKU yang sudah ada akan dilewati.
+        . Size boleh pecahan (mis. <span className="font-mono text-white/70">42 2/3</span>).
+        Stok &amp; HPP dibaca sebagai saldo awal. <strong>Barcode auto-generate</strong> dari
+        SKU+size kalau kosong. SKU/barcode yang sudah ada akan dilewati.
       </>
     );
   }
@@ -101,32 +104,61 @@ export function BulkImportButton() {
         "sku",
         "size",
         "color",
-        "barcode",
+        "quantity",
         "hpp",
         "sell_price",
         "price_offline",
+        "price_website",
+        "price_shopee",
+        "price_tiktok",
+        "price_tokopedia",
+      ],
+      // SKU sama = 1 colorway; tiap size = baris variant. Half-size pakai titik
+      // (42.5), Adidas pecahan pakai spasi (42 2/3). Koma juga diterima (auto → titik).
+      [
+        "Nike",
+        "Air Force 1 Low Triple White",
+        "DH2920 111",
+        "40",
+        "White",
+        5,
+        596000,
+        1399000,
+        1399000,
+        "",
+        1500000,
+        1650000,
+        "",
+      ],
+      [
+        "Nike",
+        "Air Force 1 Low Triple White",
+        "DH2920 111",
+        "42.5",
+        "White",
+        3,
+        596000,
+        1399000,
+        1399000,
+        "",
+        1500000,
+        1650000,
+        "",
       ],
       [
         "Adidas",
-        "Samba White",
-        "SMB-WHT-40",
-        40,
+        "Samba OG Cloud White",
+        "IE7096",
+        "42 2/3",
         "White",
-        "104100",
-        1300000,
-        1800000,
-        1650000,
-      ],
-      [
-        "Adidas",
-        "Samba White",
-        "SMB-WHT-41",
-        41,
-        "White",
-        "104101",
-        1300000,
-        1800000,
-        1650000,
+        2,
+        2200000,
+        5099000,
+        5099000,
+        "",
+        5499000,
+        5849000,
+        "",
       ],
     ]);
     const wb = XLSX.utils.book_new();

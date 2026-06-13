@@ -39,7 +39,7 @@ async function requireOwnerOrFinance() {
 
 // ─── Inventory ─────────────────────────────────────────────
 const PRODUCT_FIELDS =
-  "id, brand, model, sku, size, color, barcode, quantity, hpp, sell_price, price_offline, image_url, condition, defect_reason, is_active, created_at, first_inbound_at";
+  "id, brand, model, sku, size, size_label, color, barcode, quantity, hpp, sell_price, price_offline, image_url, condition, defect_reason, is_active, created_at, first_inbound_at";
 
 export async function getProducts(filters?: {
   brand?: string;
@@ -201,7 +201,7 @@ async function getInventoryProductsLegacy(filters?: {
 
     if (search) {
       query = query.or(
-        `brand.ilike.%${search}%,model.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%,color.ilike.%${search}%`,
+        `brand.ilike.%${search}%,model.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%,color.ilike.%${search}%,size_label.ilike.%${search}%`,
       );
     }
 

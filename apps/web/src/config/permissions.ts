@@ -35,7 +35,7 @@ export const routePermissions: Record<string, Role[]> = {
   "/penjualan/pos": ["owner", "shopkeeper", "finance"],
   "/penjualan/invoice": ["owner", "finance", "admin_online"],
   "/penjualan/penerimaan-kas": ["owner", "finance"],
-  "/penjualan/import-marketplace": ["owner", "finance", "admin_online"],
+  "/penjualan/import-marketplace": ["owner", "finance"],
   "/penjualan/export-stok": ["owner", "finance", "admin_online"],
   "/penjualan/settlement": ["owner", "finance"],
   "/orders": ["owner", "admin_gudang", "admin_online", "shopkeeper", "finance"],
