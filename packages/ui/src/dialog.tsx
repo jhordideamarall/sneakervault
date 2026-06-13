@@ -31,18 +31,18 @@ export const DialogContent = React.forwardRef<
 >(({ className, children, hideClose, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
-    <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 pointer-events-none">
+    <div className="fixed inset-0 z-[999999] flex items-center justify-center overflow-y-auto p-4 pointer-events-none">
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "relative w-full max-w-lg border border-white/[0.1] bg-[#121212] shadow-[0_0_100px_rgba(0,0,0,0.5)] rounded-[32px] outline-none flex flex-col overflow-hidden pointer-events-auto",
+          "relative flex max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg flex-col overflow-y-auto rounded-3xl border border-white/[0.1] bg-[#121212] p-5 shadow-[0_0_100px_rgba(0,0,0,0.5)] outline-none pointer-events-auto sm:w-full sm:p-6",
           className
         )}
         {...props}
       >
         {children}
         {!hideClose && (
-          <DialogPrimitive.Close className="absolute right-6 top-6 rounded-full p-2 text-white/20 transition-all hover:bg-white/5 hover:text-white focus:outline-none z-[1000000]">
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full p-2 text-white/20 transition-all hover:bg-white/5 hover:text-white focus:outline-none z-[1000000] sm:right-5 sm:top-5">
             <X size={20} strokeWidth={2.5} />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>

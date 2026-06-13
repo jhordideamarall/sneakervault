@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { approveDelete, rejectDelete } from "@/lib/actions/admin";
-import { Badge, Button, Card, Input } from "@sneakervault/ui";
+import { Badge, Button, Card } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
 import { DELETE_REQUEST_STATUS_TONES as statusTones } from "@sneakervault/shared";
@@ -12,11 +12,9 @@ import {
   XCircle, 
   Calendar, 
   User, 
-  FileText, 
   AlertCircle,
   MessageSquare,
   Clock,
-  ChevronRight
 } from "lucide-react";
 
 type Req = {

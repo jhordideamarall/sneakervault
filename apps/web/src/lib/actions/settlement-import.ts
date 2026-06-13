@@ -8,7 +8,6 @@ import type { MarketplaceChannel } from "@/lib/marketplace/parsers";
 import type { SettlementRow } from "@/lib/marketplace/settlement-parsers";
 
 export type { SettlementRow } from "@/lib/marketplace/settlement-parsers";
-export type SettlementPhase = "pending" | "released";
 
 const ROLES = ["owner", "finance"] as const;
 
@@ -21,6 +20,7 @@ export async function listActiveBankAccounts(): Promise<BankOption[]> {
     .from("bank_accounts")
     .select("id, name, type")
     .eq("is_active", true)
+    .neq("type", "marketplace_balance")
     .order("is_default", { ascending: false });
   return (data ?? []).map((b) => ({ id: b.id, name: b.name, type: b.type as string }));
 }
@@ -31,6 +31,7 @@ export type SettlementLineDiff = {
   fee: number;
   invoice_total: number | null;
   current_status: "none" | "pending" | "released" | null;
+  invoice_status: string | null;
   action: "apply" | "skip" | "unmatched";
   reason?: string;
 };
@@ -43,25 +44,29 @@ export type SettlementReconcile = {
 /** Preview: match settlement rows to invoices and decide per-row action. */
 export async function reconcileSettlement(
   channel: MarketplaceChannel,
-  phase: SettlementPhase,
   rows: SettlementRow[],
 ): Promise<SettlementReconcile> {
   await requireRole([...ROLES]);
   const supabase = await createClient();
 
   const orderIds = rows.map((r) => r.order_id).filter(Boolean);
-  const byId = new Map<string, { total: number; status: "none" | "pending" | "released" }>();
+  const byId = new Map<
+    string,
+    { total: number; paid_amount: number; invoice_status: string; settlement_status: "none" | "pending" | "released" }
+  >();
   if (orderIds.length > 0) {
     const { data } = await supabase
       .from("sales_invoices")
-      .select("marketplace_order_id, total, settlement_status")
+      .select("marketplace_order_id, total, paid_amount, status, settlement_status")
       .eq("channel", channel)
       .in("marketplace_order_id", orderIds);
     for (const i of data ?? []) {
       if (i.marketplace_order_id) {
         byId.set(i.marketplace_order_id, {
           total: Number(i.total),
-          status: (i.settlement_status ?? "none") as "none" | "pending" | "released",
+          paid_amount: Number(i.paid_amount),
+          invoice_status: String(i.status),
+          settlement_status: (i.settlement_status ?? "none") as "none" | "pending" | "released",
         });
       }
     }
@@ -70,25 +75,31 @@ export async function reconcileSettlement(
   const diffs: SettlementLineDiff[] = rows.map((r) => {
     const inv = byId.get(r.order_id);
     if (!inv) {
-      return { ...r, invoice_total: null, current_status: null, action: "unmatched" };
+      return { ...r, invoice_total: null, current_status: null, invoice_status: null, action: "unmatched" };
     }
     let action: SettlementLineDiff["action"] = "apply";
     let reason: string | undefined;
-    if (phase === "pending") {
-      if (inv.status !== "none") {
-        action = "skip";
-        reason = inv.status === "pending" ? "Sudah pending" : "Sudah cair";
-      }
-    } else {
-      if (inv.status === "released") {
-        action = "skip";
-        reason = "Sudah cair";
-      } else if (inv.status !== "pending") {
-        action = "skip";
-        reason = "Belum ada settlement pending";
-      }
+    if (inv.settlement_status === "released") {
+      action = "skip";
+      reason = "Sudah settlement";
+    } else if (inv.settlement_status === "pending") {
+      action = "skip";
+      reason = "Sudah diproses model lama";
+    } else if (inv.invoice_status !== "issued" || inv.paid_amount > 0) {
+      action = "skip";
+      reason = inv.invoice_status === "paid" ? "Faktur sudah terbayar" : "Faktur bukan outstanding";
+    } else if (r.net <= 0 || inv.total <= 0) {
+      action = "skip";
+      reason = "Nilai settlement tidak positif";
     }
-    return { ...r, invoice_total: inv.total, current_status: inv.status, action, reason };
+    return {
+      ...r,
+      invoice_total: inv.total,
+      current_status: inv.settlement_status,
+      invoice_status: inv.invoice_status,
+      action,
+      reason,
+    };
   });
 
   return {
@@ -108,11 +119,10 @@ export type SettlementResult = {
   error?: string;
 };
 
-/** Commit settlement reconciliation atomically (2-phase) + record the batch. */
+/** Commit settlement reconciliation atomically + record the batch. */
 export async function commitSettlement(input: {
   channel: MarketplaceChannel;
-  phase: SettlementPhase;
-  bankAccountId?: string | null;
+  bankAccountId: string;
   settledDate?: string | null;
   settlementRef?: string | null;
   rows: SettlementRow[];
@@ -121,17 +131,18 @@ export async function commitSettlement(input: {
   const profile = await requireRole([...ROLES]);
   const supabase = await createClient();
 
-  if (input.phase === "released" && !input.bankAccountId) {
+  if (!input.bankAccountId) {
     return { matched: 0, skipped: 0, unmatched: [], error: "Pilih akun bank tujuan pencairan" };
   }
 
   const payload = {
     channel: input.channel,
-    phase: input.phase,
-    bank_account_id: input.bankAccountId ?? null,
+    bank_account_id: input.bankAccountId,
     settled_date: input.settledDate ?? null,
     settlement_ref: input.settlementRef ?? null,
-    items: input.rows.map((r) => ({ order_id: r.order_id, net: r.net, fee: r.fee })),
+    items: input.rows
+      .filter((r) => r.net > 0)
+      .map((r) => ({ order_id: r.order_id, net: r.net, fee: r.fee })),
   };
 
   const { data, error } = await supabase.rpc("settle_marketplace_atomic", { p_payload: payload });
@@ -154,7 +165,7 @@ export async function commitSettlement(input: {
     matched_count: result.matched,
     mismatch_count: result.unmatched.length,
     status: "confirmed",
-    notes: `Settlement ${input.phase === "pending" ? "belum cair" : "cair"} ${input.channel.toUpperCase()}`,
+    notes: `Settlement cair ${input.channel.toUpperCase()}`,
     uploaded_by: profile.id,
     confirmed_by: profile.id,
     confirmed_at: new Date().toISOString(),
@@ -164,10 +175,13 @@ export async function commitSettlement(input: {
     await logActivity({
       user_id: profile.id,
       action: "settlement",
-      entity_type: "sales_invoice",
-      new_data: { phase: input.phase, channel: input.channel, count: result.matched },
+      entity_type: "customer_payment",
+      new_data: { channel: input.channel, count: result.matched, bank_account_id: input.bankAccountId },
     });
+    revalidatePath("/penjualan/penerimaan-kas");
     revalidatePath("/penjualan/invoice");
+    revalidatePath("/penjualan/settlement");
+    revalidatePath("/kas-bank/akun");
     revalidatePath("/kas-bank/mutasi");
     revalidatePath("/buku-besar/journal");
     revalidatePath("/laporan-keuangan");

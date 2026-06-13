@@ -8,6 +8,7 @@ import {
   Button,
   FieldLabel,
   Input,
+  NumberInput,
   Select,
   Textarea,
   cn,
@@ -235,7 +236,7 @@ export function ExpensesClient({
   async function uploadReceipt() {
     if (!receiptFile) return null;
     const supabase = createSupabaseBrowserClient();
-    const path = `${userId}/${Date.now()}-${sanitizeFileName(receiptFile.name)}`;
+    const path = `${userId}/${crypto.randomUUID()}-${sanitizeFileName(receiptFile.name)}`;
     const { error } = await supabase.storage
       .from("expense-receipts")
       .upload(path, receiptFile, { upsert: false });
@@ -620,14 +621,13 @@ export function ExpensesClient({
             </label>
             <label>
               <FieldLabel required>Nominal</FieldLabel>
-              <Input
-                type="number"
+              <NumberInput
                 min={0}
                 value={expenseForm.amount || ""}
-                onChange={(event) =>
+                onValueChange={(value) =>
                   setExpenseForm((current) => ({
                     ...current,
-                    amount: Number(event.target.value || 0),
+                    amount: value,
                   }))
                 }
                 placeholder="0"

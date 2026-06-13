@@ -9,6 +9,13 @@ type PendingItem = {
   href: string;
 };
 
+type ProductSummary = { brand: string; model: string; size: number };
+type ProfileSummary = { full_name: string };
+
+function firstRelation<T>(value: T | T[] | null | undefined): T | null {
+  return Array.isArray(value) ? value[0] ?? null : value ?? null;
+}
+
 export async function PendingActionsTable() {
   const supabase = await createClient();
   const items: PendingItem[] = [];
@@ -22,8 +29,8 @@ export async function PendingActionsTable() {
     .limit(5);
 
   for (const r of returns ?? []) {
-    const product = (r.packing_items as any)?.products;
-    const profile = (r.profiles as any);
+    const product = (r.packing_items as { products?: ProductSummary | null } | null)?.products;
+    const profile = firstRelation(r.profiles as unknown as ProfileSummary[] | ProfileSummary | null);
     items.push({
       type: "retur",
       detail: product ? `${product.brand} ${product.model} (${product.size})` : r.reason || "Retur",
@@ -42,7 +49,7 @@ export async function PendingActionsTable() {
     .limit(5);
 
   for (const d of deletes ?? []) {
-    const profile = (d.profiles as any);
+    const profile = firstRelation(d.profiles as unknown as ProfileSummary[] | ProfileSummary | null);
     items.push({
       type: "delete",
       detail: `Hapus ${d.entity_type}${d.reason ? ` — "${d.reason}"` : ""}`,

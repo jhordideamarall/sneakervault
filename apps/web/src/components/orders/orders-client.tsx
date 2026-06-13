@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { updateSessionStatus } from "@/lib/actions/status";
-import { Badge, Button, Select, Card } from "@sneakervault/ui";
+import { Badge, Button, Card } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
 import { useLiveRefresh } from "@/lib/use-live-refresh";
@@ -13,12 +13,10 @@ import {
   Truck, 
   CheckCircle2, 
   AlertTriangle, 
-  XCircle, 
   Calendar,
   User,
   Hash,
   Package,
-  ArrowRight
 } from "lucide-react";
 
 type Session = Record<string, unknown> & {

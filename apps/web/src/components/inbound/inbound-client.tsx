@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition, useEffect, useCallback } from "react";
+import { useState, useTransition, useCallback } from "react";
 import { scanInbound, confirmInbound, registerProduct } from "@/lib/actions/inbound";
-import { Button, Card, Input, NumberInput, Select, FieldLabel, FieldError, Alert, Badge } from "@sneakervault/ui";
+import { Button, Card, Input, NumberInput, Select, FieldLabel, FieldError, Alert } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { useHardwareScanner } from "@sneakervault/barcode";
 import { CameraScanner } from "@/components/scanner/camera-scanner";
@@ -14,11 +14,7 @@ import {
   RotateCcw, 
   Plus, 
   CheckCircle2, 
-  AlertCircle,
-  Truck,
   DollarSign,
-  ClipboardList,
-  Calendar,
   Info
 } from "lucide-react";
 
@@ -44,9 +40,9 @@ export function InboundClient({ suppliers }: { suppliers: Supplier[] }) {
   const [showCamera, setShowCamera] = useState(false);
 
   // Batch + qty state
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => ({
     quantity: 1,
-    supplier_id: "",
+    supplier_id: suppliers[0]?.id ?? "",
     unit_cost: 0,
     defect_quantity: 0,
     returned_to_supplier: 0,
@@ -54,7 +50,7 @@ export function InboundClient({ suppliers }: { suppliers: Supplier[] }) {
     received_at: new Date().toISOString().slice(0, 10),
     authenticity_confirmed: false,
     notes: "",
-  });
+  }));
 
   // Register-new state
   const [regForm, setRegForm] = useState({
@@ -65,12 +61,6 @@ export function InboundClient({ suppliers }: { suppliers: Supplier[] }) {
     color: "",
     sell_price: 0,
   });
-
-  useEffect(() => {
-    if (suppliers.length > 0 && !form.supplier_id) {
-      setForm((f) => ({ ...f, supplier_id: suppliers[0]!.id }));
-    }
-  }, [suppliers, form.supplier_id]);
 
   const doScan = useCallback((code: string) => {
     if (!code.trim() || mode !== "idle") return;

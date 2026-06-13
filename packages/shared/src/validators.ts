@@ -40,6 +40,7 @@ export type ProductConditionInput = z.infer<typeof productConditionInputSchema>;
 // ─── Product Update (now includes price_offline, condition, image) ──────────
 export const productUpdateSchema = z.object({
   id: z.string().uuid(),
+  hpp: z.coerce.number().nonnegative().optional(),
   sell_price: z.coerce.number().nonnegative().optional(),
   price_offline: z.coerce.number().nonnegative().optional(),
   color: z.string().optional(),
@@ -139,6 +140,7 @@ export const customerChannelEnum = z.enum([
   "wa",
   "shopee",
   "tiktok",
+  "tokopedia",
   "offline",
   "website",
   "mixed",

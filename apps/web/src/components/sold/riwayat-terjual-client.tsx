@@ -7,13 +7,9 @@ import { ExportButtons } from "@/components/export-buttons";
 import { 
   DollarSign, 
   Search, 
-  Filter, 
   Calendar, 
-  Hash, 
   Package, 
   TrendingUp, 
-  TrendingDown,
-  ChevronRight,
   ArrowUpRight
 } from "lucide-react";
 

@@ -100,7 +100,7 @@ const customerChannel = z.preprocess((value) => {
   if (["store", "toko"].includes(text)) return "offline";
   if (["campur", "all"].includes(text)) return "mixed";
   return text;
-}, z.enum(["wa", "shopee", "tiktok", "offline", "website", "mixed"]).catch("wa"));
+}, z.enum(["wa", "shopee", "tiktok", "tokopedia", "offline", "website", "mixed"]).catch("wa"));
 
 const bankAccountType = z.preprocess((value) => {
   const text = String(value ?? "bank").trim().toLowerCase();

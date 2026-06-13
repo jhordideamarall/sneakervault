@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { createClient } from "@sneakervault/supabase/client";
 import { User, ArrowRight } from "lucide-react";
@@ -64,15 +64,31 @@ type ActivityEntry = {
   entity_type: string;
   entity_id: string;
   created_at: string;
-  new_data: any;
+  new_data: Record<string, unknown> | null;
   profiles: { full_name: string; roles: string[] } | null;
 };
+
+function subscribeMounted(onStoreChange: () => void) {
+  onStoreChange();
+  return () => {};
+}
+
+function getClientMountedSnapshot() {
+  return true;
+}
+
+function getServerMountedSnapshot() {
+  return false;
+}
+
+function getTodayWIBKey() {
+  return nowWIB().toISOString().slice(0, 10);
+}
 
 export function RightSidebar({ 
   fullName, 
   roles,
   avatarUrl,
-  userId,
 }: { 
   fullName: string; 
   roles: string[]; 
@@ -80,15 +96,20 @@ export function RightSidebar({
   userId: string;
 }) {
   const [activities, setActivities] = useState<ActivityEntry[]>([]);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(
+    subscribeMounted,
+    getClientMountedSnapshot,
+    getServerMountedSnapshot,
+  );
   const { from: filterFrom, to: filterTo, filter } = useDateFilter();
+  const nowTime = nowWIB().getTime();
+  const nowDayWIB = getTodayWIBKey();
 
   // Realtime is only safe when the filter range includes "now" (current month,
   // or today's date). Otherwise new inserts don't belong in the filtered view.
-  const filterIncludesNow = (() => {
-    const now = Date.now();
-    return new Date(filterFrom).getTime() <= now && new Date(filterTo).getTime() >= now;
-  })();
+  const filterIncludesNow =
+    new Date(filterFrom).getTime() <= nowTime &&
+    new Date(filterTo).getTime() >= nowTime;
 
   const fetchActivities = useCallback(async () => {
     const supabase = createClient();
@@ -104,8 +125,9 @@ export function RightSidebar({
   }, [filterFrom, filterTo]);
 
   useEffect(() => {
-    setMounted(true);
-    fetchActivities();
+    queueMicrotask(() => {
+      void fetchActivities();
+    });
 
     if (!filterIncludesNow) return;
 
@@ -193,7 +215,7 @@ export function RightSidebar({
               <p className="text-xs text-white/40 px-2 italic text-center py-4">Belum ada aktivitas</p>
             ) : (
               activities.map((a) => (
-                <ActivityItem key={a.id} activity={a} />
+                <ActivityItem key={a.id} activity={a} nowDayWIB={nowDayWIB} />
               ))
             )}
           </div>
@@ -203,7 +225,7 @@ export function RightSidebar({
   );
 }
 
-function ActivityItem({ activity: a }: { activity: ActivityEntry }) {
+function ActivityItem({ activity: a, nowDayWIB }: { activity: ActivityEntry; nowDayWIB: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const primaryRole = (a.profiles?.roles?.[0] || "system").replace("_", " ");
 
@@ -226,8 +248,6 @@ function ActivityItem({ activity: a }: { activity: ActivityEntry }) {
               <p className="text-[10px] text-white/30 font-medium">
                 {(() => {
                   const d = new Date(a.created_at);
-                  // Compare calendar day in WIB — toDateString uses host TZ.
-                  const nowDayWIB = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
                   const activityDayWIB = new Date(d.getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10);
                   const isToday = nowDayWIB === activityDayWIB;
                   const timeStr = d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
@@ -255,17 +275,25 @@ function ActivityItem({ activity: a }: { activity: ActivityEntry }) {
 
 function renderSimpleContent(a: ActivityEntry) {
   const d = a.new_data || {};
+  const text = (key: string, fallback = "") => {
+    const value = d[key];
+    return typeof value === "string" || typeof value === "number" ? String(value) : fallback;
+  };
+  const num = (key: string) => {
+    const value = d[key];
+    return typeof value === "number" ? value : typeof value === "string" ? Number(value) || 0 : 0;
+  };
   
   if (a.action === 'scan_in' || (a.action === 'create' && a.entity_type === 'product')) {
     return (
       <div className="space-y-0.5">
-        <p className="text-white/90 font-bold">{d.brand} {d.model}</p>
+        <p className="text-white/90 font-bold">{text("brand")} {text("model")}</p>
         <p className="text-[9px] text-white/40 uppercase tracking-tighter">
-          SKU: <span className="text-white/60">{d.sku || '-'}</span> · Size: <span className="text-white/60">{d.size || '-'}</span>
+          SKU: <span className="text-white/60">{text("sku", "-")}</span> · Size: <span className="text-white/60">{text("size", "-")}</span>
         </p>
         <div className="flex items-center gap-2 mt-1">
-          <span className="text-blue-400 font-bold">+{d.quantity || 0} unit</span>
-          <span className="text-white/40">@ Rp{Number(d.unit_cost || 0).toLocaleString('id-ID')}</span>
+          <span className="text-blue-400 font-bold">+{num("quantity")} unit</span>
+          <span className="text-white/40">@ Rp{num("unit_cost").toLocaleString('id-ID')}</span>
         </div>
       </div>
     );
@@ -274,19 +302,19 @@ function renderSimpleContent(a: ActivityEntry) {
   if (a.action === 'scan_out') {
     return (
       <div className="space-y-0.5">
-        <p className="text-white/90 font-bold">{d.brand} {d.model}</p>
+        <p className="text-white/90 font-bold">{text("brand")} {text("model")}</p>
         <p className="text-[9px] text-white/40 uppercase tracking-tighter">
-          Size: <span className="text-white/60">{d.size || '-'}</span> · <span className="text-white/60">{d.color || ''}</span>
+          Size: <span className="text-white/60">{text("size", "-")}</span> · <span className="text-white/60">{text("color")}</span>
         </p>
       </div>
     );
   }
 
-  if (a.action === 'update' && d.manual_hpp) {
+  if (a.action === 'update' && num("manual_hpp") > 0) {
     return (
       <p>
-        HPP <span className="text-white/40">{d.brand} {d.model}</span> set to <span className="text-amber-400 font-bold">Rp{Number(d.manual_hpp).toLocaleString('id-ID')}</span>
-        {d.note && <span className="block mt-0.5 text-white/40 italic font-normal">"{d.note}"</span>}
+        HPP <span className="text-white/40">{text("brand")} {text("model")}</span> set to <span className="text-amber-400 font-bold">Rp{num("manual_hpp").toLocaleString('id-ID')}</span>
+        {text("note") && <span className="block mt-0.5 text-white/40 italic font-normal">"{text("note")}"</span>}
       </p>
     );
   }
@@ -294,10 +322,10 @@ function renderSimpleContent(a: ActivityEntry) {
   if (a.action === 'status_change') {
     return (
       <div className="flex items-center gap-1.5 py-0.5">
-        <span className="text-white/40 font-bold uppercase text-[9px]">Order {d.order_id || 'Sesi'}</span>
+        <span className="text-white/40 font-bold uppercase text-[9px]">Order {text("order_id", "Sesi")}</span>
         <ArrowRight size={8} className="text-white/20" />
         <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-emerald-400 font-black uppercase text-[8px] border border-emerald-500/20">
-          {d.status}
+          {text("status")}
         </span>
       </div>
     );

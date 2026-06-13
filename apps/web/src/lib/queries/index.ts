@@ -15,6 +15,12 @@ import {
   wibStartOfNextMonth,
 } from "@/lib/timezone";
 
+type MaybeRelation<T> = T | T[] | null;
+
+function firstRelation<T>(value: MaybeRelation<T>): T | null {
+  return Array.isArray(value) ? value[0] ?? null : value;
+}
+
 async function requireOwner() {
   const profile = await getCurrentUser();
   if (!profile || !profile.roles?.includes("owner")) throw new Error("Unauthorized");
@@ -67,6 +73,110 @@ export async function getProducts(filters?: {
 
   const { data, count, error } = await query;
   return { data: data ?? [], total: count ?? 0, error };
+}
+
+export async function getInventoryProducts(filters?: {
+  search?: string;
+  page?: number;
+  limit?: number;
+}): Promise<{
+  data: unknown[];
+  totalSku: number;
+  totalModels: number;
+  page: number;
+  limit: number;
+  summary: {
+    totalQty: number;
+    normalQty: number;
+    defectQty: number;
+    dormantQty: number;
+  };
+  error: unknown;
+}> {
+  const supabase = await createClient();
+  const requestedPage = Math.max(1, filters?.page ?? 1);
+  const limit = Math.max(1, filters?.limit ?? 50);
+  const search = filters?.search?.trim();
+
+  const rows: unknown[] = [];
+  let offset = 0;
+  let totalCount: number | null = null;
+  let error: unknown = null;
+  const chunkSize = 1000;
+
+  while (true) {
+    // Supabase query-builder generics become self-referential across conditional chaining here.
+    // Keep this typed locally and validate the returned shape below.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query: any = supabase
+      .from("products")
+      .select(
+        `${PRODUCT_FIELDS}, suppliers:default_supplier_id(name)`,
+        { count: totalCount === null ? "exact" : undefined },
+      )
+      .eq("is_active", true)
+      .order("brand", { ascending: true })
+      .order("model", { ascending: true })
+      .order("size", { ascending: true })
+      .range(offset, offset + chunkSize - 1);
+
+    if (search) {
+      query = query.or(
+        `brand.ilike.%${search}%,model.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%,color.ilike.%${search}%`,
+      );
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result: any = await query;
+    if (result.error) {
+      error = result.error;
+      break;
+    }
+
+    if (totalCount === null) totalCount = result.count ?? 0;
+    const data = result.data ?? [];
+    rows.push(...data);
+
+    if (data.length < chunkSize) break;
+    if (totalCount !== null && rows.length >= totalCount) break;
+    offset += chunkSize;
+  }
+
+  type ProductKeyRow = { brand: string; model: string; quantity: number; condition: string };
+  const groupKeys: string[] = [];
+  const seen = new Set<string>();
+  const summary = { totalQty: 0, normalQty: 0, defectQty: 0, dormantQty: 0 };
+
+  for (const row of rows as ProductKeyRow[]) {
+    const key = `${row.brand}\u0000${row.model}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      groupKeys.push(key);
+    }
+    summary.totalQty += row.quantity;
+    if (row.condition === "normal") summary.normalQty += row.quantity;
+    else if (row.condition === "defect") summary.defectQty += row.quantity;
+    else if (row.condition === "dormant") summary.dormantQty += row.quantity;
+  }
+
+  const totalModels = groupKeys.length;
+  const totalPages = Math.max(1, Math.ceil(totalModels / limit));
+  const page = Math.min(requestedPage, totalPages);
+  const from = (page - 1) * limit;
+  const pageKeys = new Set(groupKeys.slice(from, from + limit));
+  const pageRows = (rows as ProductKeyRow[]).filter((row) =>
+    pageKeys.has(`${row.brand}\u0000${row.model}`),
+  );
+
+  return {
+    data: pageRows,
+    totalSku: totalCount ?? rows.length,
+    totalModels,
+    page,
+    limit,
+    summary,
+    error,
+  };
 }
 
 export async function getProductByBarcode(barcode: string): Promise<unknown> {
@@ -235,7 +345,7 @@ export type CustomerRow = {
   phone: string | null;
   email: string | null;
   address: string | null;
-  channel: "wa" | "shopee" | "tiktok" | "offline" | "website" | "mixed";
+  channel: "wa" | "shopee" | "tiktok" | "tokopedia" | "offline" | "website" | "mixed";
   npwp: string | null;
   notes: string | null;
   is_active: boolean;
@@ -569,7 +679,7 @@ export type SalesInvoiceRow = {
   invoice_number: string;
   customer_id: string | null;
   customer_name: string;
-  channel: "wa" | "shopee" | "tiktok" | "offline" | "website" | "mixed";
+  channel: "wa" | "shopee" | "tiktok" | "tokopedia" | "offline" | "website" | "mixed";
   invoice_date: string;
   due_date: string | null;
   subtotal: number;
@@ -2054,7 +2164,7 @@ export async function getMonthlySales(selectedMonth?: string, selectedDate?: str
 
   const [{ data }, prevRes] = await Promise.all([
     query,
-    prevQuery ?? Promise.resolve({ data: null as null | any[] }),
+    prevQuery ?? Promise.resolve({ data: null as null | { products: { brand: string; model: string } | null }[] }),
   ]);
 
   // Aggregate previous totals per model (for trend comparison).
@@ -2350,8 +2460,8 @@ export async function getFinancialSummaryByModel(selectedMonth?: string, selecte
 
   const summaryMap: Record<string, FinancialSummaryModel> = {};
 
-  for (const item of data) {
-    const p = (item as any).products;
+  for (const item of data as unknown as { products: MaybeRelation<{ brand: string; model: string }>; sell_price: number | null; unit_hpp: number | null }[]) {
+    const p = firstRelation(item.products);
     if (!p) continue;
     
     // Sanitize brand & model for consistent grouping
@@ -2464,7 +2574,7 @@ export async function getMarketplaceCostReport(
   let query = supabase
     .from("sales_invoices")
     .select("channel, invoice_date, subtotal, discount, shipping, marketplace_fee, total, status")
-    .in("channel", ["shopee", "tiktok"])
+    .in("channel", ["shopee", "tiktok", "tokopedia"])
     .neq("status", "cancelled");
   if (from) query = query.gte("invoice_date", from.slice(0, 10));
   if (to) query = query.lte("invoice_date", to.slice(0, 10));

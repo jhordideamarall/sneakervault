@@ -12,13 +12,20 @@ import {
 import { usePresence } from "@/lib/use-presence";
 import { getAllProfiles } from "@/lib/actions/admin";
 
+type OnlineProfile = {
+  id: string;
+  full_name: string;
+  avatar_url: string | null;
+  roles: string[];
+};
+
 export function OnlineUsers({ userId }: { userId: string }) {
   const { onlineUsers } = usePresence(userId);
-  const [profiles, setProfiles] = React.useState<any[]>([]);
+  const [profiles, setProfiles] = React.useState<OnlineProfile[]>([]);
 
   React.useEffect(() => {
     getAllProfiles().then(({ data }) => {
-      if (data) setProfiles(data);
+      if (data) setProfiles(data as OnlineProfile[]);
     });
   }, []);
 

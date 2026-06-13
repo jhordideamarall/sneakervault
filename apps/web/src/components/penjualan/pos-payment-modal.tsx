@@ -36,18 +36,20 @@ export function PosPaymentModal({
   onConfirm: (result: PosPaymentResult) => void;
 }) {
   const accounts = bankAccounts.filter((a) => a.is_active !== false);
+  const defaultAccountId = accounts[0]?.id ?? "";
   const [method, setMethod] = useState<string>("cash");
-  const [account, setAccount] = useState(accounts[0]?.id ?? "");
+  const [account, setAccount] = useState(defaultAccountId);
   const [cash, setCash] = useState(0);
 
   useEffect(() => {
     if (open) {
-      setMethod("cash");
-      setCash(0);
-      setAccount(accounts[0]?.id ?? "");
+      queueMicrotask(() => {
+        setMethod("cash");
+        setCash(0);
+        setAccount(defaultAccountId);
+      });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, defaultAccountId]);
 
   if (!open) return null;
 

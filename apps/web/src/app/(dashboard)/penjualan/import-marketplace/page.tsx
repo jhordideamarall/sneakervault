@@ -5,10 +5,10 @@ export default function ImportMarketplacePage() {
     <div className="flex flex-col gap-6 p-6">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-white">
-          Import Laporan Marketplace
+          Import Pesanan Marketplace
         </h1>
         <p className="text-white/50">
-          Tarik laporan pesanan Shopee, Tokopedia & TikTok dari Excel/CSV — review cocok/tidak cocok dulu, lalu jadi invoice & jurnal.
+          Upload laporan pesanan/order report Shopee, Tokopedia, atau TikTok. Setelah review cocok, sistem membuat invoice, mengurangi stok, dan membuat jurnal.
         </p>
       </div>
 

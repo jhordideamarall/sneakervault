@@ -51,6 +51,7 @@ const channelTone: Record<CustomerChannel, string> = {
   wa: "bg-emerald-500/15 text-emerald-300 border-emerald-500/20",
   shopee: "bg-orange-500/15 text-orange-300 border-orange-500/20",
   tiktok: "bg-pink-500/15 text-pink-300 border-pink-500/20",
+  tokopedia: "bg-emerald-500/15 text-emerald-300 border-emerald-500/20",
   offline: "bg-sky-500/15 text-sky-300 border-sky-500/20",
   website: "bg-violet-500/15 text-violet-300 border-violet-500/20",
   mixed: "bg-white/10 text-white/70 border-white/15",

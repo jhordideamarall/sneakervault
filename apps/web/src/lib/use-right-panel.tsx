@@ -27,8 +27,10 @@ export function RightPanelProvider({ children }: { children: React.ReactNode }) 
   const [collapsed, setCollapsedState] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    setCollapsedState(localStorage.getItem(STORAGE_KEY) === "1");
+    queueMicrotask(() => {
+      setMounted(true);
+      setCollapsedState(localStorage.getItem(STORAGE_KEY) === "1");
+    });
   }, []);
 
   function setCollapsed(next: boolean) {

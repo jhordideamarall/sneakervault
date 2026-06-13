@@ -2,7 +2,7 @@
 
 import { useMemo, useState, Fragment, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Input, Select, Button, Alert } from "@sneakervault/ui";
+import { Input, NumberInput, Select, Button, Alert } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import {
   createManualJournalEntry,
@@ -376,20 +376,18 @@ export function JournalClient({
                         </option>
                       ))}
                     </Select>
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
                       placeholder="0"
                       value={line.debit || ""}
-                      onChange={(e) => updateLine(idx, "debit", Number(e.target.value))}
+                      onValueChange={(value) => updateLine(idx, "debit", value)}
                       className="h-9 w-full rounded-md border border-white/[0.08] bg-white/[0.03] px-2 text-right text-sm text-white placeholder-white/20 focus:border-white/20 focus:outline-none"
                     />
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
                       placeholder="0"
                       value={line.credit || ""}
-                      onChange={(e) => updateLine(idx, "credit", Number(e.target.value))}
+                      onValueChange={(value) => updateLine(idx, "credit", value)}
                       className="h-9 w-full rounded-md border border-white/[0.08] bg-white/[0.03] px-2 text-right text-sm text-white placeholder-white/20 focus:border-white/20 focus:outline-none"
                     />
                     <input

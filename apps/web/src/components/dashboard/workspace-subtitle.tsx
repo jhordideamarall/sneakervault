@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@sneakervault/supabase/client";
 import type { Role } from "@sneakervault/shared";
 
@@ -9,11 +9,7 @@ type Insight = { text: string; urgent: boolean };
 export function WorkspaceSubtitle({ role, userId }: { role: Role; userId: string }) {
   const [insights, setInsights] = useState<Insight[]>([]);
 
-  useEffect(() => {
-    fetchInsights();
-  }, []);
-
-  async function fetchInsights() {
+  const fetchInsights = useCallback(async () => {
     const supabase = createClient();
     const today = new Date().toISOString().split("T")[0];
     const results: Insight[] = [];
@@ -52,7 +48,13 @@ export function WorkspaceSubtitle({ role, userId }: { role: Role; userId: string
 
     if (results.length === 0) results.push({ text: "Semua berjalan lancar hari ini", urgent: false });
     setInsights(results);
-  }
+  }, [role, userId]);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void fetchInsights();
+    });
+  }, [fetchInsights]);
 
   return (
     <p className="mt-1 text-sm text-white/40">

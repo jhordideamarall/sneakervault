@@ -1,14 +1,17 @@
 "use server";
 
 import { createClient } from "@sneakervault/supabase/server";
+import { revalidatePath } from "next/cache";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { notifyEvent } from "./notify";
+import { createStockMovement } from "./stock-movements";
 import {
   productUpdateSchema,
   productConditionInputSchema,
 } from "@sneakervault/shared";
 import { z } from "zod";
+import type { ProductImportChannel } from "@/lib/marketplace/product-import";
 
 const importRowSchema = z.object({
   brand: z.string().min(1),
@@ -17,11 +20,51 @@ const importRowSchema = z.object({
   size: z.coerce.number().positive(),
   color: z.string().optional(),
   barcode: z.string().min(1),
+  quantity: z.coerce.number().int().nonnegative().default(0),
+  hpp: z.coerce.number().nonnegative().default(0),
   sell_price: z.coerce.number().nonnegative().default(0),
   price_offline: z.coerce.number().nonnegative().default(0),
 });
 
 export type ImportProductRow = z.infer<typeof importRowSchema>;
+
+const marketplaceProductImportRowSchema = importRowSchema.extend({
+  marketplace_sku: z.string().min(1),
+  marketplace_product_id: z.string().optional(),
+  marketplace_variation_id: z.string().optional(),
+});
+
+type MarketplaceProductImportRow = z.infer<typeof marketplaceProductImportRowSchema>;
+
+type ParsedImportProductRow = {
+  row: number;
+  data: ImportProductRow;
+};
+
+function chunk<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+function importPayload(row: ImportProductRow) {
+  return {
+    brand: row.brand,
+    model: row.model,
+    sku: row.sku,
+    size: row.size,
+    color: row.color || null,
+    barcode: row.barcode,
+    quantity: row.quantity,
+    hpp: row.hpp,
+    sell_price: row.sell_price,
+    price_offline: row.price_offline || row.sell_price,
+    is_active: true,
+    first_inbound_at: row.quantity > 0 ? new Date().toISOString() : null,
+  };
+}
 
 const createProductSchema = z.object({
   brand: z.string().min(1),
@@ -79,6 +122,9 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
   let inserted = 0;
   let skipped = 0;
   const errors: { row: number; reason: string }[] = [];
+  const parsedRows: ParsedImportProductRow[] = [];
+  const seenBarcodes = new Set<string>();
+  const seenSkus = new Set<string>();
 
   for (let i = 0; i < rows.length; i++) {
     const parsed = importRowSchema.safeParse(rows[i]);
@@ -92,30 +138,85 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
       continue;
     }
 
-    // Check if already exists by barcode
-    const { data: existing } = await supabase
-      .from("products")
-      .select("id")
-      .eq("barcode", parsed.data.barcode)
-      .maybeSingle();
-
-    if (existing) {
+    if (seenBarcodes.has(parsed.data.barcode) || seenSkus.has(parsed.data.sku)) {
       skipped++;
       continue;
     }
 
-    const { error } = await supabase.from("products").insert({
-      ...parsed.data,
-      price_offline: parsed.data.price_offline || parsed.data.sell_price,
-      quantity: 0,
-      hpp: 0,
-      is_active: true,
-    });
+    seenBarcodes.add(parsed.data.barcode);
+    seenSkus.add(parsed.data.sku);
+    parsedRows.push({ row: i + 2, data: parsed.data });
+  }
 
+  if (parsedRows.length === 0) {
+    return { inserted, skipped, errors };
+  }
+
+  const existingBarcodes = new Set<string>();
+  const existingSkus = new Set<string>();
+
+  for (const batch of chunk([...seenBarcodes], 100)) {
+    const { data, error } = await supabase
+      .from("products")
+      .select("barcode")
+      .in("barcode", batch);
     if (error) {
-      errors.push({ row: i + 2, reason: error.message });
+      return {
+        inserted,
+        skipped,
+        errors: [{ row: 1, reason: `Cek barcode gagal: ${error.message}` }, ...errors],
+      };
+    }
+    for (const product of data ?? []) {
+      if (product.barcode) existingBarcodes.add(product.barcode);
+    }
+  }
+
+  for (const batch of chunk([...seenSkus], 100)) {
+    const { data, error } = await supabase
+      .from("products")
+      .select("sku")
+      .in("sku", batch);
+    if (error) {
+      return {
+        inserted,
+        skipped,
+        errors: [{ row: 1, reason: `Cek SKU gagal: ${error.message}` }, ...errors],
+      };
+    }
+    for (const product of data ?? []) {
+      if (product.sku) existingSkus.add(product.sku);
+    }
+  }
+
+  const toInsert: ParsedImportProductRow[] = [];
+  for (const row of parsedRows) {
+    if (existingBarcodes.has(row.data.barcode) || existingSkus.has(row.data.sku)) {
+      skipped++;
     } else {
-      inserted++;
+      toInsert.push(row);
+    }
+  }
+
+  for (const batch of chunk(toInsert, 100)) {
+    const { error } = await supabase
+      .from("products")
+      .insert(batch.map((row) => importPayload({ ...row.data, quantity: 0, hpp: 0 })));
+
+    if (!error) {
+      inserted += batch.length;
+      continue;
+    }
+
+    for (const row of batch) {
+      const { error: rowError } = await supabase
+        .from("products")
+        .insert(importPayload({ ...row.data, quantity: 0, hpp: 0 }));
+      if (rowError) {
+        errors.push({ row: row.row, reason: rowError.message });
+      } else {
+        inserted++;
+      }
     }
   }
 
@@ -128,6 +229,195 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
     });
   }
 
+  return { inserted, skipped, errors };
+}
+
+export async function bulkImportMarketplaceProducts(
+  channel: ProductImportChannel,
+  rows: unknown[],
+): Promise<{
+  inserted: number;
+  skipped: number;
+  errors: { row: number; reason: string }[];
+}> {
+  const parsedChannel = z.enum(["shopee", "tiktok", "tokopedia"]).safeParse(channel);
+  if (!parsedChannel.success) {
+    return { inserted: 0, skipped: 0, errors: [{ row: 1, reason: "Channel marketplace tidak dikenal" }] };
+  }
+
+  const profile = await requireRole(["owner"]);
+  const supabase = await createClient();
+
+  let inserted = 0;
+  let skipped = 0;
+  const errors: { row: number; reason: string }[] = [];
+  const parsedRows: Array<{ row: number; data: MarketplaceProductImportRow }> = [];
+  const seenSkus = new Set<string>();
+  const seenBarcodes = new Set<string>();
+  const seenMarketplaceSkus = new Set<string>();
+
+  for (let i = 0; i < rows.length; i++) {
+    const parsed = marketplaceProductImportRowSchema.safeParse(rows[i]);
+    if (!parsed.success) {
+      errors.push({
+        row: i + 2,
+        reason: parsed.error.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join("; "),
+      });
+      continue;
+    }
+
+    const duplicate =
+      seenSkus.has(parsed.data.sku) ||
+      seenBarcodes.has(parsed.data.barcode) ||
+      seenMarketplaceSkus.has(parsed.data.marketplace_sku);
+    if (duplicate) {
+      skipped++;
+      continue;
+    }
+    seenSkus.add(parsed.data.sku);
+    seenBarcodes.add(parsed.data.barcode);
+    seenMarketplaceSkus.add(parsed.data.marketplace_sku);
+    parsedRows.push({ row: i + 2, data: parsed.data });
+  }
+
+  if (parsedRows.length === 0) return { inserted, skipped, errors };
+
+  const existingBySku = new Map<string, { id: string }>();
+  const existingByBarcode = new Map<string, { id: string }>();
+  for (const batch of chunk([...seenSkus], 100)) {
+    const { data, error } = await supabase.from("products").select("id, sku").in("sku", batch);
+    if (error) return { inserted, skipped, errors: [{ row: 1, reason: `Cek SKU gagal: ${error.message}` }, ...errors] };
+    for (const product of data ?? []) existingBySku.set(product.sku, { id: product.id });
+  }
+  for (const batch of chunk([...seenBarcodes], 100)) {
+    const { data, error } = await supabase.from("products").select("id, barcode").in("barcode", batch);
+    if (error) return { inserted, skipped, errors: [{ row: 1, reason: `Cek barcode gagal: ${error.message}` }, ...errors] };
+    for (const product of data ?? []) existingByBarcode.set(product.barcode, { id: product.id });
+  }
+
+  const mapRows: Array<{
+    channel: ProductImportChannel;
+    marketplace_sku: string;
+    product_id: string;
+    marketplace_product_id: string | null;
+    marketplace_variation_id: string | null;
+    created_by: string;
+    updated_at: string;
+  }> = [];
+  const toInsert: Array<{ row: number; data: MarketplaceProductImportRow }> = [];
+  for (const row of parsedRows) {
+    const existing = existingBySku.get(row.data.sku) ?? existingByBarcode.get(row.data.barcode);
+    if (existing) {
+      skipped++;
+      mapRows.push({
+        channel: parsedChannel.data,
+        marketplace_sku: row.data.marketplace_sku,
+        product_id: existing.id,
+        marketplace_product_id: row.data.marketplace_product_id ?? null,
+        marketplace_variation_id: row.data.marketplace_variation_id ?? null,
+        created_by: profile.id,
+        updated_at: new Date().toISOString(),
+      });
+    } else {
+      toInsert.push(row);
+    }
+  }
+
+  for (const batch of chunk(toInsert, 100)) {
+    const payload = batch.map((row) => importPayload(row.data));
+    const { data, error } = await supabase
+      .from("products")
+      .insert(payload)
+      .select("id, sku");
+
+    if (error) {
+      for (const row of batch) {
+        const { data: one, error: rowError } = await supabase
+          .from("products")
+          .insert(importPayload(row.data))
+          .select("id, sku")
+          .single();
+        if (rowError || !one) {
+          errors.push({ row: row.row, reason: rowError?.message ?? "Produk gagal dibuat" });
+          continue;
+        }
+        inserted++;
+        mapRows.push({
+          channel: parsedChannel.data,
+          marketplace_sku: row.data.marketplace_sku,
+          product_id: one.id,
+          marketplace_product_id: row.data.marketplace_product_id ?? null,
+          marketplace_variation_id: row.data.marketplace_variation_id ?? null,
+          created_by: profile.id,
+          updated_at: new Date().toISOString(),
+        });
+        if (row.data.quantity > 0) {
+          const movement = await createStockMovement(supabase, {
+            product_id: one.id,
+            type: "inbound",
+            quantity: row.data.quantity,
+            unit_cost: row.data.hpp,
+            reference_type: "opening_balance",
+            notes: `Bootstrap ${parsedChannel.data} template: stok awal dari marketplace, HPP ${row.data.hpp}`,
+          });
+          if (movement.error) errors.push({ row: row.row, reason: `Stock movement: ${movement.error}` });
+        }
+      }
+      continue;
+    }
+
+    const bySku = new Map((data ?? []).map((product) => [product.sku, product.id]));
+    inserted += data?.length ?? 0;
+    for (const row of batch) {
+      const productId = bySku.get(row.data.sku);
+      if (!productId) continue;
+      mapRows.push({
+        channel: parsedChannel.data,
+        marketplace_sku: row.data.marketplace_sku,
+        product_id: productId,
+        marketplace_product_id: row.data.marketplace_product_id ?? null,
+        marketplace_variation_id: row.data.marketplace_variation_id ?? null,
+        created_by: profile.id,
+        updated_at: new Date().toISOString(),
+      });
+      if (row.data.quantity > 0) {
+        const movement = await createStockMovement(supabase, {
+          product_id: productId,
+          type: "inbound",
+          quantity: row.data.quantity,
+          unit_cost: row.data.hpp,
+          reference_type: "opening_balance",
+          notes: `Bootstrap ${parsedChannel.data} template: stok awal dari marketplace, HPP ${row.data.hpp}`,
+        });
+        if (movement.error) errors.push({ row: row.row, reason: `Stock movement: ${movement.error}` });
+      }
+    }
+  }
+
+  for (const batch of chunk(mapRows, 100)) {
+    const { error } = await supabase
+      .from("marketplace_sku_map")
+      .upsert(batch, { onConflict: "channel,marketplace_sku" });
+    if (error) errors.push({ row: 1, reason: `Mapping marketplace gagal: ${error.message}` });
+  }
+
+  if (inserted > 0 || mapRows.length > 0) {
+    await logActivity({
+      user_id: profile.id,
+      action: "create",
+      entity_type: "product",
+      new_data: {
+        source: `marketplace:${parsedChannel.data}`,
+        imported: inserted,
+        skipped,
+        mapped: mapRows.length,
+        errors: errors.length,
+      },
+    });
+  }
+
+  revalidatePath("/inventory");
+  revalidatePath("/penjualan/export-stok");
   return { inserted, skipped, errors };
 }
 
@@ -185,6 +475,7 @@ export async function updateProduct(input: unknown) {
   const canEditPrice = isOwner || isFinance;
 
   if (!canEditPrice) {
+    delete (patch as { hpp?: number }).hpp;
     delete (patch as { sell_price?: number }).sell_price;
     delete (patch as { price_offline?: number }).price_offline;
   }

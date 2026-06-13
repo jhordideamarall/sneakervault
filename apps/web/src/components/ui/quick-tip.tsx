@@ -47,15 +47,17 @@ export function QuickTip({
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    if (typeof window === "undefined") return;
-    try {
-      const v = window.localStorage.getItem(storageKey);
-      if (v === "dismissed") setDismissed(true);
-      if (v === "collapsed") setExpanded(false);
-    } catch {
-      // ignore
-    }
+    queueMicrotask(() => {
+      setMounted(true);
+      if (typeof window === "undefined") return;
+      try {
+        const v = window.localStorage.getItem(storageKey);
+        if (v === "dismissed") setDismissed(true);
+        if (v === "collapsed") setExpanded(false);
+      } catch {
+        // ignore
+      }
+    });
   }, [storageKey]);
 
   if (!mounted) return null;

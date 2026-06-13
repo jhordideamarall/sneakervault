@@ -7,7 +7,17 @@ import {
 
 const COLORS = ["#8b5cf6", "#22c55e", "#3b82f6", "#eab308", "#ef4444", "#f97316", "#06b6d4", "#ec4899"];
 
-function ChartTooltip({ active, payload, label, mode = "rupiah" }: { active?: boolean; payload?: any[]; label?: string; mode?: "rupiah" | "unit" }) {
+type ChartPayload = {
+  name?: string;
+  value?: unknown;
+  color?: string;
+  fill?: string;
+  payload?: unknown;
+};
+
+type StockPieDatum = { brand: string; value: number; units: number };
+
+function ChartTooltip({ active, payload, label, mode = "rupiah" }: { active?: boolean; payload?: ChartPayload[]; label?: string; mode?: "rupiah" | "unit" }) {
   if (!active || !payload?.length) return null;
   const formatValue = (v: unknown) => {
     if (typeof v !== "number") return String(v ?? "");
@@ -28,6 +38,44 @@ function ChartTooltip({ active, payload, label, mode = "rupiah" }: { active?: bo
           </span>
         </div>
       ))}
+    </div>
+  );
+}
+
+function StockPieTooltip({
+  active,
+  payload,
+  total,
+}: {
+  active?: boolean;
+  payload?: ChartPayload[];
+  total: number;
+}) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0]?.payload as StockPieDatum | undefined;
+  if (!p) return null;
+  const pct = total > 0 ? ((p.value / total) * 100).toFixed(1) : "0";
+  const color = payload[0]?.color ?? payload[0]?.fill ?? "#fff";
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-[#1c1c1e] px-4 py-3 shadow-2xl">
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+        <span className="text-[12px] font-semibold text-white">{p.brand}</span>
+      </div>
+      <div className="space-y-0.5 text-[11px]">
+        <div className="flex justify-between gap-6">
+          <span className="text-white/50">Unit</span>
+          <span className="text-white font-semibold tabular-nums">{p.units.toLocaleString("id-ID")}</span>
+        </div>
+        <div className="flex justify-between gap-6">
+          <span className="text-white/50">Modal</span>
+          <span className="text-white font-semibold tabular-nums">Rp {p.value.toLocaleString("id-ID")}</span>
+        </div>
+        <div className="flex justify-between gap-6">
+          <span className="text-white/50">Porsi</span>
+          <span className="text-white/70 tabular-nums">{pct}%</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -54,40 +102,10 @@ export function RevenueChart({ data }: { data: { month: string; revenue: number;
   );
 }
 
-export function StockPieChart({ data }: { data: { brand: string; value: number; units: number }[] }) {
+export function StockPieChart({ data }: { data: StockPieDatum[] }) {
   if (data.length === 0) return <EmptyChart />;
   const total = data.reduce((s, d) => s + d.value, 0);
   const totalUnits = data.reduce((s, d) => s + d.units, 0);
-
-  const PieTooltip = ({ active, payload }: { active?: boolean; payload?: any[] }) => {
-    if (!active || !payload?.length) return null;
-    const p = payload[0]?.payload as { brand: string; value: number; units: number } | undefined;
-    if (!p) return null;
-    const pct = total > 0 ? ((p.value / total) * 100).toFixed(1) : "0";
-    const color = payload[0]?.color ?? payload[0]?.fill ?? "#fff";
-    return (
-      <div className="rounded-xl border border-white/[0.08] bg-[#1c1c1e] px-4 py-3 shadow-2xl">
-        <div className="flex items-center gap-2 mb-1.5">
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-          <span className="text-[12px] font-semibold text-white">{p.brand}</span>
-        </div>
-        <div className="space-y-0.5 text-[11px]">
-          <div className="flex justify-between gap-6">
-            <span className="text-white/50">Unit</span>
-            <span className="text-white font-semibold tabular-nums">{p.units.toLocaleString("id-ID")}</span>
-          </div>
-          <div className="flex justify-between gap-6">
-            <span className="text-white/50">Modal</span>
-            <span className="text-white font-semibold tabular-nums">Rp {p.value.toLocaleString("id-ID")}</span>
-          </div>
-          <div className="flex justify-between gap-6">
-            <span className="text-white/50">Porsi</span>
-            <span className="text-white/70 tabular-nums">{pct}%</span>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
@@ -106,7 +124,7 @@ export function StockPieChart({ data }: { data: { brand: string; value: number; 
           <Pie data={data} dataKey="value" nameKey="brand" cx="50%" cy="50%" outerRadius={80} strokeWidth={0}>
             {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
           </Pie>
-          <Tooltip content={<PieTooltip />} />
+          <Tooltip content={<StockPieTooltip total={total} />} />
         </PieChart>
       </ResponsiveContainer>
       <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-2">

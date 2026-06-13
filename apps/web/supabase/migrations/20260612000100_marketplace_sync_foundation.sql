@@ -6,7 +6,7 @@
 --      learned during import diff; reused by stock export round-trip.
 --   3. marketplace_imports — extend existing audit table with order/settlement
 --      kind + file name + match counters (table already existed for settlement).
---   4. sales_invoices settlement columns (2-phase: pending -> released).
+--   4. sales_invoices settlement columns (none -> released).
 --   5. import_marketplace_order_atomic() — atomic invoice+lines+stock+journal
 --      (mirrors journalForSalesInvoice / pos_checkout), closes the non-atomic
 --      import loop risk.
@@ -78,7 +78,7 @@ ALTER TABLE public.marketplace_imports
 
 COMMENT ON COLUMN public.marketplace_imports.kind IS 'order | settlement — distinguishes order import batches from settlement batches.';
 
--- ── 4. sales_invoices settlement state (2-phase: pending -> released) ──────────
+-- ── 4. sales_invoices settlement state (none -> released) ──────────────────────
 ALTER TABLE public.sales_invoices
   ADD COLUMN IF NOT EXISTS settlement_status      text NOT NULL DEFAULT 'none',
   ADD COLUMN IF NOT EXISTS settlement_fee_actual  numeric,
@@ -87,7 +87,7 @@ ALTER TABLE public.sales_invoices
   ADD COLUMN IF NOT EXISTS settlement_ref         text;
 
 COMMENT ON COLUMN public.sales_invoices.settlement_status IS
-  'none | pending | released. Settlement upload phase 1 (dana belum cair) -> pending; phase 2 (cair) -> released.';
+  'none | released. Order import leaves invoice unpaid; settlement import creates customer payment and marks it released.';
 
 -- ── 5. Atomic marketplace order import ────────────────────────────────────────
 -- Payload:
@@ -140,6 +140,7 @@ BEGIN
   END IF;
 
   -- 3. Resolve lines -> products (aggregate by product, last price wins).
+  DROP TABLE IF EXISTS pg_temp._mp_cart;
   CREATE TEMP TABLE _mp_cart ON COMMIT DROP AS
   WITH raw AS (
     SELECT (l->>'product_id')::uuid AS pid,

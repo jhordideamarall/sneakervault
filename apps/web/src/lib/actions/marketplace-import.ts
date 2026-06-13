@@ -5,10 +5,14 @@ import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
 import { assertPeriodOpen } from "@/lib/fiscal-periods";
+import { createStockMovement } from "./stock-movements";
+import { extractShoeSize } from "@/lib/marketplace/product-import";
 import type {
   MarketplaceChannel,
   MarketplaceOrder,
+  MarketplaceOrderLine,
 } from "@/lib/marketplace/parsers";
+import { z } from "zod";
 
 export type { MarketplaceChannel, MarketplaceOrder, MarketplaceOrderLine } from "@/lib/marketplace/parsers";
 
@@ -20,6 +24,7 @@ type ResolvedProduct = {
   sku: string;
   quantity: number;
   sell_price: number;
+  hpp: number;
 };
 
 export type LineDiff = {
@@ -27,9 +32,11 @@ export type LineDiff = {
   qty: number;
   unit_price: number;
   product_name: string;
+  variation_name?: string;
   product: ResolvedProduct | null;
   via: "sku" | "map" | null;
   issue: "ok" | "low_stock" | "unmapped";
+  cost_issue: "ok" | "missing_hpp";
 };
 
 export type OrderDiff = {
@@ -52,8 +59,27 @@ export type ReconcileResult = {
     blocked: number;
     duplicate: number;
     unmapped_skus: string[];
+    missing_hpp_skus: string[];
   };
 };
+
+const BRAND_PREFIXES = [
+  "New Balance",
+  "Under Armour",
+  "Nike",
+  "Adidas",
+  "Asics",
+  "Jordan",
+  "Puma",
+  "Reebok",
+  "Converse",
+  "Vans",
+  "Salomon",
+  "Hoka",
+  "Mizuno",
+  "Skechers",
+  "On",
+].sort((a, b) => b.length - a.length);
 
 function labelOf(p: {
   brand: string;
@@ -63,6 +89,52 @@ function labelOf(p: {
   sku: string;
 }): string {
   return `${p.brand} ${p.model} ${p.color ?? ""} • Size ${p.size ?? ""} • ${p.sku}`;
+}
+
+function cleanMarketplaceName(value: string) {
+  return value
+    .replace(/^dewinstsneakers\s*\|\s*/i, "")
+    .replace(/\((?:100%\s*)?authentic\)/gi, "")
+    .replace(/\bBNIB\b/gi, "")
+    .replace(/\bRESMI\b/gi, "")
+    .replace(/\bORIGINAL\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitBrandModel(productName: string) {
+  const cleaned = cleanMarketplaceName(productName);
+  const match = BRAND_PREFIXES.find((brand) => cleaned.toLowerCase().startsWith(brand.toLowerCase()));
+  if (match) {
+    return { brand: match, model: cleaned.slice(match.length).trim() || cleaned };
+  }
+  const [brand = "Marketplace", ...rest] = cleaned.split(/\s+/);
+  return { brand, model: rest.join(" ") || cleaned || "Imported Product" };
+}
+
+function productPayloadFromMarketplaceLine(channel: MarketplaceChannel, line: MarketplaceOrderLine) {
+  const size = extractShoeSize(line.variation_name) ?? extractShoeSize(line.product_name);
+  if (!size) {
+    return { error: "Size/variasi tidak terbaca. Buat produk manual di Inventory lalu petakan SKU." };
+  }
+
+  const { brand, model } = splitBrandModel(line.product_name);
+  return {
+    data: {
+      brand,
+      model,
+      sku: line.sku,
+      size,
+      color: null,
+      barcode: `MP-${channel}-${line.sku}`.slice(0, 120),
+      quantity: Math.max(0, Math.trunc(line.qty)),
+      hpp: 0,
+      sell_price: Math.max(0, line.unit_price),
+      price_offline: Math.max(0, line.unit_price),
+      is_active: true,
+      first_inbound_at: line.qty > 0 ? new Date().toISOString() : null,
+    },
+  };
 }
 
 /**
@@ -86,7 +158,7 @@ async function resolveOrders(
   if (allSkus.length > 0) {
     const { data } = await supabase
       .from("products")
-      .select("id, sku, brand, model, color, size, quantity, sell_price")
+      .select("id, sku, brand, model, color, size, quantity, sell_price, hpp")
       .in("sku", allSkus);
     for (const p of data ?? []) {
       bySku.set(p.sku, {
@@ -95,6 +167,7 @@ async function resolveOrders(
         sku: p.sku,
         quantity: Number(p.quantity),
         sell_price: Number(p.sell_price),
+        hpp: Number(p.hpp),
       });
     }
   }
@@ -112,7 +185,7 @@ async function resolveOrders(
     if (mapPids.length > 0) {
       const { data: mapped } = await supabase
         .from("products")
-        .select("id, sku, brand, model, color, size, quantity, sell_price")
+        .select("id, sku, brand, model, color, size, quantity, sell_price, hpp")
         .in("id", mapPids);
       const pById = new Map(
         (mapped ?? []).map((p) => [
@@ -123,6 +196,7 @@ async function resolveOrders(
             sku: p.sku,
             quantity: Number(p.quantity),
             sell_price: Number(p.sell_price),
+            hpp: Number(p.hpp),
           } as ResolvedProduct,
         ]),
       );
@@ -159,9 +233,11 @@ async function resolveOrders(
         qty: l.qty,
         unit_price: l.unit_price,
         product_name: l.product_name,
+        variation_name: l.variation_name,
         product,
         via,
         issue,
+        cost_issue: product && Number(product.hpp) <= 0 ? "missing_hpp" : "ok",
       };
     });
 
@@ -192,9 +268,11 @@ export async function reconcileMarketplaceOrders(
   const diffs = await resolveOrders(supabase, channel, orders);
 
   const unmapped = new Set<string>();
+  const missingHpp = new Set<string>();
   for (const o of diffs) {
     for (const l of o.lines) {
       if (l.issue === "unmapped") unmapped.add(l.sku);
+      if (l.cost_issue === "missing_hpp") missingHpp.add(l.sku);
     }
   }
 
@@ -205,6 +283,7 @@ export async function reconcileMarketplaceOrders(
       blocked: diffs.filter((o) => o.status === "blocked").length,
       duplicate: diffs.filter((o) => o.status === "duplicate").length,
       unmapped_skus: Array.from(unmapped),
+      missing_hpp_skus: Array.from(missingHpp),
     },
   };
 }
@@ -244,7 +323,7 @@ export async function searchProductsForMapping(
   const pattern = `%${q}%`;
   const { data } = await supabase
     .from("products")
-    .select("id, sku, brand, model, color, size, quantity, sell_price")
+    .select("id, sku, brand, model, color, size, quantity, sell_price, hpp")
     .or(`sku.ilike.${pattern},brand.ilike.${pattern},model.ilike.${pattern},barcode.ilike.${pattern}`)
     .eq("is_active", true)
     .limit(10);
@@ -254,7 +333,238 @@ export async function searchProductsForMapping(
     sku: p.sku,
     quantity: Number(p.quantity),
     sell_price: Number(p.sell_price),
+    hpp: Number(p.hpp),
   }));
+}
+
+async function mapSkuToProduct(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  profileId: string,
+  channel: MarketplaceChannel,
+  marketplaceSku: string,
+  productId: string,
+) {
+  return supabase
+    .from("marketplace_sku_map")
+    .upsert(
+      {
+        channel,
+        marketplace_sku: marketplaceSku.trim(),
+        product_id: productId,
+        created_by: profileId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "channel,marketplace_sku" },
+    );
+}
+
+const createLineProductSchema = z.object({
+  sku: z.string().min(1),
+  qty: z.coerce.number().int().positive(),
+  unit_price: z.coerce.number().nonnegative(),
+  product_name: z.string().min(1),
+  variation_name: z.string().optional(),
+});
+
+export async function createProductFromMarketplaceLine(
+  channel: MarketplaceChannel,
+  input: unknown,
+): Promise<{ ok?: true; error?: string }> {
+  const profile = await requireRole(["owner"]);
+  const parsed = createLineProductSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues.map((i) => i.message).join(", ") };
+
+  const payload = productPayloadFromMarketplaceLine(channel, parsed.data);
+  if ("error" in payload) return { error: payload.error ?? "Produk gagal dibuat" };
+
+  const supabase = await createClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("products")
+    .select("id, quantity")
+    .eq("sku", parsed.data.sku)
+    .maybeSingle();
+  if (existingError) return { error: existingError.message };
+
+  let productId = existing?.id;
+  if (!productId) {
+    const { data, error } = await supabase
+      .from("products")
+      .insert(payload.data)
+      .select("id")
+      .single();
+    if (error) return { error: error.message };
+    productId = data.id;
+
+    if (parsed.data.qty > 0) {
+      const movement = await createStockMovement(supabase, {
+        product_id: productId,
+        type: "inbound",
+        quantity: parsed.data.qty,
+        unit_cost: 0,
+        reference_type: "opening_balance",
+        notes: `Bootstrap dari import order ${channel}: HPP belum diisi`,
+      });
+      if (movement.error) return { error: movement.error };
+    }
+  }
+
+  const mapped = await mapSkuToProduct(supabase, profile.id, channel, parsed.data.sku, productId);
+  if (mapped.error) return { error: mapped.error.message };
+
+  await logActivity({
+    user_id: profile.id,
+    action: "create",
+    entity_type: "product",
+    entity_id: productId,
+    new_data: { source: `marketplace-order:${channel}`, sku: parsed.data.sku, hpp: 0 },
+  });
+  revalidatePath("/inventory");
+  revalidatePath("/penjualan/import-marketplace");
+  return { ok: true };
+}
+
+export async function createMissingProductsFromMarketplaceOrders(
+  channel: MarketplaceChannel,
+  orders: MarketplaceOrder[],
+): Promise<{ created: number; skipped: number; errors: { sku: string; reason: string }[] }> {
+  const profile = await requireRole(["owner"]);
+  const supabase = await createClient();
+  const diffs = await resolveOrders(supabase, channel, orders);
+  const lines = new Map<string, MarketplaceOrderLine>();
+  const qtyBySku = new Map<string, number>();
+
+  for (const order of diffs) {
+    if (order.status === "duplicate") continue;
+    for (const line of order.lines) {
+      if (line.issue !== "unmapped") continue;
+      if (!lines.has(line.sku)) {
+        lines.set(line.sku, {
+          sku: line.sku,
+          qty: 0,
+          unit_price: line.unit_price,
+          product_name: line.product_name,
+          variation_name: line.variation_name,
+        });
+      }
+      qtyBySku.set(line.sku, (qtyBySku.get(line.sku) ?? 0) + line.qty);
+    }
+  }
+
+  let created = 0;
+  let skipped = 0;
+  const errors: { sku: string; reason: string }[] = [];
+
+  for (const [sku, line] of lines) {
+    const qty = qtyBySku.get(sku) ?? 0;
+    const payload = productPayloadFromMarketplaceLine(channel, { ...line, qty });
+    if ("error" in payload) {
+      errors.push({ sku, reason: payload.error ?? "Produk gagal dibuat" });
+      continue;
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from("products")
+      .select("id")
+      .eq("sku", sku)
+      .maybeSingle();
+    if (existingError) {
+      errors.push({ sku, reason: existingError.message });
+      continue;
+    }
+
+    let productId = existing?.id;
+    if (productId) {
+      skipped++;
+    } else {
+      const { data, error } = await supabase
+        .from("products")
+        .insert(payload.data)
+        .select("id")
+        .single();
+      if (error) {
+        errors.push({ sku, reason: error.message });
+        continue;
+      }
+      productId = data.id;
+      created++;
+      if (qty > 0) {
+        const movement = await createStockMovement(supabase, {
+          product_id: productId,
+          type: "inbound",
+          quantity: qty,
+          unit_cost: 0,
+          reference_type: "opening_balance",
+          notes: `Bootstrap dari import order ${channel}: HPP belum diisi`,
+        });
+        if (movement.error) errors.push({ sku, reason: movement.error });
+      }
+    }
+
+    const mapped = await mapSkuToProduct(supabase, profile.id, channel, sku, productId);
+    if (mapped.error) errors.push({ sku, reason: mapped.error.message });
+  }
+
+  if (created > 0) {
+    await logActivity({
+      user_id: profile.id,
+      action: "bulk_import",
+      entity_type: "product",
+      new_data: { source: `marketplace-order:${channel}`, created, skipped, hpp: 0 },
+    });
+  }
+  revalidatePath("/inventory");
+  revalidatePath("/penjualan/import-marketplace");
+  return { created, skipped, errors };
+}
+
+export async function topUpProductStockForMarketplaceImport(
+  productId: string,
+  requiredQty: number,
+): Promise<{ ok?: true; added?: number; error?: string }> {
+  const profile = await requireRole(["owner", "admin_gudang"]);
+  const parsed = z.string().uuid().safeParse(productId);
+  if (!parsed.success) return { error: "Produk tidak valid" };
+  const qty = Math.trunc(Number(requiredQty));
+  if (!Number.isFinite(qty) || qty <= 0) return { error: "Qty tidak valid" };
+
+  const supabase = await createClient();
+  const { data: product, error: productError } = await supabase
+    .from("products")
+    .select("id, quantity, hpp")
+    .eq("id", productId)
+    .maybeSingle();
+  if (productError) return { error: productError.message };
+  if (!product) return { error: "Produk tidak ditemukan" };
+
+  const missing = Math.max(0, qty - Number(product.quantity));
+  if (missing === 0) return { ok: true, added: 0 };
+
+  const { error: incError } = await supabase.rpc("increment_product_quantity", {
+    p_id: productId,
+    qty: missing,
+  });
+  if (incError) return { error: incError.message };
+
+  const movement = await createStockMovement(supabase, {
+    product_id: productId,
+    type: "adjustment",
+    quantity: missing,
+    unit_cost: Number(product.hpp),
+    reference_type: "marketplace_import",
+    notes: "Tambah stok sementara dari review import marketplace",
+  });
+  if (movement.error) return { error: movement.error };
+
+  await logActivity({
+    user_id: profile.id,
+    action: "adjustment",
+    entity_type: "product",
+    entity_id: productId,
+    new_data: { reason: "marketplace_import_topup", added: missing },
+  });
+  revalidatePath("/inventory");
+  revalidatePath("/penjualan/import-marketplace");
+  return { ok: true, added: missing };
 }
 
 export type CommitResult = {

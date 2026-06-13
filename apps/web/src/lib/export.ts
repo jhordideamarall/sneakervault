@@ -126,7 +126,7 @@ export async function exportToPDF(params: ExportParams) {
           doc.text(`Halaman ${data.pageNumber}`, pageWidth - 14, doc.internal.pageSize.getHeight() - 8, { align: "right" });
         },
       });
-      y = (doc as any).lastAutoTable.finalY + 8;
+      y = ((doc as typeof doc & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y) + 8;
     }
   }
 

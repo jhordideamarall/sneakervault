@@ -15,7 +15,7 @@ export default async function SoldPage({
 
   return (
     <RiwayatTerjualClient 
-      initialSessions={data as any} 
+      initialSessions={data as Parameters<typeof RiwayatTerjualClient>[0]["initialSessions"]}
       searchParams={sp} 
     />
   );

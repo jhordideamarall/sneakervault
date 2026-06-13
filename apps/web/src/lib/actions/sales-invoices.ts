@@ -269,7 +269,7 @@ export async function issueSalesInvoice(id: string) {
   const inv2 = inv as unknown as {
     invoice_number: string;
     invoice_date: string;
-    channel: "wa" | "shopee" | "tiktok" | "offline" | "website" | "mixed";
+    channel: "wa" | "shopee" | "tiktok" | "tokopedia" | "offline" | "website" | "mixed";
     total: number;
     subtotal: number;
     discount: number;

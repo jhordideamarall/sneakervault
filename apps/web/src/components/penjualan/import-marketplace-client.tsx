@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Button, Card, Badge } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import {
   parseMarketplaceFile,
-  detectChannel,
+  isExpectedOrderTemplate,
   type MarketplaceChannel,
   type MarketplaceOrder,
 } from "@/lib/marketplace/parsers";
@@ -25,6 +25,9 @@ import {
   commitMarketplaceOrders,
   mapMarketplaceSku,
   searchProductsForMapping,
+  createMissingProductsFromMarketplaceOrders,
+  createProductFromMarketplaceLine,
+  topUpProductStockForMarketplaceImport,
   type ReconcileResult,
   type OrderDiff,
   type CommitResult,
@@ -32,11 +35,22 @@ import {
 
 type ImportState = "upload" | "review" | "processing" | "result";
 
+const DRAFT_KEY = "sneakervault:marketplace-import-review";
+
 const CHANNELS: { id: MarketplaceChannel; label: string; dot: string; badge: string }[] = [
   { id: "shopee", label: "Shopee", dot: "bg-orange-500", badge: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
   { id: "tokopedia", label: "Tokopedia", dot: "bg-emerald-500", badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
   { id: "tiktok", label: "TikTok", dot: "bg-pink-500", badge: "bg-pink-500/10 text-pink-400 border-pink-500/20" },
 ];
+
+function isStockExportTemplate(rows: Record<string, unknown>[]): boolean {
+  const keys = new Set(Object.keys(rows[0] ?? {}).map((key) => key.trim().toLowerCase()));
+  return (
+    keys.has("et_title_product_id") ||
+    keys.has("et_title_variation_stock") ||
+    keys.has("warehouse_quantity")
+  );
+}
 
 export function ImportMarketplaceClient() {
   const router = useRouter();
@@ -52,12 +66,58 @@ export function ImportMarketplaceClient() {
 
   const channelMeta = CHANNELS.find((c) => c.id === channel)!;
 
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as {
+        channel?: MarketplaceChannel;
+        fileName?: string;
+        orders?: MarketplaceOrder[];
+      };
+      if (!draft.channel || !Array.isArray(draft.orders) || draft.orders.length === 0) return;
+      queueMicrotask(() => {
+        setChannel(draft.channel!);
+        setFileName(draft.fileName ?? "Draft import marketplace");
+        setOrders(draft.orders!);
+        startTransition(async () => {
+          try {
+            await runReconcile(draft.channel!, draft.orders!);
+            setState("review");
+          } catch {
+            sessionStorage.removeItem(DRAFT_KEY);
+          }
+        });
+      });
+    } catch (error) {
+      void error;
+      sessionStorage.removeItem(DRAFT_KEY);
+    }
+  }, []);
+
+  function saveDraft(ch: MarketplaceChannel, name: string, ords: MarketplaceOrder[]) {
+    try {
+      sessionStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ channel: ch, fileName: name, orders: ords }),
+      );
+    } catch (error) {
+      void error;
+      // Best effort only; file can always be uploaded again.
+    }
+  }
+
   function reset() {
     setState("upload");
     setOrders([]);
     setDiff(null);
     setResult(null);
     setFileName("");
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch (error) {
+      void error;
+    }
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -91,10 +151,17 @@ export function ImportMarketplaceClient() {
           return;
         }
 
-        // Auto-detect is a validation aid against the selected channel tab.
-        const detected = detectChannel(rows);
-        if (detected && detected !== channel && !(detected === "tiktok" && channel === "tokopedia")) {
-          toast.push(`File terdeteksi ${detected.toUpperCase()}, tapi tab ${channelMeta.label} dipilih. Cek lagi.`, "error");
+        if (isStockExportTemplate(rows)) {
+          toast.push(
+            "File ini template update stok/harga. Pakai menu Penjualan → Export Stok, bukan Import Pesanan.",
+            "error",
+          );
+          return;
+        }
+
+        if (!isExpectedOrderTemplate(channel, rows)) {
+          toast.push(`Template tidak sesuai tab ${channelMeta.label}. Pilih tab marketplace yang benar lalu upload ulang.`, "error");
+          return;
         }
 
         const parsed = parseMarketplaceFile(channel, rows);
@@ -104,9 +171,17 @@ export function ImportMarketplaceClient() {
         }
 
         setOrders(parsed);
+        saveDraft(channel, file.name, parsed);
         startTransition(async () => {
-          await runReconcile(channel, parsed);
-          setState("review");
+          try {
+            await runReconcile(channel, parsed);
+            setState("review");
+          } catch (error) {
+            toast.push(
+              error instanceof Error ? error.message : "Gagal mereview file import",
+              "error",
+            );
+          }
         });
       } catch {
         toast.push("Gagal memproses file", "error");
@@ -121,6 +196,11 @@ export function ImportMarketplaceClient() {
       setState("processing");
       const r = await commitMarketplaceOrders(channel, orders, fileName);
       setResult(r);
+      try {
+        sessionStorage.removeItem(DRAFT_KEY);
+      } catch (error) {
+        void error;
+      }
       setState("result");
       if (r.success > 0) toast.push(`${r.success} order berhasil diimport`, "success");
     });
@@ -142,8 +222,7 @@ export function ImportMarketplaceClient() {
           </div>
           <h2 className="mb-2 text-lg font-semibold text-white">Import Pesanan Marketplace</h2>
           <p className="mb-6 max-w-sm text-sm text-white/50">
-            Pilih marketplace sumber, lalu upload file laporan pesanan. Data akan
-            direview dulu (cocok / tidak cocok) sebelum disimpan.
+            Pilih channel, lalu upload laporan pesanan/order report. Jangan pakai template stok atau settlement di menu ini.
           </p>
 
           {/* Channel selector = explicit import source label */}
@@ -168,7 +247,7 @@ export function ImportMarketplaceClient() {
 
           <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-semibold text-black transition-all hover:bg-white/90 active:scale-95">
             <FileUp size={18} />
-            Upload File {channelMeta.label}
+            Upload Laporan Pesanan {channelMeta.label}
             <input
               ref={fileInputRef}
               type="file"
@@ -177,13 +256,14 @@ export function ImportMarketplaceClient() {
               className="hidden"
             />
           </label>
-          <p className="mt-4 text-xs text-white/30">Format Excel/CSV dari {channelMeta.label} Seller Center</p>
+          <p className="mt-4 text-xs text-white/30">File order report Excel/CSV dari {channelMeta.label} Seller Center</p>
         </Card>
       )}
 
       {state === "review" && diff && (
         <ReviewDiff
           diff={diff}
+          orders={orders}
           channel={channel}
           channelBadge={channelMeta.badge}
           channelLabel={channelMeta.label}
@@ -217,6 +297,7 @@ function statusBadge(status: OrderDiff["status"]) {
 
 function ReviewDiff({
   diff,
+  orders,
   channel,
   channelBadge,
   channelLabel,
@@ -227,6 +308,7 @@ function ReviewDiff({
   onMapped,
 }: {
   diff: ReconcileResult;
+  orders: MarketplaceOrder[];
   channel: MarketplaceChannel;
   channelBadge: string;
   channelLabel: string;
@@ -237,6 +319,21 @@ function ReviewDiff({
   onMapped: () => void;
 }) {
   const { summary } = diff;
+  const toast = useToast();
+  const [fixing, startFixing] = useTransition();
+
+  function createAllMissingProducts() {
+    startFixing(async () => {
+      const result = await createMissingProductsFromMarketplaceOrders(channel, orders);
+      if (result.errors.length > 0) {
+        toast.push(`${result.created} produk dibuat, ${result.errors.length} gagal dibuat`, "info");
+      } else {
+        toast.push(`${result.created} produk dibuat dari order`, "success");
+      }
+      onMapped();
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -262,7 +359,21 @@ function ReviewDiff({
 
       {summary.unmapped_skus.length > 0 && (
         <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3 text-xs text-amber-200/80">
-          {summary.unmapped_skus.length} SKU belum dikenali sistem. Petakan ke produk di bawah — pemetaan akan diingat untuk import berikutnya.
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <strong>{summary.unmapped_skus.length} SKU belum dikenali.</strong>{" "}
+              Petakan ke produk existing, atau buat produk baru dari data order. Mapping akan diingat untuk import berikutnya.
+            </div>
+            <Button size="sm" variant="secondary" onClick={createAllMissingProducts} disabled={fixing || pending}>
+              {fixing ? "Membuat..." : "Buat Semua Produk"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {summary.missing_hpp_skus.length > 0 && (
+        <div className="rounded-lg border border-sky-500/20 bg-sky-500/[0.06] px-4 py-3 text-xs text-sky-100/75">
+          {summary.missing_hpp_skus.length} SKU HPP-nya masih 0. Import tetap bisa, tapi jurnal HPP/COGS dan laba belum final sampai HPP diisi lewat Barang Masuk, Stock Opname, atau cutover Accurate.
         </div>
       )}
 
@@ -325,22 +436,34 @@ function LineRow({
             <span>SKU: {line.sku}</span>
             <span>·</span>
             <span>{line.qty}×</span>
+            {line.variation_name && (
+              <>
+                <span>·</span>
+                <span>{line.variation_name}</span>
+              </>
+            )}
           </div>
           {line.product && (
             <div className="mt-1 flex items-center gap-1.5 text-[11px] text-emerald-300/70">
               <Link2 size={11} />
               <span className="truncate">{line.product.label}</span>
               {line.via === "map" && <span className="text-white/30">(dipetakan)</span>}
+              {line.cost_issue === "missing_hpp" && <span className="text-sky-300/80">(HPP 0)</span>}
             </div>
           )}
         </div>
         <div className="shrink-0 text-right">
           {line.issue === "ok" && <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">OK · stok {line.product?.quantity}</Badge>}
-          {line.issue === "low_stock" && <Badge className="bg-red-500/10 text-red-400 border-red-500/20">Stok {line.product?.quantity} &lt; {line.qty}</Badge>}
+          {line.issue === "low_stock" && (
+            <LowStockAction line={line} onMapped={onMapped} />
+          )}
           {line.issue === "unmapped" && !disabled && (
-            <Button size="sm" variant="secondary" onClick={() => setMapping((v) => !v)}>
-              <Search size={13} className="mr-1" /> Petakan SKU
-            </Button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <CreateProductAction line={line} channel={channel} onMapped={onMapped} />
+              <Button size="sm" variant="secondary" onClick={() => setMapping((v) => !v)}>
+                <Search size={13} className="mr-1" /> Petakan SKU
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -354,6 +477,79 @@ function LineRow({
             onMapped();
           }}
         />
+      )}
+    </div>
+  );
+}
+
+function CreateProductAction({
+  line,
+  channel,
+  onMapped,
+}: {
+  line: OrderDiff["lines"][number];
+  channel: MarketplaceChannel;
+  onMapped: () => void;
+}) {
+  const toast = useToast();
+  const [pending, startTransition] = useTransition();
+
+  function createProduct() {
+    startTransition(async () => {
+      const result = await createProductFromMarketplaceLine(channel, {
+        sku: line.sku,
+        qty: line.qty,
+        unit_price: line.unit_price,
+        product_name: line.product_name,
+        variation_name: line.variation_name,
+      });
+      if (result.error) {
+        toast.push(result.error, "error");
+        return;
+      }
+      toast.push("Produk dibuat. HPP masih 0 sampai diisi.", "success");
+      onMapped();
+    });
+  }
+
+  return (
+    <Button size="sm" variant="secondary" onClick={createProduct} disabled={pending}>
+      {pending ? "Membuat..." : "Buat Produk"}
+    </Button>
+  );
+}
+
+function LowStockAction({
+  line,
+  onMapped,
+}: {
+  line: OrderDiff["lines"][number];
+  onMapped: () => void;
+}) {
+  const toast = useToast();
+  const [pending, startTransition] = useTransition();
+  const missing = Math.max(0, line.qty - Number(line.product?.quantity ?? 0));
+
+  function addStock() {
+    if (!line.product) return;
+    startTransition(async () => {
+      const result = await topUpProductStockForMarketplaceImport(line.product!.id, line.qty);
+      if (result.error) {
+        toast.push(result.error, "error");
+        return;
+      }
+      toast.push(result.added ? `Stok ditambah ${result.added}` : "Stok sudah cukup", "success");
+      onMapped();
+    });
+  }
+
+  return (
+    <div className="flex flex-wrap justify-end gap-2">
+      <Badge className="bg-red-500/10 text-red-400 border-red-500/20">Stok {line.product?.quantity} &lt; {line.qty}</Badge>
+      {line.product && missing > 0 && (
+        <Button size="sm" variant="secondary" onClick={addStock} disabled={pending}>
+          {pending ? "Menambah..." : `Tambah stok ${missing}`}
+        </Button>
       )}
     </div>
   );

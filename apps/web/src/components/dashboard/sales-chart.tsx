@@ -3,6 +3,14 @@
 import { Bar, BarChart as ReBarChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ZAxis } from "recharts";
 
 type WeekData = Record<string, number | string>;
+type ChartPayload = {
+  name?: string;
+  value?: unknown;
+  color?: string;
+  fill?: string;
+  payload?: unknown;
+};
+type StripPoint = { x: number; model: string; units: number };
 
 const BAR_COLORS = [
   "#8b5cf6", "#22c55e", "#eab308", "#ef4444", "#3b82f6", "#f97316", 
@@ -13,7 +21,7 @@ const LINE_COLORS = [
   "#f43f5e", "#14b8a6", "#fbbf24", "#6366f1", "#d946ef", "#8b5cf6"
 ];
 
-function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
+function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: ChartPayload[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-xl border border-white/[0.08] bg-[#1c1c1e] px-4 py-3 shadow-2xl shadow-black/40">
@@ -24,7 +32,7 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || p.fill }} />
             <span className="text-[11px] text-white/70">{p.name}</span>
           </div>
-          <span className="text-[11px] font-semibold text-white">{p.value}</span>
+          <span className="text-[11px] font-semibold text-white">{String(p.value ?? "")}</span>
         </div>
       ))}
     </div>
@@ -49,6 +57,78 @@ function computeTrend(current: number, previous: number): TrendInfo {
   const pct = Math.round(((current - previous) / previous) * 100);
   const dir = pct > 10 ? "up" : pct < -10 ? "down" : "flat";
   return { dir, pct };
+}
+
+const trendColor = (dir: TrendInfo["dir"]) =>
+  dir === "up" ? "#22c55e"
+  : dir === "down" ? "#ef4444"
+  : dir === "new" ? "#3b82f6"
+  : "rgba(255,255,255,0.3)";
+
+const trendSymbol = (dir: TrendInfo["dir"]) =>
+  dir === "up" ? "↑" : dir === "down" ? "↓" : dir === "new" ? "✦" : dir === "flat" ? "→" : "";
+
+function ScatterTooltip({
+  active,
+  payload,
+  xLabels,
+}: {
+  active?: boolean;
+  payload?: ChartPayload[];
+  xLabels: string[];
+}) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0]?.payload as StripPoint | undefined;
+  if (!p) return null;
+  const period = xLabels[p.x] ?? "";
+  const color = payload[0]?.color ?? payload[0]?.fill ?? "#fff";
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-[#1c1c1e] px-3 py-2 shadow-2xl shadow-black/40">
+      <p className="text-[10px] text-white/50 mb-1">{period}</p>
+      <div className="flex items-center gap-2">
+        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+        <span className="text-[11px] text-white/80">{p.model}</span>
+        <span className="text-[11px] font-semibold text-white ml-auto">{p.units} unit</span>
+      </div>
+    </div>
+  );
+}
+
+function ModelTick({
+  x,
+  y,
+  payload,
+  trends,
+  labelWidth,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value?: string };
+  trends: Record<string, TrendInfo>;
+  labelWidth: number;
+}) {
+  const name = payload?.value ?? "";
+  const t = trends[name] ?? { dir: "none" as const, pct: 0 };
+  const leftX = -labelWidth + 4;
+  const showBadge = t.dir !== "none";
+  const badgeText = !showBadge
+    ? ""
+    : t.dir === "new"
+      ? `${trendSymbol(t.dir)} NEW`
+      : t.dir === "flat" && t.pct === 0
+        ? `${trendSymbol(t.dir)} 0%`
+        : `${trendSymbol(t.dir)} ${t.pct > 0 ? "+" : ""}${t.pct}%`;
+
+  return (
+    <g transform={`translate(${x ?? 0},${y ?? 0})`}>
+      <text x={leftX} y={0} dy={4} textAnchor="start" fontSize={10} fontFamily="inherit">
+        {showBadge && (
+          <tspan fill={trendColor(t.dir)} fontWeight={700}>{badgeText} </tspan>
+        )}
+        <tspan fill="rgba(255,255,255,0.65)">{name}</tspan>
+      </text>
+    </g>
+  );
 }
 
 export function SalesChart({ 
@@ -94,7 +174,6 @@ export function SalesChart({
   const xLabels = data.map(d => d.week as string);
 
   // One point per (period, model) that has sales. x = period index.
-  type StripPoint = { x: number; model: string; units: number };
   const stripPoints: StripPoint[] = [];
   data.forEach((d, i) => {
     laneModels.forEach(({ name: m }) => {
@@ -107,25 +186,6 @@ export function SalesChart({
   // per model to guarantee every lane shows up even if a model has no visible
   // dot in the current viewport.
   const modelNames = laneModels.map(m => m.name);
-
-  // Tooltip that knows how to read scatter payloads with the period label.
-  const ScatterTooltip = ({ active, payload }: { active?: boolean; payload?: any[] }) => {
-    if (!active || !payload?.length) return null;
-    const p = payload[0]?.payload as StripPoint | undefined;
-    if (!p) return null;
-    const period = xLabels[p.x] ?? "";
-    const color = payload[0]?.color ?? payload[0]?.fill ?? "#fff";
-    return (
-      <div className="rounded-xl border border-white/[0.08] bg-[#1c1c1e] px-3 py-2 shadow-2xl shadow-black/40">
-        <p className="text-[10px] text-white/50 mb-1">{period}</p>
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-          <span className="text-[11px] text-white/80">{p.model}</span>
-          <span className="text-[11px] font-semibold text-white ml-auto">{p.units} unit</span>
-        </div>
-      </div>
-    );
-  };
 
   // Height scales with number of lanes for readability (row height ~36px).
   const LANE_HEIGHT = 36;
@@ -148,45 +208,6 @@ export function SalesChart({
   const Y_LABEL_WIDTH = 140;
 
   // Custom Y axis tick: left-aligned trend badge + model name, color-coded.
-  const trendColor = (dir: TrendInfo["dir"]) =>
-    dir === "up" ? "#22c55e"
-    : dir === "down" ? "#ef4444"
-    : dir === "new" ? "#3b82f6"
-    : "rgba(255,255,255,0.3)";
-  const trendSymbol = (dir: TrendInfo["dir"]) =>
-    dir === "up" ? "↑" : dir === "down" ? "↓" : dir === "new" ? "✦" : dir === "flat" ? "→" : "";
-
-  const ModelTick = (props: any) => {
-    const { x, y, payload } = props;
-    const name = payload.value as string;
-    const t = trends[name] ?? { dir: "none" as const, pct: 0 };
-
-    // Left-align within the reserved label area (Y_LABEL_WIDTH), with 4px
-    // padding so text doesn't touch the chart's edge.
-    const leftX = -Y_LABEL_WIDTH + 4;
-
-    // If there's no previous period to compare against, skip the badge entirely.
-    const showBadge = t.dir !== "none";
-    const badgeText = !showBadge
-      ? ""
-      : t.dir === "new"
-      ? `${trendSymbol(t.dir)} NEW`
-      : t.dir === "flat" && t.pct === 0
-      ? `${trendSymbol(t.dir)} 0%`
-      : `${trendSymbol(t.dir)} ${t.pct > 0 ? "+" : ""}${t.pct}%`;
-
-    return (
-      <g transform={`translate(${x},${y})`}>
-        <text x={leftX} y={0} dy={4} textAnchor="start" fontSize={10} fontFamily="inherit">
-          {showBadge && (
-            <tspan fill={trendColor(t.dir)} fontWeight={700}>{badgeText} </tspan>
-          )}
-          <tspan fill="rgba(255,255,255,0.65)">{name}</tspan>
-        </text>
-      </g>
-    );
-  };
-
   return (
     <div className="space-y-6">
       {/* Bar Chart: Weekly Distribution per Brand */}
@@ -262,7 +283,7 @@ export function SalesChart({
                 dataKey="model"
                 allowDuplicatedCategory={false}
                 domain={modelNames}
-                tick={<ModelTick />}
+                tick={<ModelTick trends={trends} labelWidth={Y_LABEL_WIDTH} />}
                 axisLine={false}
                 tickLine={false}
                 width={Y_LABEL_WIDTH}
@@ -272,7 +293,7 @@ export function SalesChart({
               <ZAxis dataKey="units" range={[50, 320]} name="Units" />
               <Tooltip
                 cursor={{ strokeDasharray: "3 3", stroke: "rgba(255,255,255,0.08)" }}
-                content={<ScatterTooltip />}
+                content={<ScatterTooltip xLabels={xLabels} />}
               />
               {laneModels.map((m, i) => (
                 <Scatter

@@ -5,6 +5,31 @@ import { exportToPDF, exportToExcel, type ReportSection } from "@/lib/export";
 import { createClient } from "@sneakervault/supabase/client";
 import { useToast } from "@/components/toast";
 
+type MaybeRelation<T> = T | T[] | null;
+type PackingItemExport = {
+  sell_price: number | null;
+  unit_hpp: number | null;
+  products: MaybeRelation<{ brand: string; model: string }>;
+  packing_sessions: MaybeRelation<{ platform: string | null }>;
+};
+
+type InvoiceExport = {
+  channel: string | null;
+  discount: number | null;
+  marketplace_fee: number | null;
+  total: number | null;
+  sales_invoice_lines: { qty: number | null; unit_cost: number | null }[] | null;
+};
+
+type ExpenseExport = {
+  amount: number | null;
+  expense_categories: MaybeRelation<{ name: string | null; account_code: string | null }>;
+};
+
+function firstRelation<T>(value: MaybeRelation<T>): T | null {
+  return Array.isArray(value) ? value[0] ?? null : value;
+}
+
 export function ReportsExport() {
   const toast = useToast();
 
@@ -23,11 +48,11 @@ export function ReportsExport() {
     ]);
 
     const products = productsRes.data ?? [];
-    const items = packingItemsRes.data ?? [];
+    const items = (packingItemsRes.data ?? []) as unknown as PackingItemExport[];
     const sessions = sessionsRes.data ?? [];
     const returns = returnsRes.data ?? [];
-    const invoices = invoicesRes.data ?? [];
-    const expenses = expensesRes.data ?? [];
+    const invoices = (invoicesRes.data ?? []) as InvoiceExport[];
+    const expenses = (expensesRes.data ?? []) as unknown as ExpenseExport[];
 
     // ═══════════════════════════════════════════
     // SECTION 1: INVENTORY REPORTING
@@ -69,7 +94,7 @@ export function ReportsExport() {
     const modelMap: Record<string, { brand: string; model: string; units: number; revenue: number; hpp: number }> = {};
 
     for (const item of items) {
-      const p = (item as any).products;
+      const p = firstRelation(item.products);
       if (!p) continue;
       const key = `${p.brand}::${p.model}`;
       if (!modelMap[key]) modelMap[key] = { brand: p.brand, model: p.model, units: 0, revenue: 0, hpp: 0 };
@@ -119,7 +144,7 @@ export function ReportsExport() {
       platformMap[platform].sessions++;
     }
     for (const item of items) {
-      const platform = ((item as any).packing_sessions?.platform) ?? "Lainnya";
+      const platform = firstRelation(item.packing_sessions)?.platform ?? "Lainnya";
       if (!platformMap[platform]) platformMap[platform] = { sessions: 0, items: 0 };
       platformMap[platform].items++;
     }
@@ -144,7 +169,7 @@ export function ReportsExport() {
     // SECTION 4: CHANNEL PROFIT + MARKETPLACE COST
     // ═══════════════════════════════════════════
     const channelMap: Record<string, { invoices: number; units: number; revenue: number; cogs: number; fee: number; discount: number }> = {};
-    for (const invoice of invoices as any[]) {
+    for (const invoice of invoices) {
       const channel = invoice.channel ?? "other";
       if (!channelMap[channel]) channelMap[channel] = { invoices: 0, units: 0, revenue: 0, cogs: 0, fee: 0, discount: 0 };
       const lines = invoice.sales_invoice_lines ?? [];
@@ -175,9 +200,10 @@ export function ReportsExport() {
     // SECTION 5: EXPENSE REPORTING
     // ═══════════════════════════════════════════
     const expenseMap: Record<string, { category: string; account: string; count: number; total: number }> = {};
-    for (const expense of expenses as any[]) {
-      const category = expense.expense_categories?.name ?? "Tanpa kategori";
-      const account = expense.expense_categories?.account_code ?? "—";
+    for (const expense of expenses) {
+      const expenseCategory = firstRelation(expense.expense_categories);
+      const category = expenseCategory?.name ?? "Tanpa kategori";
+      const account = expenseCategory?.account_code ?? "—";
       const key = `${account}:${category}`;
       if (!expenseMap[key]) expenseMap[key] = { category, account, count: 0, total: 0 };
       expenseMap[key].count++;

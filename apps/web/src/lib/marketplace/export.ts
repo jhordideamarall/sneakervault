@@ -8,7 +8,7 @@
  * never store marketplace product IDs — they ride along in the template.
  */
 
-export type ExportChannel = "shopee" | "tiktok";
+export type ExportChannel = "shopee" | "tiktok" | "tokopedia";
 
 type ChannelConfig = {
   /** Column header keys that hold the seller SKU (first match wins). */
@@ -21,7 +21,7 @@ type ChannelConfig = {
 
 export const EXPORT_CONFIG: Record<ExportChannel, ChannelConfig> = {
   shopee: {
-    skuKeys: ["et_title_variation_sku", "et_title_parent_sku"],
+    skuKeys: ["et_title_parent_sku", "et_title_variation_sku"],
     stockKeys: ["et_title_variation_stock"],
     priceKeys: ["et_title_variation_price"],
   },
@@ -30,10 +30,23 @@ export const EXPORT_CONFIG: Record<ExportChannel, ChannelConfig> = {
     stockKeys: ["warehouse_quantity"],
     priceKeys: ["price"],
   },
+  tokopedia: {
+    skuKeys: ["seller_sku", "sku_id"],
+    stockKeys: ["warehouse_quantity", "stock", "stok"],
+    priceKeys: ["price"],
+  },
 };
 
 function norm(v: unknown): string {
   return String(v ?? "").trim().toLowerCase();
+}
+
+function findKeyIndex(cells: string[], keys: string[]): number {
+  for (const key of keys) {
+    const idx = cells.findIndex((cell) => cell === norm(key));
+    if (idx !== -1) return idx;
+  }
+  return -1;
 }
 
 /** Find the header row index + the resolved column indices for a channel. */
@@ -52,7 +65,7 @@ export function locateColumns(
     const row = aoa[r] ?? [];
     const cells = row.map(norm);
 
-    const skuCol = cells.findIndex((c) => cfg.skuKeys.some((k) => c === norm(k)));
+    const skuCol = findKeyIndex(cells, cfg.skuKeys);
     if (skuCol === -1) continue;
 
     const stockCols: number[] = [];
