@@ -1,11 +1,12 @@
+import { Suspense } from "react";
 import { Sidebar } from "@/components/dashboard/sidebar";
+import { SidebarWithSignals } from "@/components/dashboard/sidebar-signals-loader";
 import { RightSidebarSlot } from "@/components/dashboard/right-sidebar-slot";
 import { MainShell } from "@/components/dashboard/main-shell";
 import { getCurrentUser } from "@/lib/actions/auth";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { hasRouteAccess } from "@/config/permissions";
-import { getSidebarSignals } from "@/lib/sidebar-signals";
 import type { Role } from "@sneakervault/shared";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@sneakervault/ui";
 import { MailGlobalDialog } from "@/components/dashboard/mail/mail-global-dialog";
@@ -37,9 +38,6 @@ export default async function DashboardLayout({
     redirect("/workspace");
   }
 
-  // Live activity signals (coloured dots) for sidebar menus, gated by role.
-  const signals = await getSidebarSignals(roles);
-
   return (
     <DateFilterProvider>
     <RightPanelProvider>
@@ -53,7 +51,13 @@ export default async function DashboardLayout({
           defaultSize={15}
           className="bg-[#262626] rounded-md overflow-hidden"
         >
-          <Sidebar roles={roles} fullName={profile.full_name} userId={profile.id} signals={signals} />
+          <Suspense
+            fallback={
+              <Sidebar roles={roles} fullName={profile.full_name} userId={profile.id} />
+            }
+          >
+            <SidebarWithSignals roles={roles} fullName={profile.full_name} userId={profile.id} />
+          </Suspense>
         </ResizablePanel>
 
         <ResizableHandle />
