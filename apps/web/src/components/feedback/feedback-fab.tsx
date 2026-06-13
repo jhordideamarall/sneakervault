@@ -9,7 +9,9 @@ export function FeedbackFab({ userId }: { userId: string }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  if (process.env.NEXT_PUBLIC_UAT_MODE !== "true") return null;
+  // Tampil default selama fase UAT. Sembunyikan pasca go-live dengan set
+  // NEXT_PUBLIC_UAT_MODE="false" (lalu redeploy).
+  if (process.env.NEXT_PUBLIC_UAT_MODE === "false") return null;
 
   return (
     <>
