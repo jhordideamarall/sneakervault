@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ImageUp, X } from "lucide-react";
 import { createClient } from "@sneakervault/supabase/client";
 import { createFeedback } from "@/lib/actions/feedback";
 
@@ -107,15 +108,44 @@ export function FeedbackForm({ defaultPath, userId, onDone }: Props) {
           onChange={(e) => setPagePath(e.target.value)}
         />
       </label>
-      <label className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1">
         <span className="text-white/50">Screenshot (boleh lebih dari satu)</span>
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-        />
-      </label>
+        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-white/20 bg-white/[0.03] px-3 py-4 text-white/60 transition-colors hover:border-amber-400/60 hover:bg-amber-400/5 hover:text-amber-200">
+          <ImageUp size={18} />
+          <span>Klik untuk pilih gambar / screenshot</span>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) =>
+              setFiles((prev) => [...prev, ...Array.from(e.target.files ?? [])])
+            }
+          />
+        </label>
+        {files.length > 0 && (
+          <ul className="mt-1 flex flex-col gap-1">
+            {files.map((f, i) => (
+              <li
+                key={`${f.name}-${i}`}
+                className="flex items-center justify-between gap-2 rounded-md bg-white/[0.04] px-2 py-1.5 text-xs text-white/70"
+              >
+                <span className="truncate">{f.name}</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFiles((prev) => prev.filter((_, idx) => idx !== i))
+                  }
+                  className="shrink-0 text-white/40 hover:text-red-300"
+                  aria-label="Hapus screenshot"
+                >
+                  <X size={14} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       {err && <p className="text-red-400">{err}</p>}
       <button
         disabled={busy || !title.trim() || !description.trim()}
