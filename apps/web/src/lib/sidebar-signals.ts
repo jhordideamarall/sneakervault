@@ -102,6 +102,11 @@ export async function getSidebarSignals(roles: Role[]): Promise<SidebarSignals> 
         supabase.from("delete_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
       ).then((c) => mark("/delete-requests", true, c)),
     );
+    jobs.push(
+      headCount(() =>
+        supabase.from("feedback_reports").select("id", { count: "exact", head: true }).eq("status", "baru"),
+      ).then((c) => mark("/feedback", true, c)),
+    );
   }
 
   await Promise.all(jobs);

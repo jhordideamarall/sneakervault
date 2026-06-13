@@ -43,6 +43,7 @@ import {
   Calculator,
   Database,
   LifeBuoy,
+  MessageSquarePlus,
 } from "lucide-react";
 import { MailInbox } from "./mail/mail-inbox";
 import {
@@ -169,6 +170,7 @@ const navGroups: NavGroup[] = [
     icon: i(Settings),
     items: [
       { href: "/panduan", label: "Panduan Pemakaian", icon: i(LifeBuoy) },
+      { href: "/feedback", label: "Feedback UAT", icon: i(MessageSquarePlus) },
       { href: "/activity-log", label: "Activity Log", icon: i(ScrollText) },
       { href: "/delete-requests", label: "Req. Hapus", icon: i(Trash2) },
       { href: "/settings/data-sync", label: "Sinkronisasi Data", icon: i(Database) },
