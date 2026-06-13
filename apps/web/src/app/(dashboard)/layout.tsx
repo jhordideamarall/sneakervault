@@ -11,6 +11,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@sneakerva
 import { MailGlobalDialog } from "@/components/dashboard/mail/mail-global-dialog";
 import { RealtimeProvider } from "@/components/dashboard/realtime-provider";
 import { ViewAsBanner } from "@/components/dashboard/view-as-banner";
+import { FeedbackFab } from "@/components/feedback/feedback-fab";
 import { DateFilterProvider } from "@/lib/use-date-filter";
 import { RightPanelProvider } from "@/lib/use-right-panel";
 
@@ -44,6 +45,7 @@ export default async function DashboardLayout({
     <RightPanelProvider>
     <div className="flex h-screen w-full overflow-hidden bg-[#1F1F1E] gap-2 p-2">
       <MailGlobalDialog userId={profile.id} />
+      <FeedbackFab userId={profile.id} />
       <RealtimeProvider />
       <ResizablePanelGroup direction="horizontal" className="flex-1">
         {/* Left Sidebar — resizable */}
