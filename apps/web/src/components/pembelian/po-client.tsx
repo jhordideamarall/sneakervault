@@ -486,7 +486,7 @@ export function PurchaseOrderClient({
           </div>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-white">
-              Purchase Order
+              Pembelian Barang
             </h1>
             <p className="text-sm text-white/50">
               Daftar pembelian dari finance ke vendor sebelum barang masuk
@@ -809,7 +809,7 @@ function FormModal({
         <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-4 flex-shrink-0">
           <h2 className="text-base font-semibold text-white">
             {editing.mode === "new"
-              ? "Purchase Order Baru"
+              ? "Pembelian Barang Baru"
               : `Edit ${editing.po.po_number}`}
           </h2>
           <button
@@ -1441,7 +1441,7 @@ function EmptyState({
         className="mx-auto mb-4 text-white/30"
       />
       <h3 className="text-base font-medium text-white">
-        {hasFilter ? "Tidak ada PO yang cocok" : "Belum ada Purchase Order"}
+        {hasFilter ? "Tidak ada PO yang cocok" : "Belum ada Pembelian Barang"}
       </h3>
       <p className="mx-auto mt-1 max-w-md text-sm text-white/50">
         {hasFilter

@@ -1220,9 +1220,14 @@ export type Database = {
           is_active: boolean
           model: string
           price_offline: number
+          price_shopee: number | null
+          price_tiktok: number | null
+          price_tokopedia: number | null
+          price_website: number | null
           quantity: number
           sell_price: number
           size: number
+          size_label: string
           sku: string
           updated_at: string
         }
@@ -1243,9 +1248,14 @@ export type Database = {
           is_active?: boolean
           model: string
           price_offline?: number
+          price_shopee?: number | null
+          price_tiktok?: number | null
+          price_tokopedia?: number | null
+          price_website?: number | null
           quantity?: number
           sell_price?: number
-          size: number
+          size?: number
+          size_label?: string
           sku: string
           updated_at?: string
         }
@@ -1266,9 +1276,14 @@ export type Database = {
           is_active?: boolean
           model?: string
           price_offline?: number
+          price_shopee?: number | null
+          price_tiktok?: number | null
+          price_tokopedia?: number | null
+          price_website?: number | null
           quantity?: number
           sell_price?: number
           size?: number
+          size_label?: string
           sku?: string
           updated_at?: string
         }
@@ -2421,6 +2436,7 @@ export type Database = {
           quantity: number
           sell_price: number
           size: number
+          size_label: string
           sku: string
           supplier_name: string | null
           total_models: number

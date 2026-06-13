@@ -678,7 +678,7 @@ function FormModal({
 
           {form.source === "po" ? (
             <div>
-              <FieldLabel htmlFor="po_id">Purchase Order *</FieldLabel>
+              <FieldLabel htmlFor="po_id">Pembelian Barang *</FieldLabel>
               <Select
                 id="po_id"
                 value={form.po_id}

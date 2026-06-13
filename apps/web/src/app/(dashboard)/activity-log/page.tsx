@@ -79,7 +79,7 @@ const entityLabels: Record<string, string> = {
   purchase_invoice: "Faktur Pembelian",
   customer_payment: "Pembayaran Customer",
   vendor_payment: "Pembayaran Vendor",
-  purchase_order: "Purchase Order",
+  purchase_order: "Pembelian Barang",
   journal_entry: "Jurnal",
   internal_message: "Pesan Internal",
   bank_account: "Akun Bank",

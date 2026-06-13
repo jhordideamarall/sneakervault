@@ -9,13 +9,20 @@ export type MarketplaceProductImportDraft = {
   marketplace_variation_id?: string;
   brand: string;
   model: string;
+  /** sku = colorway anchor (parent/seller SKU), SAMA antar size = variant. */
   sku: string;
-  size: number;
+  /** size_label apa adanya dari marketplace (mis. "38 1/2"). */
+  size: string;
+  /** size numerik (desimal) untuk match lintas-sumber (38 1/2 & 38.5 → 38.5). */
+  size_value: number;
   color?: string;
   barcode: string;
   quantity: number;
   sell_price: number;
   price_offline: number;
+  price_shopee?: number;
+  price_tiktok?: number;
+  price_tokopedia?: number;
 };
 
 export type MarketplaceProductImportRejectedRow = {
@@ -236,22 +243,24 @@ function parseShopeeProducts(aoa: unknown[][]): MarketplaceProductImportParseRes
     if (parentSku) parentSkuByProduct.set(productId, parentSku);
 
     const baseSku = parentSku || parentSkuByProduct.get(productId) || "";
-    const size = extractShoeSize(variationName);
-    if (!size) {
+    const sizeNum = extractShoeSize(variationName);
+    if (!sizeNum) {
       rejected.push({ row: r + 1, reason: unsupportedSizeReason(variationName) });
       continue;
     }
+    const sizeLabel = String(variationName).trim();
 
     const marketplaceSku = shopeeRowKey({
       productId,
       variationId,
       parentSku: baseSku,
       variationSku,
-      size,
+      size: sizeNum,
     });
     if (!marketplaceSku) continue;
 
-    const sku = variationSku || (baseSku ? `${baseSku}-${sizeForSku(size)}` : `SHOPEE-${variationId}`);
+    // SKU produk = colorway (SKU Induk); size = variant; barcode = variation id (unik per varian).
+    const sku = baseSku || variationSku || `SHOPEE-${productId}`;
     const { brand, model } = splitBrandModel(productName);
     const price = readNumber(readCell(row, priceCol));
     rows.push({
@@ -261,11 +270,13 @@ function parseShopeeProducts(aoa: unknown[][]): MarketplaceProductImportParseRes
       brand,
       model,
       sku,
-      size,
-      barcode: readCell(row, gtinCol) || variationId || sku,
+      size: sizeLabel,
+      size_value: sizeNum,
+      barcode: readCell(row, gtinCol) || variationId || `${sku}-${variationId}`,
       quantity: Math.max(0, Math.trunc(readNumber(readCell(row, stockCol)))),
       sell_price: price,
       price_offline: price,
+      price_shopee: price,
     });
   }
 
@@ -298,13 +309,15 @@ function parseTikTokProducts(aoa: unknown[][]): MarketplaceProductImportParseRes
     if (!productName || (!sellerSku && !skuId)) continue;
     if (isInstructionValue(skuId) && (!sellerSku || isInstructionValue(sellerSku))) continue;
 
-    const size = extractShoeSize(variation || productName);
-    if (!size) {
+    const sizeNum = extractShoeSize(variation || productName);
+    if (!sizeNum) {
       rejected.push({ row: r + 1, reason: unsupportedSizeReason(variation || productName) });
       continue;
     }
-    const marketplaceSku = sellerSku ? skuWithSize(sellerSku, size) : skuId;
-    const sku = marketplaceSku || `TIKTOK-${sanitizeGeneratedPart(skuId)}`;
+    const sizeLabel = String(variation || "").trim() || String(sizeNum);
+    // marketplace_sku = kunci per-varian (unik) untuk mapping; sku produk = SKU Penjual (colorway).
+    const marketplaceSku = sellerSku ? skuWithSize(sellerSku, sizeNum) : skuId;
+    const sku = sellerSku || `TIKTOK-${sanitizeGeneratedPart(productId || skuId)}`;
     const { brand, model } = splitBrandModel(productName, readCell(row, brandCol));
     const price = readNumber(readCell(row, priceCol));
     const quantity = stockCols.reduce((sum, col) => sum + Math.max(0, Math.trunc(readNumber(readCell(row, col)))), 0);
@@ -316,11 +329,13 @@ function parseTikTokProducts(aoa: unknown[][]): MarketplaceProductImportParseRes
       brand,
       model,
       sku,
-      size,
-      barcode: skuId || sellerSku || sku,
+      size: sizeLabel,
+      size_value: sizeNum,
+      barcode: skuId || `${sku}-${sizeLabel}`,
       quantity,
       sell_price: price,
       price_offline: price,
+      price_tiktok: price,
     });
   }
 
@@ -363,16 +378,17 @@ function parseTokopediaProducts(aoa: unknown[][]): MarketplaceProductImportParse
     if (!productName || (!sellerSku && !skuId)) continue;
     if (isInstructionValue(skuId) && (!sellerSku || isInstructionValue(sellerSku))) continue;
 
-    const size = extractShoeSize(variation || productName);
-    if (!size) {
+    const sizeNum = extractShoeSize(variation || productName);
+    if (!sizeNum) {
       rejected.push({ row: r + 1, reason: unsupportedSizeReason(variation || productName) });
       continue;
     }
-    const marketplaceSku = sellerSku ? skuWithSize(sellerSku, size) : skuId;
+    const sizeLabel = String(variation || "").trim() || String(sizeNum);
+    const marketplaceSku = sellerSku ? skuWithSize(sellerSku, sizeNum) : skuId;
     if (seen.has(marketplaceSku)) continue;
     seen.add(marketplaceSku);
 
-    const sku = marketplaceSku || `TOKOPEDIA-${sanitizeGeneratedPart(skuId)}`;
+    const sku = sellerSku || `TOKOPEDIA-${sanitizeGeneratedPart(skuId)}`;
     const { brand, model } = splitBrandModel(productName);
     const price = readNumber(readCell(row, priceCol));
     rows.push({
@@ -381,11 +397,13 @@ function parseTokopediaProducts(aoa: unknown[][]): MarketplaceProductImportParse
       brand,
       model,
       sku,
-      size,
-      barcode: skuId || sellerSku || sku,
+      size: sizeLabel,
+      size_value: sizeNum,
+      barcode: skuId || `${sku}-${sizeLabel}`,
       quantity: 0,
       sell_price: price,
       price_offline: price,
+      price_tokopedia: price,
     });
   }
 

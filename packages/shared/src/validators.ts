@@ -5,7 +5,9 @@ export const productInputSchema = z.object({
   brand: z.string().min(1),
   model: z.string().min(1),
   sku: z.string().min(1),
-  size: z.coerce.number().positive(),
+  // Free-text size (mis. Adidas "42 2/3", "37,5", "40"). Numerik `size` di DB
+  // diturunkan otomatis oleh trigger products_sync_size untuk sorting.
+  size_label: z.string().trim().min(1),
   color: z.string().min(1),
   barcode: z.string().min(1),
   quantity: z.coerce.number().int().nonnegative().default(0),
@@ -40,6 +42,7 @@ export type ProductConditionInput = z.infer<typeof productConditionInputSchema>;
 // ─── Product Update (now includes price_offline, condition, image) ──────────
 export const productUpdateSchema = z.object({
   id: z.string().uuid(),
+  size_label: z.string().trim().min(1).optional(),
   hpp: z.coerce.number().nonnegative().optional(),
   sell_price: z.coerce.number().nonnegative().optional(),
   price_offline: z.coerce.number().nonnegative().optional(),

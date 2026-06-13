@@ -88,7 +88,7 @@ export function InboundClient({ suppliers }: { suppliers: Supplier[] }) {
     startTransition(async () => {
       const result = await registerProduct({
         ...regForm,
-        size: Number(regForm.size),
+        size_label: regForm.size,
         barcode: barcode.trim(),
         quantity: 0,
         hpp: 0,
@@ -284,14 +284,13 @@ export function InboundClient({ suppliers }: { suppliers: Supplier[] }) {
                 </div>
                 <div className="space-y-2">
                   <FieldLabel required>Size</FieldLabel>
-                  <Input 
-                    type="number" 
-                    step="0.5" 
-                    value={regForm.size} 
-                    onChange={(e) => setRegForm({ ...regForm, size: e.target.value })} 
-                    placeholder="Contoh: 42"
+                  <Input
+                    type="text"
+                    value={regForm.size}
+                    onChange={(e) => setRegForm({ ...regForm, size: e.target.value })}
+                    placeholder="Contoh: 42 atau 42 2/3"
                   />
-                  <FieldError message={fieldErrors.size} />
+                  <FieldError message={fieldErrors.size_label} />
                 </div>
                 <div className="space-y-2">
                   <FieldLabel>Warna</FieldLabel>

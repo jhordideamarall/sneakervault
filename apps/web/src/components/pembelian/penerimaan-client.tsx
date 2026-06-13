@@ -648,8 +648,8 @@ function EmptyState() {
         Tidak ada PO yang menunggu diterima
       </h3>
       <p className="mx-auto mt-1 max-w-md text-sm text-white/50">
-        Penerimaan akan muncul di sini setelah finance menyetujui Purchase Order.
-        Buat dan setujui PO baru di menu <strong>Pembelian → Purchase Order</strong>.
+        Penerimaan akan muncul di sini setelah finance menyetujui Pembelian Barang.
+        Buat dan setujui PO baru di menu <strong>Pembelian → Pembelian Barang</strong>.
       </p>
     </div>
   );

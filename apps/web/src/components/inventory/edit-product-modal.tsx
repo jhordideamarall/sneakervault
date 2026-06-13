@@ -28,6 +28,7 @@ type Props = {
     brand: string;
     model: string;
     size: number;
+    size_label: string;
     color: string | null;
     hpp: number;
     sell_price: number;
@@ -119,7 +120,7 @@ export function EditProductModal({
         <DialogHeader>
           <DialogTitle>Edit Produk</DialogTitle>
           <DialogDescription>
-            {product.brand} {product.model} — Size {product.size}
+            {product.brand} {product.model} — Size {product.size_label}
           </DialogDescription>
         </DialogHeader>
 
