@@ -58,6 +58,12 @@ export function FeedbackForm({ defaultPath, userId, onDone }: Props) {
         setErr("Periksa input: judul/deskripsi wajib diisi.");
         return;
       }
+      if (res.attachmentError) {
+        setErr(
+          "Laporan tersimpan, tapi sebagian screenshot gagal diunggah. Lampirkan ulang lewat komentar di laporan.",
+        );
+        return;
+      }
       onDone();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Gagal mengirim");
