@@ -105,3 +105,7 @@ export type CoaNormalBalance = "debit" | "credit";
  * use `price_offline` (lebih murah per kebijakan client).
  */
 export type PriceChannel = "online" | "offline";
+
+/** UAT feedback module severity & lifecycle. */
+export type FeedbackSeverity = "blocker" | "mengganggu" | "minor";
+export type FeedbackStatus = "baru" | "diproses" | "selesai" | "ditolak";
