@@ -61,6 +61,7 @@ export async function createFeedback(
   if (error || !report)
     return { error: { _form: ["Gagal menyimpan laporan"] } };
 
+  let attachmentError = false;
   if (attachments.length > 0) {
     const rows = attachments.map((a) => ({
       report_id: report.id,
@@ -68,7 +69,10 @@ export async function createFeedback(
       file_name: a.file_name,
       created_by: profile.id,
     }));
-    await supabase.from("feedback_attachments").insert(rows);
+    const { error: attachErr } = await supabase
+      .from("feedback_attachments")
+      .insert(rows);
+    attachmentError = Boolean(attachErr);
   }
 
   await logActivity({
@@ -80,7 +84,12 @@ export async function createFeedback(
   });
 
   revalidatePath("/feedback");
-  return { ok: true, id: report.id, report_no: report.report_no };
+  return {
+    ok: true,
+    id: report.id,
+    report_no: report.report_no,
+    attachmentError,
+  };
 }
 
 /** Add a comment to a report. RLS enforces visibility; we also attach files. */
@@ -106,6 +115,7 @@ export async function addFeedbackComment(
   if (error || !comment)
     return { error: { _form: ["Gagal menyimpan komentar (cek akses)"] } };
 
+  let attachmentError = false;
   if (attachments.length > 0) {
     const rows = attachments.map((a) => ({
       report_id: parsed.data.report_id,
@@ -114,11 +124,14 @@ export async function addFeedbackComment(
       file_name: a.file_name,
       created_by: profile.id,
     }));
-    await supabase.from("feedback_attachments").insert(rows);
+    const { error: attachErr } = await supabase
+      .from("feedback_attachments")
+      .insert(rows);
+    attachmentError = Boolean(attachErr);
   }
 
   revalidatePath("/feedback");
-  return { ok: true };
+  return { ok: true, attachmentError };
 }
 
 /** Owner-only: change report status; stamp resolver on terminal states. */
