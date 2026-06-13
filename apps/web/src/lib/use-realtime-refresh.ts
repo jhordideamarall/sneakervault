@@ -18,13 +18,16 @@ export function useRealtimeRefresh() {
 
     const debouncedRefresh = () => {
       if (timeout) clearTimeout(timeout);
-      timeout = setTimeout(() => router.refresh(), 300);
+      timeout = setTimeout(() => router.refresh(), 800);
     };
 
+    // NB: `activity_logs` sengaja TIDAK di-subscribe — ia berubah pada hampir
+    // setiap aksi (logActivity), jadi men-trigger full server refetch terus-menerus.
+    // Sidebar signals tidak bergantung padanya; feed aktivitas cukup refresh saat
+    // halaman dibuka/navigasi.
     const channelName = `global-realtime:${crypto.randomUUID()}`;
     const channel = supabase
       .channel(channelName)
-      .on("postgres_changes", { event: "*", schema: "public", table: "activity_logs" }, debouncedRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, debouncedRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "packing_sessions" }, debouncedRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "packing_items" }, debouncedRefresh)
