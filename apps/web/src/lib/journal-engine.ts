@@ -228,7 +228,7 @@ export async function journalForSalesInvoice(args: {
   invoice_id: string;
   invoice_number: string;
   invoice_date: string;
-  channel: "wa" | "shopee" | "tiktok" | "offline" | "website" | "mixed";
+  channel: "wa" | "shopee" | "tiktok" | "tokopedia" | "offline" | "website" | "mixed";
   total: number;
   subtotal: number;
   discount: number;
@@ -242,6 +242,7 @@ export async function journalForSalesInvoice(args: {
   let revenueCode = "4.1.01"; // WA/Offline default
   if (args.channel === "shopee") revenueCode = "4.1.02";
   else if (args.channel === "tiktok") revenueCode = "4.1.03";
+  else if (args.channel === "tokopedia") revenueCode = "4.1.04";
 
   const lines: JournalLineInput[] = [];
 

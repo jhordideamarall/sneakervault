@@ -8,7 +8,6 @@ import {
   cancelPackingSession,
   finalizePackingSession,
 } from "@/lib/actions/outbound";
-import { updateSessionStatus } from "@/lib/actions/status";
 import { PLATFORMS, COURIERS } from "@sneakervault/shared";
 import {
   Button, Card, Input, Select, FieldLabel, FieldError, Alert, Badge,
@@ -18,17 +17,12 @@ import { useHardwareScanner } from "@sneakervault/barcode";
 import { CameraScanner } from "@/components/scanner/camera-scanner";
 import { 
   PackageMinus, 
-  Truck, 
   ShoppingCart, 
   QrCode, 
   Camera, 
   XCircle, 
   CheckCircle2, 
-  AlertTriangle,
-  User,
   Trash2,
-  ChevronRight,
-  Info,
   Search
 } from "lucide-react";
 
@@ -169,20 +163,6 @@ export function OutboundClient() {
       }
       toast.push("Packing selesai, siap kirim", "success");
       // Keep session but update local status? For now reset for simplicity
-      resetSession();
-    });
-  }
-
-  function handleShip() {
-    if (!session) return;
-    startTransition(async () => {
-      const result = await updateSessionStatus({ session_id: session.id, status: "shipped" });
-      if ("error" in result && result.error) {
-        const msg = (result.error as { _form?: string[] })._form?.[0] ?? "Gagal update status";
-        toast.push(msg, "error");
-        return;
-      }
-      toast.push("Status: Dikirim", "success");
       resetSession();
     });
   }

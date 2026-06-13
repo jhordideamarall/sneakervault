@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Button,
   Input,
+  NumberInput,
   Select,
   FieldLabel,
   Alert,
@@ -496,14 +497,11 @@ export function MutasiBankClient({
                 </div>
                 <div>
                   <FieldLabel htmlFor="amount">Jumlah *</FieldLabel>
-                  <Input
+                  <NumberInput
                     id="amount"
-                    type="number"
                     min={0}
                     value={form.amount}
-                    onChange={(e) =>
-                      setForm({ ...form, amount: Number(e.target.value) })
-                    }
+                    onValueChange={(value) => setForm({ ...form, amount: value })}
                   />
                 </div>
               </div>

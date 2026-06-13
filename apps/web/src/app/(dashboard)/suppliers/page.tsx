@@ -6,7 +6,7 @@ export default async function SuppliersPage() {
   
   return (
     <SuppliersClient
-      initialSuppliers={suppliers as any}
+      initialSuppliers={suppliers as Parameters<typeof SuppliersClient>[0]["initialSuppliers"]}
     />
   );
 }

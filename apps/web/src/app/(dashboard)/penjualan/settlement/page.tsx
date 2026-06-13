@@ -5,11 +5,10 @@ export default function SettlementPage() {
     <div className="flex flex-col gap-6 p-6">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-white">
-          Settlement Marketplace
+          Rekonsiliasi Settlement Marketplace
         </h1>
         <p className="text-white/50">
-          Rekonsiliasi pencairan dana marketplace ke finance — tahap belum cair
-          (tertahan) lalu tahap cair (masuk bank).
+          Upload laporan pencairan dana marketplace setelah pesanan diimport. Sistem melunasi invoice terkait, mencatat penerimaan bank bersih, dan membukukan biaya marketplace aktual.
         </p>
       </div>
 

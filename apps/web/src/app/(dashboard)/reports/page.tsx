@@ -200,6 +200,7 @@ async function ProfitByModelTable({
 
 async function AgingTable() {
   const aging = await getAgingReport() as { id: string; brand: string; model: string; size: number; quantity: number; hpp: number; first_inbound_at: string | null }[];
+  const nowMs = nowWIB().getTime();
 
   if (aging.length === 0) {
     return (
@@ -212,7 +213,7 @@ async function AgingTable() {
   const totalTied = aging.reduce((s, p) => s + p.quantity * p.hpp, 0);
   const oldItems = aging.filter(p => {
     if (!p.first_inbound_at) return false;
-    return (Date.now() - new Date(p.first_inbound_at).getTime()) / 86400000 > 30;
+    return (nowMs - new Date(p.first_inbound_at).getTime()) / 86400000 > 30;
   });
 
   return (
@@ -245,7 +246,7 @@ async function AgingTable() {
         <tbody>
           {aging.slice(0, 20).map((p) => {
             const ageDays = p.first_inbound_at
-              ? Math.floor((Date.now() - new Date(p.first_inbound_at).getTime()) / 86400000)
+              ? Math.floor((nowMs - new Date(p.first_inbound_at).getTime()) / 86400000)
               : null;
             const status = ageDays === null ? "—" : ageDays > 60 ? "Kritis" : ageDays > 30 ? "Perhatian" : "Aman";
             const statusStyle = status === "Kritis" ? "bg-red-500/10 text-red-400 border-red-500/20" : status === "Perhatian" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";

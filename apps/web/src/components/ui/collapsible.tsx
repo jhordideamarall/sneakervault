@@ -64,7 +64,7 @@ const CollapsibleTrigger = React.forwardRef<
 >(({ className, children, asChild, ...props }, ref) => {
   const { open, onOpenChange } = useCollapsible();
   
-  const onClick = (e: React.MouseEvent) => {
+  const onClick = () => {
     onOpenChange(!open);
   };
 
@@ -73,7 +73,7 @@ const CollapsibleTrigger = React.forwardRef<
     return React.cloneElement(child, {
       onClick: (e: React.MouseEvent) => {
         if (child.props.onClick) child.props.onClick(e);
-        onClick(e);
+        onClick();
       },
     });
   }

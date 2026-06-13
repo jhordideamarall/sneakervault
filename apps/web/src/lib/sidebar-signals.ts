@@ -34,12 +34,6 @@ export async function getSidebarSignals(roles: Role[]): Promise<SidebarSignals> 
   if (has("owner", "admin_gudang")) {
     jobs.push(
       headCount(() =>
-        supabase.from("products").select("id", { count: "exact", head: true })
-          .eq("is_active", true).gt("quantity", 0).lt("quantity", 3),
-      ).then((c) => mark("/inventory", false, c)),
-    );
-    jobs.push(
-      headCount(() =>
         supabase.from("stock_opname_sessions").select("id", { count: "exact", head: true }).eq("status", "review"),
       ).then((c) => mark("/inventory/opname", false, c)),
     );
@@ -63,7 +57,10 @@ export async function getSidebarSignals(roles: Role[]): Promise<SidebarSignals> 
   if (has("owner", "finance")) {
     jobs.push(
       headCount(() =>
-        supabase.from("sales_invoices").select("id", { count: "exact", head: true }).eq("settlement_status", "pending"),
+        supabase.from("sales_invoices").select("id", { count: "exact", head: true })
+          .in("channel", ["shopee", "tiktok", "tokopedia"])
+          .eq("status", "issued")
+          .eq("settlement_status", "none"),
       ).then((c) => mark("/penjualan/settlement", false, c)),
     );
   }

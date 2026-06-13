@@ -14,10 +14,13 @@
 - [x] Commit atomik via RPC `import_marketplace_order_atomic`
 - [x] Catat batch ke `marketplace_imports` (kind=order, marketplace, period dari order_date, status confirmed)
 - [x] Regenerate Database types (`packages/supabase/src/types.ts`)
+- [x] Guard file template stok/harga marketplace agar tidak diproses sebagai import pesanan
+- [x] Validasi template per tab marketplace tanpa auto-switch channel
+- [x] Skip baris order batal/cancel/refund/return saat parse file marketplace
 - [x] type-check hijau
 
 ## Blockers
-- E2E dengan file Excel nyata belum dijalankan (perlu file + login). Header Tiktok/Tokopedia perlu validasi mapping saat ada file asli — parser sudah pakai alias + fallback.
+- E2E order import dengan file laporan pesanan nyata belum dijalankan (perlu file + login). Header Tiktok/Tokopedia perlu validasi mapping saat ada file asli — parser sudah pakai alias + fallback.
 
 ## Files Modified
 - apps/web/src/lib/marketplace/parsers.ts (baru)
@@ -29,3 +32,5 @@
 - Single source of truth = sistem; diff hanya expose mismatch, owner approve/remap manual.
 - Commit re-resolve server-side (otoritatif) lalu RPC per order; blocked/duplicate dilewati.
 - RPC mirror pos_checkout (terbukti) — risiko runtime rendah; kolom identik.
+- 2026-06-12: File Shopee `shopee_mass_update_sales_info_318480383_20260611124242.xlsx` adalah template update stok/harga, bukan laporan pesanan. Import pesanan sekarang menolak file tipe ini dengan toast yang mengarahkan ke Penjualan -> Export Stok.
+- 2026-06-12: Template order Shopee/TikTok/Tokopedia diproses sesuai tab yang dipilih. Sistem tidak auto-detect/auto-switch channel; salah tab ditolak. Baris cancelled/refund/return tidak ikut jadi invoice.

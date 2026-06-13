@@ -6,7 +6,7 @@ import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 
 export async function createSupplier(input: unknown) {
-  const profile = await requireRole(["owner", "admin_gudang"]);
+  const profile = await requireRole(["owner", "admin_gudang", "finance"]);
   const parsed = supplierInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
@@ -19,7 +19,7 @@ export async function createSupplier(input: unknown) {
 }
 
 export async function updateSupplier(id: string, input: unknown) {
-  const profile = await requireRole(["owner", "admin_gudang"]);
+  const profile = await requireRole(["owner", "admin_gudang", "finance"]);
   const parsed = supplierInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 

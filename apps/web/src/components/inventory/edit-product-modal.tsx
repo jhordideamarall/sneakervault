@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition, type ChangeEvent } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,7 @@ import {
   DialogDescription,
   Button,
   Input,
+  NumberInput,
   FieldLabel,
   FieldError,
   Alert,
@@ -16,6 +17,8 @@ import {
 import { updateProduct } from "@/lib/actions/products";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
+import { createClient } from "@sneakervault/supabase/client";
+import { ImageOff, Trash2, Upload } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -26,6 +29,7 @@ type Props = {
     model: string;
     size: number;
     color: string | null;
+    hpp: number;
     sell_price: number;
     price_offline: number;
     image_url: string | null;
@@ -44,19 +48,48 @@ export function EditProductModal({
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState({
+    hpp: product.hpp,
     sell_price: product.sell_price,
     price_offline: product.price_offline,
     color: product.color ?? "",
     image_url: product.image_url ?? "",
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [uploading, setUploading] = useState(false);
+
+  async function handlePhotoUpload(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.currentTarget.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.push("File harus berupa gambar", "error");
+      return;
+    }
+    setUploading(true);
+    const supabase = createClient();
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+    const path = `products/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage
+      .from("product-photos")
+      .upload(path, file, { upsert: false, cacheControl: "3600" });
+    if (error) {
+      toast.push(`Gagal upload foto: ${error.message}`, "error");
+      setUploading(false);
+      return;
+    }
+    const { data } = supabase.storage.from("product-photos").getPublicUrl(path);
+    setForm((prev) => ({ ...prev, image_url: data.publicUrl }));
+    setUploading(false);
+  }
 
   function handleSave() {
     setFieldErrors({});
     startTransition(async () => {
       const patch: Record<string, unknown> = { id: product.id, color: form.color };
       if (canEditPrice) {
+        patch.hpp = form.hpp;
         patch.sell_price = form.sell_price;
         patch.price_offline = form.price_offline;
       }
@@ -103,45 +136,85 @@ export function EditProductModal({
 
           {canEditImage && (
             <div>
-              <FieldLabel htmlFor="image_url">URL Foto Produk</FieldLabel>
-              <Input
-                id="image_url"
-                type="url"
-                value={form.image_url}
-                onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-                placeholder="https://... (copy dari Google atau galeri)"
-              />
-              <p className="mt-1 text-xs text-white/40">
-                Bisa paste link gambar dari Google atau dari foto internal. Kosongkan untuk menghapus.
-              </p>
-              {form.image_url && (
-                <div className="mt-3 h-24 w-24 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.02]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={form.image_url}
-                    alt="Preview"
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).style.display = "none";
-                    }}
-                  />
+              <FieldLabel>Foto Produk</FieldLabel>
+              <div className="mt-2 flex items-center gap-3">
+                <div className="flex h-24 w-24 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.02]">
+                  {form.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={form.image_url}
+                      alt="Preview"
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-white/25">
+                      <ImageOff size={22} />
+                    </div>
+                  )}
                 </div>
-              )}
+                <div className="space-y-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                  >
+                    <Upload size={14} className="mr-1.5" />
+                    {uploading ? "Upload..." : form.image_url ? "Ganti Foto" : "Upload Foto"}
+                  </Button>
+                  {form.image_url && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setForm({ ...form, image_url: "" })}
+                    >
+                      <Trash2 size={14} className="mr-1.5" />
+                      Hapus Foto
+                    </Button>
+                  )}
+                </div>
+              </div>
               <FieldError message={fieldErrors.image_url} />
             </div>
           )}
 
           {canEditPrice ? (
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <FieldLabel htmlFor="hpp">HPP / Modal (Rp)</FieldLabel>
+                <NumberInput
+                  id="hpp"
+                  min={0}
+                  value={form.hpp}
+                  onValueChange={(value) =>
+                    setForm({ ...form, hpp: value })
+                  }
+                />
+                <p className="mt-1 text-[11px] text-white/40">
+                  Modal per SKU
+                </p>
+                <FieldError message={fieldErrors.hpp} />
+              </div>
               <div>
                 <FieldLabel htmlFor="sell_price">Harga Online (Rp)</FieldLabel>
-                <Input
+                <NumberInput
                   id="sell_price"
-                  type="number"
                   min={0}
                   value={form.sell_price}
-                  onChange={(e) =>
-                    setForm({ ...form, sell_price: Number(e.target.value) })
+                  onValueChange={(value) =>
+                    setForm({ ...form, sell_price: value })
                   }
                 />
                 <p className="mt-1 text-[11px] text-white/40">
@@ -151,13 +224,12 @@ export function EditProductModal({
               </div>
               <div>
                 <FieldLabel htmlFor="price_offline">Harga Offline (Rp)</FieldLabel>
-                <Input
+                <NumberInput
                   id="price_offline"
-                  type="number"
                   min={0}
                   value={form.price_offline}
-                  onChange={(e) =>
-                    setForm({ ...form, price_offline: Number(e.target.value) })
+                  onValueChange={(value) =>
+                    setForm({ ...form, price_offline: value })
                   }
                 />
                 <p className="mt-1 text-[11px] text-white/40">
@@ -168,7 +240,7 @@ export function EditProductModal({
             </div>
           ) : (
             <Alert tone="info">
-              Hanya owner / finance yang bisa mengubah harga jual.
+              Hanya owner / finance yang bisa mengubah HPP dan harga jual.
             </Alert>
           )}
 

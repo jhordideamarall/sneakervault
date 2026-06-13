@@ -19,8 +19,23 @@
 - [x] `use-realtime-refresh.ts`: +stock_opname_sessions, purchase_orders, purchase_invoices, sales_invoices, bank_transactions.
 - [x] Migration `20260612000300_realtime_signal_tables.sql`: tambah 5 tabel ke publication supabase_realtime (idempotent).
 
+## Part D — Input nominal pakai pemisah ribuan
+- [x] Sweep lanjutan input uang mentah ke `NumberInput`: faktur pembelian, pembayaran vendor, akun/mutasi kas-bank, pengeluaran, penerimaan kas customer, invoice penjualan, jurnal manual, DP/manual PO, dan modal edit produk.
+- [x] Input angka non-uang tetap `type="number"`: qty, size, persen DP, sort order, stock opname, barcode quantity, dan axis chart.
+
+## Part E — Modal inventory proporsional
+- [x] `packages/ui/src/dialog.tsx`: tambah padding default, batas tinggi viewport, scroll aman, width mobile, dan posisi close button responsif untuk semua `DialogContent` default.
+- [x] `condition-updater-modal.tsx`: lebarkan status modal ke `max-w-xl` supaya tiga pilihan status tidak sesak.
+- [x] Audit statis modal lain: customer, akun bank, mutasi, jurnal, retur, supplier, delete request, dan POS memakai padding/header/body sendiri atau `Card` padded; tidak kena bug clipping `DialogContent`.
+
 ## Verifikasi
 - type-check & `pnpm build` hijau.
+- `pnpm --filter @sneakervault/web type-check` hijau.
+- `pnpm --filter @sneakervault/web lint` hijau dengan 81 warning existing (tidak ada error).
+- `git diff --check` hijau.
+- Prettier tidak dijalankan: config mencari `prettier-plugin-tailwindcss` yang belum terpasang.
+- Browser in-app QA terblokir: sesi Browser `iab` tidak tersedia di runtime Codex saat dicek.
+- Playwright screenshot QA terblokir: `pnpm exec playwright --version` gagal karena command `playwright` belum tersedia di repo.
 - Visual QA manual (collapse persist, titik per role via chip view-as, format WIB) — belum dijalankan.
 
 ## Files (utama)
@@ -30,4 +45,7 @@
 - apps/web/src/lib/use-realtime-refresh.ts
 - apps/web/src/app/(dashboard)/layout.tsx
 - ~30 client components (sweep format/status)
+- apps/web/src/components/{pembelian,penjualan,kas-bank,buku-besar,inventory}/* client form nominal
+- packages/ui/src/dialog.tsx
+- apps/web/src/components/inventory/condition-updater-modal.tsx
 - migration 20260612000300_realtime_signal_tables.sql

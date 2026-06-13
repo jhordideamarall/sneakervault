@@ -3,11 +3,12 @@
 import { useRef, useState, useTransition } from "react";
 import { Button, Card, Badge } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
-import { Download, FileUp, CheckCircle2, RefreshCw } from "lucide-react";
+import { ArrowRight, Database, Download, FileUp, CheckCircle2, RefreshCw } from "lucide-react";
 import {
   locateColumns,
   type ExportChannel,
 } from "@/lib/marketplace/export";
+import { extractStockTemplateRowKeys } from "@/lib/marketplace/product-import";
 import { getStockForExport, type StockExportRow } from "@/lib/actions/stock-export";
 
 type ExportState = "upload" | "ready" | "done";
@@ -15,6 +16,7 @@ type ExportState = "upload" | "ready" | "done";
 const CHANNELS: { id: ExportChannel; label: string; dot: string; hint: string }[] = [
   { id: "shopee", label: "Shopee", dot: "bg-orange-500", hint: "Mass Update — Stok & Harga" },
   { id: "tiktok", label: "TikTok", dot: "bg-pink-500", hint: "Batch Edit — All Information" },
+  { id: "tokopedia", label: "Tokopedia", dot: "bg-emerald-500", hint: "Batch Edit / stok seller center" },
 ];
 
 type Loaded = {
@@ -24,7 +26,27 @@ type Loaded = {
   stockCols: number[];
   priceCols: number[];
   skus: string[];
+  rowKeys: Record<number, string>;
 };
+
+function readTemplateSku(value: unknown): string {
+  const sku = String(value ?? "").trim();
+  if (!sku) return "";
+  const lower = sku.toLowerCase();
+  if (
+    sku.startsWith("{") ||
+    lower === "sku" ||
+    lower === "sku induk" ||
+    lower === "seller sku" ||
+    lower === "sku penjual" ||
+    lower === "sales_info"
+  ) {
+    return "";
+  }
+  if (sku.includes("\n") || sku.length > 80) return "";
+  if (["opsional", "wajib", "wajib diisi sesuai syarat", "tidak dapat diedit"].includes(lower)) return "";
+  return sku;
+}
 
 export function ExportStokClient() {
   const toast = useToast();
@@ -81,13 +103,7 @@ export function ExportStokClient() {
           return;
         }
 
-        // Collect seller SKUs from data rows (rows after the header row).
-        const skuSet = new Set<string>();
-        for (let r = cols.headerRow + 1; r < aoa.length; r++) {
-          const v = String(aoa[r]?.[cols.skuCol] ?? "").trim();
-          if (v) skuSet.add(v);
-        }
-        const skus = Array.from(skuSet);
+        const { keys: skus, rowKeys } = extractStockTemplateRowKeys(aoa, channel, cols.headerRow);
         if (skus.length === 0) {
           toast.push("Tidak ada SKU terbaca di file", "error");
           return;
@@ -97,10 +113,17 @@ export function ExportStokClient() {
         sheetNameRef.current = sheetName!;
 
         startTransition(async () => {
-          const map = await getStockForExport(channel, skus);
-          setStockMap(map);
-          setLoaded({ fileName: file.name, ...cols, skus });
-          setState("ready");
+          try {
+            const map = await getStockForExport(channel, skus);
+            setStockMap(map);
+            setLoaded({ fileName: file.name, ...cols, skus, rowKeys });
+            setState("ready");
+          } catch (error) {
+            toast.push(
+              error instanceof Error ? error.message : "Gagal mencocokkan SKU template",
+              "error",
+            );
+          }
         });
       } catch {
         toast.push("Gagal memproses file", "error");
@@ -125,7 +148,7 @@ export function ExportStokClient() {
 
       for (let r = loaded.headerRow + 1; r <= range.e.r; r++) {
         const skuAddr = XLSX.utils.encode_cell({ r, c: loaded.skuCol });
-        const sku = String(ws[skuAddr]?.v ?? "").trim();
+        const sku = loaded.rowKeys[r] ?? readTemplateSku(ws[skuAddr]?.v);
         const row = stockMap[sku];
         if (!row) continue;
 
@@ -163,11 +186,10 @@ export function ExportStokClient() {
           <div className="mb-4 rounded-full bg-white/5 p-4 text-white/40">
             <Download size={32} />
           </div>
-          <h2 className="mb-2 text-lg font-semibold text-white">Export Stok ke Template Marketplace</h2>
+          <h2 className="mb-2 text-lg font-semibold text-white">Isi Template Stok Marketplace</h2>
           <p className="mb-6 max-w-md text-sm text-white/50">
-            Download template "Mass Update / Batch Edit" dari Seller Center, upload
-            di sini — sistem mengisi kolom stok (& opsional harga) dari data sistem,
-            lalu kamu download & upload balik ke marketplace.
+            Upload template stok/harga dari Seller Center. Sistem mengisi kolom stok
+            dari inventory, lalu hasilnya kamu download untuk upload balik ke marketplace.
           </p>
 
           <div className="mb-8 flex gap-2 rounded-lg border border-white/[0.06] bg-[#262626] p-1.5">
@@ -189,7 +211,7 @@ export function ExportStokClient() {
 
           <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-semibold text-black transition-all hover:bg-white/90 active:scale-95">
             <FileUp size={18} />
-            Upload Template {channelMeta.label}
+            Upload Template Stok {channelMeta.label}
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFile} className="hidden" />
           </label>
           <p className="mt-4 text-xs text-white/30">{channelMeta.hint}</p>
@@ -241,6 +263,41 @@ export function ExportStokClient() {
           {unmatched > 0 && (
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3 text-xs text-amber-200/80">
               {unmatched} SKU di file tidak ditemukan di sistem (lewat SKU langsung / pemetaan). Baris itu dibiarkan apa adanya.
+            </div>
+          )}
+
+          {matched === 0 && (
+            <div className="rounded-xl border border-sky-500/20 bg-sky-500/[0.06] p-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="flex gap-3">
+                  <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-sky-400/10 text-sky-200">
+                    <Database size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Inventory masih kosong</h3>
+                    <p className="mt-1 max-w-2xl text-xs leading-relaxed text-white/55">
+                      Template marketplace ini hanya bisa diisi kalau SKU sudah ada di inventory.
+                      Mulai dari import master produk dan saldo awal stok/HPP dulu, lalu upload ulang template ini.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <a
+                    href="/inventory"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black transition-colors hover:bg-white/90"
+                  >
+                    Import Produk
+                    <ArrowRight size={13} />
+                  </a>
+                  <a
+                    href="/settings/data-sync"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/75 transition-colors hover:bg-white/[0.08] hover:text-white"
+                  >
+                    Cutover Accurate
+                    <ArrowRight size={13} />
+                  </a>
+                </div>
+              </div>
             </div>
           )}
         </div>

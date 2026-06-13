@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Button,
   Input,
+  NumberInput,
   Select,
   FieldLabel,
   Alert,
@@ -106,6 +107,7 @@ const channelTone: Record<CustomerChannel, string> = {
   wa: "bg-emerald-500/15 text-emerald-300 border-emerald-500/20",
   shopee: "bg-orange-500/15 text-orange-300 border-orange-500/20",
   tiktok: "bg-pink-500/15 text-pink-300 border-pink-500/20",
+  tokopedia: "bg-emerald-500/15 text-emerald-300 border-emerald-500/20",
   offline: "bg-sky-500/15 text-sky-300 border-sky-500/20",
   website: "bg-violet-500/15 text-violet-300 border-violet-500/20",
   mixed: "bg-white/10 text-white/70 border-white/15",
@@ -759,7 +761,7 @@ function FormModal({
       .slice(0, 50);
   }, [products, pickerSearch]);
 
-  const isOnline = form.channel === "shopee" || form.channel === "tiktok";
+  const isOnline = form.channel === "shopee" || form.channel === "tiktok" || form.channel === "tokopedia";
 
   return (
     <div
@@ -1034,13 +1036,12 @@ function FormModal({
                           />
                         </td>
                         <td className="px-3 py-2">
-                          <Input
-                            type="number"
+                          <NumberInput
                             min={0}
                             value={l.unit_price}
-                            onChange={(e) =>
+                            onValueChange={(value) =>
                               onUpdateLine(idx, {
-                                unit_price: Math.max(0, Number(e.target.value)),
+                                unit_price: Math.max(0, value),
                               })
                             }
                             className="h-8 px-2"
@@ -1070,60 +1071,56 @@ function FormModal({
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <div>
               <FieldLabel htmlFor="discount">Diskon</FieldLabel>
-              <Input
+              <NumberInput
                 id="discount"
-                type="number"
                 min={0}
                 value={form.discount}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   setForm({
                     ...form,
-                    discount: Math.max(0, Number(e.target.value)),
+                    discount: Math.max(0, value),
                   })
                 }
               />
             </div>
             <div>
               <FieldLabel htmlFor="shipping">Ongkir</FieldLabel>
-              <Input
+              <NumberInput
                 id="shipping"
-                type="number"
                 min={0}
                 value={form.shipping}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   setForm({
                     ...form,
-                    shipping: Math.max(0, Number(e.target.value)),
+                    shipping: Math.max(0, value),
                   })
                 }
               />
             </div>
             <div>
               <FieldLabel htmlFor="marketplace_fee">Fee Marketplace</FieldLabel>
-              <Input
+              <NumberInput
                 id="marketplace_fee"
-                type="number"
                 min={0}
                 value={form.marketplace_fee}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   setForm({
                     ...form,
-                    marketplace_fee: Math.max(0, Number(e.target.value)),
+                    marketplace_fee: Math.max(0, value),
                   })
                 }
               />
             </div>
             <div>
               <FieldLabel htmlFor="tax">Pajak</FieldLabel>
-              <Input
+              <NumberInput
                 id="tax"
-                type="number"
                 min={0}
                 value={form.tax}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   setForm({
                     ...form,
-                    tax: Math.max(0, Number(e.target.value)),
+                    tax: Math.max(0, value),
                   })
                 }
               />

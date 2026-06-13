@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -23,6 +23,7 @@ import {
   deletePurchaseOrder,
   updatePurchaseOrder,
 } from "@/lib/actions/purchase-orders";
+import { createSupplier } from "@/lib/actions/suppliers";
 import type {
   PoListRow,
   PoDetail,
@@ -134,6 +135,13 @@ export function PurchaseOrderClient({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<PoStatus | "all">("all");
+  const [supplierOptions, setSupplierOptions] = useState<SupplierOpt[]>(suppliers);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setSupplierOptions(suppliers);
+    });
+  }, [suppliers]);
 
   const canManage = roles.includes("owner") || roles.includes("finance");
   const canDelete = roles.includes("owner");
@@ -187,11 +195,15 @@ export function PurchaseOrderClient({
       total > 0 && po.payment_type === "dp"
         ? Math.round((po.dp_amount / total) * 100)
         : 50;
+    const taxRate =
+      lineSubtotal > 0 && po.tax > 0
+        ? Number(((po.tax / lineSubtotal) * 100).toFixed(2))
+        : 0;
     setForm({
       supplier_id: po.supplier_id,
       order_date: po.order_date,
       expected_date: po.expected_date ?? "",
-      tax: po.tax,
+      tax: taxRate,
       shipping: po.shipping,
       notes: po.notes ?? "",
       lines: po.lines.map((l) => ({
@@ -288,7 +300,8 @@ export function PurchaseOrderClient({
     (acc, l) => acc + l.ordered_qty * l.unit_cost,
     0,
   );
-  const formTotal = formSubtotal + form.tax + form.shipping;
+  const formTaxAmount = Math.round((formSubtotal * form.tax) / 100);
+  const formTotal = formSubtotal + formTaxAmount + form.shipping;
 
   function handleSave() {
     if (!editing || editing.mode === "view") return;
@@ -326,7 +339,7 @@ export function PurchaseOrderClient({
       supplier_id: form.supplier_id,
       order_date: form.order_date,
       expected_date: form.expected_date || undefined,
-      tax: form.tax,
+      tax: formTaxAmount,
       shipping: form.shipping,
       notes: form.notes || undefined,
       lines: form.lines.map((l) => ({
@@ -595,12 +608,13 @@ export function PurchaseOrderClient({
           editing={editing}
           form={form}
           setForm={setForm}
-          suppliers={suppliers}
+          suppliers={supplierOptions}
           products={products}
           bankAccounts={bankAccounts}
           formError={formError}
           fieldErrors={fieldErrors}
           formSubtotal={formSubtotal}
+          formTaxAmount={formTaxAmount}
           formTotal={formTotal}
           pending={pending}
           onClose={close}
@@ -609,6 +623,14 @@ export function PurchaseOrderClient({
           onAddManual={addManualLine}
           onRemoveLine={removeLine}
           onUpdateLine={updateLine}
+          onSupplierCreated={(supplier) => {
+            setSupplierOptions((prev) =>
+              prev.some((item) => item.id === supplier.id)
+                ? prev
+                : [...prev, supplier].sort((a, b) => a.name.localeCompare(b.name)),
+            );
+            setForm((prev) => ({ ...prev, supplier_id: supplier.id }));
+          }}
         />
       ) : null}
       {editing && editing.mode === "view" ? (
@@ -637,6 +659,7 @@ function FormModal({
   formError,
   fieldErrors,
   formSubtotal,
+  formTaxAmount,
   formTotal,
   pending,
   onClose,
@@ -645,6 +668,7 @@ function FormModal({
   onAddManual,
   onRemoveLine,
   onUpdateLine,
+  onSupplierCreated,
 }: {
   editing: { mode: "new" } | { mode: "edit"; po: PoDetail };
   form: FormState;
@@ -655,6 +679,7 @@ function FormModal({
   formError: string | null;
   fieldErrors: Record<string, string>;
   formSubtotal: number;
+  formTaxAmount: number;
   formTotal: number;
   pending: boolean;
   onClose: () => void;
@@ -663,11 +688,45 @@ function FormModal({
   onAddManual: (m: ManualLineInput) => void;
   onRemoveLine: (idx: number) => void;
   onUpdateLine: (idx: number, patch: Partial<FormLine>) => void;
+  onSupplierCreated: (supplier: SupplierOpt) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
   const [pickerTab, setPickerTab] = useState<"existing" | "manual">("existing");
   const [manual, setManual] = useState({ brand: "", model: "", size: "", color: "", sku: "", unit_cost: "", qty: "1" });
+  const [supplierFormOpen, setSupplierFormOpen] = useState(false);
+  const [supplierForm, setSupplierForm] = useState({ name: "", contact_person: "", phone: "" });
+  const [supplierErrors, setSupplierErrors] = useState<Record<string, string>>({});
+  const [supplierPending, startSupplierTransition] = useTransition();
+
+  function submitSupplier() {
+    setSupplierErrors({});
+    startSupplierTransition(async () => {
+      const result = (await createSupplier({
+        name: supplierForm.name.trim(),
+        contact_person: supplierForm.contact_person.trim() || undefined,
+        phone: supplierForm.phone.trim() || undefined,
+      })) as { error?: unknown; data?: { id: string; name: string } };
+      if (result.error) {
+        const errs: Record<string, string> = {};
+        if (typeof result.error === "object") {
+          for (const [key, value] of Object.entries(result.error)) {
+            errs[key] = Array.isArray(value) ? value[0] ?? "" : String(value);
+          }
+        } else {
+          errs._form = String(result.error);
+        }
+        setSupplierErrors(errs);
+        return;
+      }
+      if (result.data) {
+        const supplier = result.data;
+        onSupplierCreated({ id: supplier.id, name: supplier.name });
+        setSupplierForm({ name: "", contact_person: "", phone: "" });
+        setSupplierFormOpen(false);
+      }
+    });
+  }
 
   function submitManual() {
     const size = Number(manual.size);
@@ -746,8 +805,58 @@ function FormModal({
               <FieldError message={fieldErrors.supplier_id} />
               {suppliers.length === 0 ? (
                 <p className="mt-1.5 text-[11px] text-amber-300/80">
-                  Belum ada vendor. Tambah dulu di <span className="font-medium">Master Data → Supplier</span>.
+                  Belum ada vendor. Tambahkan langsung di sini atau lewat <span className="font-medium">Master Data → Supplier</span>.
                 </p>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setSupplierFormOpen((open) => !open)}
+                className="mt-2 text-[12px] font-medium text-sky-300/85 hover:text-sky-200"
+              >
+                + Tambah vendor baru
+              </button>
+              {supplierFormOpen ? (
+                <div className="mt-3 rounded-xl border border-white/[0.06] bg-[#1f1f1f] p-3">
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <Input
+                      placeholder="Nama vendor *"
+                      value={supplierForm.name}
+                      onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })}
+                    />
+                    <Input
+                      placeholder="PIC"
+                      value={supplierForm.contact_person}
+                      onChange={(e) => setSupplierForm({ ...supplierForm, contact_person: e.target.value })}
+                    />
+                    <Input
+                      placeholder="No. HP"
+                      value={supplierForm.phone}
+                      onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })}
+                    />
+                  </div>
+                  {supplierErrors._form || supplierErrors.name ? (
+                    <p className="mt-2 text-[11px] text-red-300">
+                      {supplierErrors.name || supplierErrors._form}
+                    </p>
+                  ) : null}
+                  <div className="mt-3 flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSupplierFormOpen(false)}
+                      disabled={supplierPending}
+                    >
+                      Batal
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={submitSupplier}
+                      disabled={supplierPending || !supplierForm.name.trim()}
+                    >
+                      {supplierPending ? "Menyimpan..." : "Simpan Vendor"}
+                    </Button>
+                  </div>
+                </div>
               ) : null}
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -965,28 +1074,29 @@ function FormModal({
           {/* Tax, shipping, notes */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <FieldLabel htmlFor="tax">Pajak</FieldLabel>
-              <Input
+              <FieldLabel htmlFor="tax">Pajak (%)</FieldLabel>
+              <NumberInput
                 id="tax"
-                type="number"
                 min={0}
                 value={form.tax}
-                onChange={(e) =>
-                  setForm({ ...form, tax: Math.max(0, Number(e.target.value)) })
+                onValueChange={(value) =>
+                  setForm({ ...form, tax: Math.max(0, value) })
                 }
               />
+              <p className="mt-1 text-[11px] text-white/40">
+                Input 11 untuk PPN 11%
+              </p>
             </div>
             <div>
               <FieldLabel htmlFor="shipping">Ongkos Kirim</FieldLabel>
-              <Input
+              <NumberInput
                 id="shipping"
-                type="number"
                 min={0}
                 value={form.shipping}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   setForm({
                     ...form,
-                    shipping: Math.max(0, Number(e.target.value)),
+                    shipping: Math.max(0, value),
                   })
                 }
               />
@@ -1011,9 +1121,9 @@ function FormModal({
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-white/50">Pajak</span>
+              <span className="text-white/50">Pajak ({form.tax || 0}%)</span>
               <span className="tabular-nums text-white/80">
-                {fmtRupiah(form.tax)}
+                {fmtRupiah(formTaxAmount)}
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
@@ -1453,12 +1563,11 @@ function PaymentSection({
             </div>
           ) : (
             <div>
-              <input
-                type="number"
+              <NumberInput
                 min={0}
                 value={form.dp_amount}
-                onChange={(e) =>
-                  setForm({ ...form, dp_amount: Math.max(0, Number(e.target.value)) })
+                onValueChange={(value) =>
+                  setForm({ ...form, dp_amount: Math.max(0, value) })
                 }
                 placeholder="0"
                 className="h-9 w-full rounded-md border border-white/[0.08] bg-white/[0.03] px-3 text-right text-sm tabular-nums text-white placeholder-white/20 focus:border-white/20 focus:outline-none"

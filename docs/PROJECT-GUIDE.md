@@ -110,38 +110,47 @@ truth**; owner pegang **kendali manual** (review diff + approve/remap).
 ### 4.1 Import Order Marketplace — `/penjualan/import-marketplace`
 **Tujuan:** tarik laporan pesanan jadi invoice + jurnal + kurangi stok.
 **Cara pakai (simulasi):**
-1. Pilih tab channel: **Shopee / Tokopedia / TikTok** (= label sumber).
+1. Pilih tab channel: **Shopee / Tokopedia / TikTok** (= label sumber). Sistem tidak auto-switch; template harus sesuai tab yang dipilih.
 2. Upload file Excel/CSV laporan pesanan dari Seller Center.
 3. Sistem parse + **reconcile** → layar **Review Diff**: per order/baris tampil status
    - ✅ OK (SKU cocok, stok cukup) · ⚠️ stok kurang · ❌ SKU tak dikenal · 🔁 sudah diimport (skip).
-4. Baris ❌ → klik **Petakan SKU** → cari produk sistem → pilih → tersimpan ke `marketplace_sku_map` (diingat utk next import). Klik baris re-reconcile otomatis.
+4. Baris ❌ → klik **Petakan SKU** untuk produk existing, atau **Buat Produk** untuk bootstrap dari baris order → tersimpan ke `marketplace_sku_map` (diingat utk next import). Klik baris re-reconcile otomatis.
 5. **Konfirmasi Import (N)** → commit hanya order "Siap" via RPC atomik `import_marketplace_order_atomic` (invoice+lines+stok+jurnal 1 transaksi). Batch dicatat ke `marketplace_imports` (kind=order).
 - Idempotent: re-upload file yang sama → semua skip (dup-guard `marketplace_order_id`).
 - Revenue per channel: Shopee 4.1.02, TikTok 4.1.03, Tokopedia 4.1.04.
+- Baris order batal/cancel/refund/return tidak dibuat jadi invoice.
+- Produk bootstrap dari order dibuat dengan stok awal sebesar qty order supaya import bisa lanjut; HPP default 0 dan review memberi warning bahwa COGS/laba belum final sampai HPP diisi lewat Barang Masuk, Stock Opname, atau cutover Accurate.
 - File: `lib/marketplace/parsers.ts`, `lib/actions/marketplace-import.ts`, `components/penjualan/import-marketplace-client.tsx`.
 
 ### 4.2 Export Stok (Round-Trip) — `/penjualan/export-stok`
 **Tujuan:** dorong stok sistem ke marketplace agar sinkron.
 **Cara pakai (simulasi):**
-1. Pilih channel: **Shopee** (Mass Update) / **TikTok** (Batch Edit).
+1. Pilih channel: **Shopee** (Mass Update) / **TikTok** (Batch Edit). Sistem memvalidasi template sesuai tab, bukan auto-detect.
 2. Download template "Mass Update / Batch Edit" dari Seller Center → upload di sini.
 3. Sistem cocokkan `seller_sku ↔ products.sku` (+ `marketplace_sku_map`) → tampil ringkasan (cocok / tidak ada di sistem).
 4. (Opsional) centang "Ikut update harga jual".
 5. **Generate** → file `.xlsx` ter-download (struktur asli dipertahankan, hanya kolom stok/harga ditimpa; product_id/variation_id marketplace tetap dari file).
 6. Upload file hasil balik ke Seller Center.
 - Read-only (tak menulis DB). File: `lib/marketplace/export.ts`, `lib/actions/stock-export.ts`, `components/penjualan/export-stok-client.tsx`.
-- Catatan: Tokopedia export menyusul (template stok belum disediakan).
+- Catatan: Tokopedia export menyusul (template stok/update produk Tokopedia belum disediakan). Template TikTok yang tersedia saat ini masih instruction-only bila tidak berisi row SKU produk.
+- Jika inventory kosong, mulai dari `/inventory` → **Import Produk**. Modal ini bisa bootstrap produk dari template internal, Shopee Mass Update, TikTok Batch Edit, atau report Tokopedia berisi SKU. HPP hasil bootstrap marketplace = 0 sampai diisi lewat Barang Masuk/Stock Opname/cutover Accurate.
+- Shopee Mass Update sering tidak punya seller SKU per variasi; sistem membuat key internal per variasi dari product/variation data dan menyimpan `marketplace_sku_map` agar upload template yang sama bisa match di round-trip berikutnya.
 
-### 4.3 Settlement 2-Fase — `/penjualan/settlement` (owner, finance)
-**Tujuan:** rekonsiliasi pencairan dana marketplace ke finance. Upload **2x**: saat belum cair, lalu saat cair.
+### 4.3 Settlement Sekali Import — `/penjualan/settlement` (owner, finance)
+**Tujuan:** rekonsiliasi pencairan dana marketplace ke finance. Upload **1x** saat dana sudah dilepas/cair.
 **Cara pakai (simulasi):**
-1. Pilih **fase**: "Belum Cair" (tahap 1) / "Sudah Cair" (tahap 2). Pilih channel.
+1. Pilih channel.
 2. Upload file settlement → layar review (akan diterapkan / dilewati / tak ada invoice).
-3. Fase **Sudah Cair**: pilih **bank tujuan**, tanggal cair, no. referensi.
+3. Pilih **bank tujuan**, tanggal cair, no. referensi.
 4. **Terapkan** → RPC atomik `settle_marketplace_atomic`.
-   - **Pending:** Dr 1.1.03 Saldo Marketplace (net) + Dr 6.1 biaya aktual (total−net) ; Cr 1.1.04 Piutang. AR lunas, dana parkir di Saldo Marketplace.
-   - **Released:** Dr Bank (net) ; Cr 1.1.03 ; invoice `paid`; saldo bank + bank_transaction.
-- Idempotent (skip yang sudah ≥ fase target). **Tidak menyentuh stok** (hindari double-count vs packing).
+   - Membuat `customer_payments` + `customer_payment_allocations` supaya muncul di **Penerimaan Penjualan**.
+   - Mark invoice `paid`, `settlement_status = released`, `paid_amount = total`.
+   - Dr Bank (net cair) + Dr/Cr 6.1 selisih biaya marketplace aktual ; Cr 1.1.04 Piutang.
+- Idempotent (skip invoice yang sudah settlement/terbayar). **Tidak menyentuh stok** (hindari double-count vs packing).
+- Format settlement ketat per channel tapi aman untuk workbook multi-sheet resmi:
+  - Shopee: baca sheet `Income` dengan kolom `No. Pesanan` + `Total Penghasilan`.
+  - TikTok/Tokopedia: baca sheet `Detail pesanan` dengan kolom `ID Pesanan/Penyesuaian` + `Jumlah penyelesaian pembayaran` + `Total Biaya`.
+  - Sheet ringkasan/penjelasan/detail fee diabaikan supaya angka tidak dobel. Custom Excel bebas tidak didukung.
 - File: `lib/marketplace/settlement-parsers.ts`, `lib/actions/settlement-import.ts`, `components/penjualan/settlement-import-client.tsx`, migrasi `20260612000200_settle_marketplace_atomic.sql`.
 
 ---
@@ -172,15 +181,15 @@ truth**; owner pegang **kendali manual** (review diff + approve/remap).
 ### Selesai (2026-06-12)
 - Pondasi DB marketplace sync (sku_map, staging, settlement cols, RPC, enum tokopedia, CoA 4.1.04).
 - Chip view-as-role (cookie, owner-only, anti-lockout).
-- Import order per-marketplace + review diff + Tokopedia + learned SKU map.
-- Export stok round-trip (Shopee + TikTok).
-- Settlement 2-fase → finance.
+- Import order per-marketplace + review diff + Tokopedia + learned SKU map; template validasi per tab dan skip baris batal/refund/return.
+- Export stok round-trip (Shopee + TikTok), dengan template Shopee nyata dan TikTok batch edit nyata terverifikasi untuk deteksi kolom.
+- Settlement sekali import → Penerimaan Penjualan + finance.
 - Fix bug: `/overview` query owner-only (`getDashboardStats`/`getBestsellers`/`getMonthlySales`) → `requireOwnerOrFinance` (finance & preview-finance tak lagi error).
 - Reset DB (1 owner, slate bersih).
-- Artifacts: `artifacts/026..031`.
+- Artifacts: `artifacts/026..031`, `artifacts/034-marketplace-template-finance-alignment`.
 
 ### Pending / Perlu Diperhatikan
-- **E2E dengan file Excel nyata belum dijalankan.** Parser pakai alias header + fallback; validasi mapping saat ada file Seller Center asli — terutama header **Tiktok/Tokopedia pesanan** dan **Shopee settlement** (template yang diberi hanya baris header period).
+- **E2E browser dengan upload/download nyata belum dijalankan.** Parser order sudah diuji offline dengan file Shopee/TikTok/Tokopedia di `docs/marketplace-templates`; export stok sudah diuji offline dengan template Shopee/TikTok; parser settlement sudah membaca workbook multi-sheet resmi Shopee (`Income`) dan TikTok/Tokopedia (`Detail pesanan`).
 - RPC marketplace belum di-smoke-test runtime (butuh sesi auth; mirror pola `pos_checkout` yang terbukti).
 - Tokopedia **export stok** belum (template stok belum ada).
 - Jika muncul "view error" saat preview role: penyebab umum = page diizinkan ke role X tapi query internal `requireOwner()` throw. Pola fix: samakan gate query dengan `routePermissions`, atau sembunyikan section owner-only (lihat fix `/overview`). Audit lain bila perlu: `grep "requireOwner()" apps/web/src/lib/queries/index.ts` lalu cek page pemakainya vs matrix.

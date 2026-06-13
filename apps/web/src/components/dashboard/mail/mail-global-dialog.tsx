@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
 import { Mail, Send, Reply, X, Check, CheckCheck, Paperclip, Smile, Bell, MessageCircle, Plus, Search } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { SystemMessageBubble } from "./system-message-bubble";
@@ -55,12 +56,14 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
   React.useEffect(() => {
     const openMailId = searchParams.get("openMail");
     if (openMailId) {
-      setOpen(true);
-      setSelectedId(openMailId);
-      // Clean up query param
-      const url = new URL(window.location.href);
-      url.searchParams.delete("openMail");
-      router.replace(url.pathname + url.search, { scroll: false });
+      queueMicrotask(() => {
+        setOpen(true);
+        setSelectedId(openMailId);
+        // Clean up query param
+        const url = new URL(window.location.href);
+        url.searchParams.delete("openMail");
+        router.replace(url.pathname + url.search, { scroll: false });
+      });
     }
   }, [searchParams, router]);
 
@@ -494,7 +497,14 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
                                         className="block rounded-lg overflow-hidden border border-white/10 hover:opacity-80 transition-opacity"
                                       >
                                         {isImage ? (
-                                          <img src={url} alt="attachment" className="max-w-[200px] max-h-[200px] object-cover" />
+                                          <Image
+                                            src={url}
+                                            alt="attachment"
+                                            width={200}
+                                            height={200}
+                                            unoptimized
+                                            className="max-h-[200px] max-w-[200px] object-cover"
+                                          />
                                         ) : (
                                           <div className={cn("p-3 flex items-center gap-2", isMe ? "bg-black/5" : "bg-white/5")}>
                                             <Paperclip size={14} className={isMe ? "text-black/40" : "text-white/40"} />
@@ -619,7 +629,14 @@ export function MailGlobalDialog({ userId }: { userId: string }) {
                             {attachments.map((file, i) => (
                               <div key={i} className="relative group rounded-xl overflow-hidden border border-white/10 bg-white/[0.03] p-1.5 pr-8 flex items-center gap-2">
                                 {file.type.startsWith('image/') ? (
-                                  <img src={file.url} className="size-8 rounded-lg object-cover" alt="" />
+                                  <Image
+                                    src={file.url}
+                                    className="size-8 rounded-lg object-cover"
+                                    alt=""
+                                    width={32}
+                                    height={32}
+                                    unoptimized
+                                  />
                                 ) : (
                                   <div className="size-8 rounded-lg bg-white/5 flex items-center justify-center"><Paperclip size={14} className="text-white/40" /></div>
                                 )}

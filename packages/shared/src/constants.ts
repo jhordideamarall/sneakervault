@@ -73,6 +73,7 @@ export const CUSTOMER_CHANNELS: { value: CustomerChannel; label: string }[] = [
   { value: "wa", label: "WhatsApp" },
   { value: "shopee", label: "Shopee" },
   { value: "tiktok", label: "TikTok Shop" },
+  { value: "tokopedia", label: "Tokopedia" },
   { value: "offline", label: "Offline / Toko" },
   { value: "website", label: "Website" },
   { value: "mixed", label: "Campuran" },

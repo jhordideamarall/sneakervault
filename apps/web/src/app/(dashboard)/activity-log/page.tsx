@@ -9,11 +9,9 @@ import {
 } from "@/lib/timezone";
 import { 
   ScrollText, 
-  Search, 
   Filter, 
   Calendar as CalendarIcon, 
   User, 
-  Clock, 
   Activity, 
   ChevronRight,
   Info

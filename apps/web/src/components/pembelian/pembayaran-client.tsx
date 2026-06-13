@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Button,
   Input,
+  NumberInput,
   Select,
   FieldLabel,
   Alert,
@@ -569,23 +570,25 @@ function PayModal({
 
   // Load allocations when supplier changes
   useEffect(() => {
-    if (!supplierId) {
-      setAllocs([]);
-      return;
-    }
-    const list = allOutstanding
-      .filter((o) => o.supplier_id === supplierId)
-      .map<AllocationDraft>((o) => ({
-        invoice_id: o.id,
-        invoice_number: o.invoice_number,
-        total: o.total,
-        paid_amount: o.paid_amount,
-        remaining: o.remaining,
-        due_date: o.due_date,
-        amount: 0,
-        selected: false,
-      }));
-    setAllocs(list);
+    queueMicrotask(() => {
+      if (!supplierId) {
+        setAllocs([]);
+        return;
+      }
+      const list = allOutstanding
+        .filter((o) => o.supplier_id === supplierId)
+        .map<AllocationDraft>((o) => ({
+          invoice_id: o.id,
+          invoice_number: o.invoice_number,
+          total: o.total,
+          paid_amount: o.paid_amount,
+          remaining: o.remaining,
+          due_date: o.due_date,
+          amount: 0,
+          selected: false,
+        }));
+      setAllocs(list);
+    });
   }, [supplierId, allOutstanding]);
 
   const totalAlloc = allocs.reduce(
@@ -818,14 +821,11 @@ function PayModal({
                             {fmtRupiah(a.remaining)}
                           </td>
                           <td className="px-3 py-2">
-                            <Input
-                              type="number"
+                            <NumberInput
                               min={0}
                               max={a.remaining}
                               value={a.amount}
-                              onChange={(e) =>
-                                updateAmount(idx, Number(e.target.value))
-                              }
+                              onValueChange={(value) => updateAmount(idx, value)}
                               className="h-8 px-2 text-right"
                             />
                           </td>

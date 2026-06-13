@@ -23,6 +23,11 @@ type StaffContact = {
   avatar_url: string | null;
 };
 
+type MessageProfile = {
+  full_name: string;
+  avatar_url: string | null;
+};
+
 export function useInbox(userId?: string) {
   const [messages, setMessages] = useState<InternalMessage[]>([]);
   const [contacts, setContacts] = useState<StaffContact[]>([]);
@@ -46,11 +51,14 @@ export function useInbox(userId?: string) {
       if (msg.sender_id === userId && msg.receiver_id === userId) return;
 
       const otherId = msg.sender_id === userId ? msg.receiver_id : msg.sender_id;
-      const otherProfile = (msg.sender_id === userId ? msg.receiver : msg.sender) as any;
+      const otherProfile: MessageProfile = (msg.sender_id === userId ? msg.receiver : msg.sender) ?? {
+        full_name: "Unknown",
+        avatar_url: null,
+      };
       
       if (!groups[otherId]) {
         groups[otherId] = {
-          profile: { id: otherId, ...otherProfile },
+          profile: { id: otherId, full_name: otherProfile.full_name, avatar_url: otherProfile.avatar_url },
           lastMessage: msg,
           messages: [],
           unreadCount: 0
@@ -113,9 +121,10 @@ export function useInbox(userId?: string) {
       .limit(200);
 
     if (!error && data) {
+      const hydrated = data as InternalMessage[];
       // Reverse back to ascending for display
-      setMessages((data as any).reverse());
-      setUnreadCount(data.filter((m) => m.receiver_id === userId && !m.is_read).length);
+      setMessages([...hydrated].reverse());
+      setUnreadCount(hydrated.filter((m) => m.receiver_id === userId && !m.is_read).length);
     } else if (error) {
       console.error("Error fetching messages:", error);
     }
@@ -124,8 +133,10 @@ export function useInbox(userId?: string) {
 
   useEffect(() => {
     if (!userId) return;
-    fetchContacts();
-    fetchMessages();
+    queueMicrotask(() => {
+      void fetchContacts();
+      void fetchMessages();
+    });
 
     const supabase = createClient();
     const channelName = `inbox:${userId}:${crypto.randomUUID()}`;
@@ -157,10 +168,11 @@ export function useInbox(userId?: string) {
             .single();
 
           if (data) {
+            const message = data as InternalMessage;
             setMessages(prev => {
               // Avoid duplicates
-              if (prev.some(m => m.id === data.id)) return prev;
-              return [...prev, data as any];
+              if (prev.some(m => m.id === message.id)) return prev;
+              return [...prev, message];
             });
             setUnreadCount(prev => prev + 1);
           }

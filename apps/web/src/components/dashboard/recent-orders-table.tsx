@@ -3,6 +3,13 @@ import { createClient } from "@sneakervault/supabase/server";
 import { Badge } from "@sneakervault/ui";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONES } from "@sneakervault/shared";
 
+type ProfileSummary = { full_name: string };
+type PackingItemCount = { count: number };
+
+function firstRelation<T>(value: T | T[] | null | undefined): T | null {
+  return Array.isArray(value) ? value[0] ?? null : value ?? null;
+}
+
 export async function RecentOrdersTable() {
   const supabase = await createClient();
 
@@ -43,8 +50,8 @@ export async function RecentOrdersTable() {
         </thead>
         <tbody>
           {sessions.map((s) => {
-            const profile = s.profiles as any;
-            const itemCount = (s.packing_items as any)?.[0]?.count ?? 0;
+            const profile = firstRelation(s.profiles as unknown as ProfileSummary[] | ProfileSummary | null);
+            const itemCount = (s.packing_items as PackingItemCount[] | null)?.[0]?.count ?? 0;
             return (
               <tr key={s.id} className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
                 <td className="px-6 py-3 text-[13px] text-white/70 font-medium">

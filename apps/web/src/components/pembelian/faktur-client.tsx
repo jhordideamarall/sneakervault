@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Button,
   Input,
+  NumberInput,
   Select,
   FieldLabel,
   FieldError,
@@ -750,32 +751,29 @@ function FormModal({
           <div className="grid grid-cols-3 gap-3">
             <div>
               <FieldLabel htmlFor="subtotal">Subtotal *</FieldLabel>
-              <Input
+              <NumberInput
                 id="subtotal"
-                type="number"
                 min={0}
                 value={form.subtotal}
-                onChange={(e) => onSubtotalChange(Number(e.target.value))}
+                onValueChange={onSubtotalChange}
               />
             </div>
             <div>
               <FieldLabel htmlFor="tax">Pajak</FieldLabel>
-              <Input
+              <NumberInput
                 id="tax"
-                type="number"
                 min={0}
                 value={form.tax}
-                onChange={(e) => onTaxChange(Number(e.target.value))}
+                onValueChange={onTaxChange}
               />
             </div>
             <div>
               <FieldLabel htmlFor="total">Total *</FieldLabel>
-              <Input
+              <NumberInput
                 id="total"
-                type="number"
                 min={0}
                 value={form.total}
-                onChange={(e) => onTotalChange(Number(e.target.value))}
+                onValueChange={onTotalChange}
               />
               <p className="mt-1 text-[11px] text-white/40">
                 Bisa di-override (cth: pembulatan)

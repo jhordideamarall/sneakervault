@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Button,
   Input,
+  NumberInput,
   Select,
   FieldLabel,
   FieldError,
@@ -516,14 +517,13 @@ export function BankAccountsClient({
                 <FieldLabel htmlFor="opening_balance">
                   Saldo Awal {editing !== "new" ? "(read-only)" : ""}
                 </FieldLabel>
-                <Input
+                <NumberInput
                   id="opening_balance"
-                  type="number"
                   value={form.opening_balance}
-                  onChange={(e) =>
+                  onValueChange={(value) =>
                     setForm({
                       ...form,
-                      opening_balance: Number(e.target.value),
+                      opening_balance: value,
                     })
                   }
                   disabled={editing !== "new"}

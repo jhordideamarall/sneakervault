@@ -6,7 +6,6 @@ import {
   Input,
   Card,
   FieldLabel,
-  FieldError,
   Alert,
   cn,
   NumberInput,
@@ -14,6 +13,7 @@ import {
 import { formatRupiah } from "@/lib/format";
 import {
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ImageOff,
   Package,
@@ -22,10 +22,10 @@ import {
   ShieldAlert,
   Clock,
 } from "lucide-react";
-import { createProduct, searchProductsFuzzy } from "@/lib/actions/products";
+import { createProduct } from "@/lib/actions/products";
 import { createClient } from "@sneakervault/supabase/client";
 import { useToast } from "@/components/toast";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ExportButtons } from "@/components/export-buttons";
 import { useLiveRefresh } from "@/lib/use-live-refresh";
 import { BulkImportButton } from "@/components/inventory/bulk-import-button";
@@ -73,6 +73,13 @@ type ModelGroup = {
   minOnline: number;
   maxOnline: number;
   avgHpp: number; // weighted average HPP across all sizes in the SKU
+};
+
+type InventorySummary = {
+  totalQty: number;
+  normalQty: number;
+  defectQty: number;
+  dormantQty: number;
 };
 
 function groupByModel(products: Product[]): ModelGroup[] {
@@ -155,19 +162,36 @@ function formatPriceRange(min: number, max: number): string {
 export function InventoryClient({
   products,
   total,
+  totalModels,
+  page,
+  pageSize,
+  searchQuery,
+  summary,
   roles,
 }: {
   products: Product[];
   total: number;
+  totalModels: number;
+  page: number;
+  pageSize: number;
+  searchQuery: string;
+  summary: InventorySummary;
   roles: string[];
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const urlSearchParams = useSearchParams();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
+  const [pagePending, startPageTransition] = useTransition();
   const roleList = roles as Role[];
 
-  const [search, setSearch] = useState("");
-  const [fuzzyResults, setFuzzyResults] = useState<Product[] | null>(null);
+  const [searchState, setSearchState] = useState(() => ({
+    source: searchQuery,
+    value: searchQuery,
+  }));
+  const search = searchState.source === searchQuery ? searchState.value : searchQuery;
+  const setSearch = (value: string) => setSearchState({ source: searchQuery, value });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<Product | null>(null);
   const [conditionEditing, setConditionEditing] = useState<Product | null>(null);
@@ -181,49 +205,41 @@ export function InventoryClient({
 
   useLiveRefresh(["products"]);
 
-  // Fuzzy search via RPC (meeting 2: "samba" ≈ "cloud white")
-  useEffect(() => {
-    if (search.trim().length < 2) {
-      setFuzzyResults(null);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      const results = (await searchProductsFuzzy(search, 100)) as Product[];
-      setFuzzyResults(results);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [search]);
+  const paramsSnapshot = urlSearchParams.toString();
 
-  const displayProducts = useMemo(() => {
-    if (fuzzyResults) return fuzzyResults;
-    if (!search.trim()) return products;
-    const q = search.toLowerCase();
-    return products.filter(
-      (p) =>
-        p.brand.toLowerCase().includes(q) ||
-        p.model.toLowerCase().includes(q) ||
-        p.sku.toLowerCase().includes(q) ||
-        p.barcode.toLowerCase().includes(q) ||
-        (p.color ?? "").toLowerCase().includes(q),
-    );
-  }, [products, fuzzyResults, search]);
+  useEffect(() => {
+    const nextSearch = search.trim();
+    if (nextSearch === searchQuery) return;
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams(paramsSnapshot);
+      if (nextSearch) params.set("q", nextSearch);
+      else params.delete("q");
+      params.delete("page");
+      const qs = params.toString();
+      startPageTransition(() => {
+        router.replace(qs ? `${pathname}?${qs}` : pathname);
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, searchQuery, paramsSnapshot, pathname, router]);
+
+  const displayProducts = products;
 
   const groups = useMemo(() => groupByModel(displayProducts), [displayProducts]);
 
-  // Totals for the summary strip
-  const summary = useMemo(() => {
-    let totalQty = 0;
-    let normalQty = 0;
-    let defectQty = 0;
-    let dormantQty = 0;
-    for (const p of products) {
-      totalQty += p.quantity;
-      if (p.condition === "normal") normalQty += p.quantity;
-      else if (p.condition === "defect") defectQty += p.quantity;
-      else if (p.condition === "dormant") dormantQty += p.quantity;
-    }
-    return { totalQty, normalQty, defectQty, dormantQty };
-  }, [products]);
+  const totalPages = Math.max(1, Math.ceil(totalModels / pageSize));
+  const fromModel = totalModels === 0 ? 0 : (page - 1) * pageSize + 1;
+  const toModel = Math.min(page * pageSize, totalModels);
+
+  function pushPage(nextPage: number) {
+    const params = new URLSearchParams(paramsSnapshot);
+    if (nextPage <= 1) params.delete("page");
+    else params.set("page", String(nextPage));
+    const qs = params.toString();
+    startPageTransition(() => {
+      router.push(qs ? `${pathname}?${qs}` : pathname);
+    });
+  }
 
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => {
@@ -247,7 +263,8 @@ export function InventoryClient({
         <div>
           <h1 className="text-2xl font-semibold text-white">Inventori</h1>
           <p className="mt-1 text-sm text-white/50">
-            {groups.length} model · {total} SKU
+            {fromModel}-{toModel} dari {totalModels} model · {total} SKU
+            {searchQuery ? ` · filter "${searchQuery}"` : ""}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -282,6 +299,8 @@ export function InventoryClient({
                 p.price_offline,
               ];
             })}
+            pdfLabel="Produk PDF"
+            excelLabel="Produk Excel"
           />
           {canEditInventory && <BulkImportButton />}
           {canEditInventory && (
@@ -297,6 +316,9 @@ export function InventoryClient({
         title="Cara HPP & stok dihitung"
         tone="info"
       >
+        Menu ini untuk <strong>data produk internal</strong>: tambah SKU, ubah harga, dan export/import master produk.
+        Bukan untuk laporan pesanan marketplace.
+        <br />
         <strong>1 SKU = 1 HPP</strong> (weighted average semua size dalam model yang sama).
         HPP rata-rata ditampilkan di header model — bukan per size — supaya tidak membingungkan.
         Tiap kali ada penerimaan barang dengan harga beda, HPP rata-rata otomatis ter-update.
@@ -363,10 +385,8 @@ export function InventoryClient({
         </Button>
       </div>
 
-      {fuzzyResults !== null && search.trim().length >= 2 && (
-        <p className="text-[11px] text-white/40">
-          Pencarian fuzzy aktif — mencocokkan ejaan mendekati (“samba white” ≈ “samba cloud white”).
-        </p>
+      {pagePending && (
+        <p className="text-[11px] text-white/40">Memuat hasil inventory...</p>
       )}
 
       {/* Add product form (inline) */}
@@ -408,6 +428,32 @@ export function InventoryClient({
             ))}
           </ul>
         )}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-white/45">
+        <span>
+          Halaman {page.toLocaleString("id-ID")} dari {totalPages.toLocaleString("id-ID")}
+        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => pushPage(page - 1)}
+            disabled={page <= 1 || pagePending}
+          >
+            <ChevronLeft size={14} className="mr-1" />
+            Sebelumnya
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => pushPage(page + 1)}
+            disabled={page >= totalPages || pagePending}
+          >
+            Selanjutnya
+            <ChevronRight size={14} className="ml-1" />
+          </Button>
+        </div>
       </div>
 
       {/* Modals */}
@@ -665,6 +711,7 @@ type AddFormState = {
   size: string;
   color: string;
   barcode: string;
+  hpp: number;
   sell_price: number;
   price_offline: number;
   image_url: string;
@@ -694,6 +741,7 @@ function AddProductForm({
     size: "",
     color: "",
     barcode: "",
+    hpp: 0,
     sell_price: 0,
     price_offline: 0,
     image_url: "",
@@ -735,11 +783,11 @@ function AddProductForm({
         size: Number(form.size),
         color: form.color,
         barcode: form.barcode,
+        hpp: canEditPrice ? form.hpp : 0,
         sell_price: form.sell_price,
         price_offline: form.price_offline || form.sell_price,
         image_url: form.image_url.trim() || null,
         quantity: 0,
-        hpp: 0,
       });
       if ("error" in result && result.error) {
         const errs: Record<string, string> = {};
@@ -880,6 +928,21 @@ function AddProductForm({
         </div>
         {canEditPrice && (
           <>
+            <div>
+              <FieldLabel htmlFor="add-hpp">
+                HPP / Modal (Rp)
+              </FieldLabel>
+              <NumberInput
+                id="add-hpp"
+                align="left"
+                placeholder="0"
+                value={form.hpp}
+                onValueChange={(n) => setForm({ ...form, hpp: n })}
+              />
+              <p className="mt-1 text-[11px] text-white/40">
+                Modal awal per SKU
+              </p>
+            </div>
             <div>
               <FieldLabel htmlFor="add-price-online">
                 Harga Online (Rp)

@@ -56,6 +56,7 @@ export type CustomerChannel =
   | "wa"
   | "shopee"
   | "tiktok"
+  | "tokopedia"
   | "offline"
   | "website"
   | "mixed";

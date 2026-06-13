@@ -6,8 +6,6 @@ import {
   Button, 
   Card, 
   Input, 
-  Badge, 
-  Select 
 } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
@@ -19,11 +17,9 @@ import {
   Phone, 
   Mail, 
   User, 
-  MoreVertical,
   Edit2,
   Trash2,
   ChevronRight,
-  ExternalLink
 } from "lucide-react";
 
 type Supplier = {

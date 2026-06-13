@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   nowWIB,
@@ -61,9 +61,15 @@ export function DateFilterProvider({ children }: { children: ReactNode }) {
 
   const [filter, setFilter] = useState<DateFilter>(initialFilter);
   const filterRef = useRef(filter);
-  filterRef.current = filter;
   const pathnameRef = useRef(pathname);
-  pathnameRef.current = pathname;
+
+  useEffect(() => {
+    filterRef.current = filter;
+  }, [filter]);
+
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
 
   const navigate = useCallback((f: DateFilter) => {
     const params = new URLSearchParams();
