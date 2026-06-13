@@ -69,6 +69,7 @@ export const routePermissions: Record<string, Role[]> = {
 
   // Pengaturan & audit
   "/panduan": ["owner", "admin_gudang", "admin_online", "shopkeeper", "finance"],
+  "/feedback": ["owner", "admin_gudang", "admin_online", "shopkeeper", "finance"],
   "/settings": ["owner"],
   "/settings/data-sync": ["owner"],
   "/activity-log": ["owner"],
