@@ -442,6 +442,9 @@ export async function getPurchaseOrders(opts?: {
     .order("created_at", { ascending: false });
   if (opts?.status) query = query.eq("status", opts.status);
   if (opts?.supplierId) query = query.eq("supplier_id", opts.supplierId);
+  // Guardrail: 1000 PO terbaru (lihat catatan di getSalesInvoices). Laporan
+  // pembelian pakai agregasi terpisah, tak terpengaruh.
+  query = query.limit(1000);
   const { data } = await query;
   return (
     (data as unknown as Array<{
@@ -704,7 +707,11 @@ export async function getSalesInvoices(): Promise<SalesInvoiceRow[]> {
       "id, invoice_number, customer_id, customer_name, channel, invoice_date, due_date, subtotal, discount, shipping, marketplace_fee, tax, total, paid_amount, status, marketplace_order_id, notes, created_at, sales_invoice_lines(id)",
     )
     .order("invoice_date", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    // Guardrail: ambil 1000 invoice terbaru. Mencegah fetch ribuan baris saat
+    // data besar (laporan keuangan pakai query agregasi terpisah, tak terpengaruh).
+    // TODO: ganti dengan server-side pagination + search saat volume tinggi.
+    .limit(1000);
   return (
     (data as unknown as Array<{
       id: string;
