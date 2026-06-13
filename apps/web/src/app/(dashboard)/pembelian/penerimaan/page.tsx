@@ -1,8 +1,4 @@
-import {
-  getPurchaseOrdersForReceiving,
-  getPurchaseOrderById,
-} from "@/lib/queries";
-import type { PoDetail } from "@/lib/queries";
+import { getPurchaseOrdersForReceiving } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/actions/auth";
 import { PenerimaanClient } from "@/components/pembelian/penerimaan-client";
 import { redirect } from "next/navigation";
@@ -21,19 +17,11 @@ export default async function PenerimaanPage() {
   if (!canAccess) redirect("/workspace");
 
   const receivablePos = await getPurchaseOrdersForReceiving();
-  const detailEntries = await Promise.all(
-    receivablePos.map(async (p) => {
-      const d = await getPurchaseOrderById(p.id);
-      return [p.id, d] as const;
-    }),
-  );
-  const detailById: Record<string, PoDetail> = {};
-  for (const [id, d] of detailEntries) if (d) detailById[id] = d;
 
   return (
     <PenerimaanClient
       receivablePos={receivablePos}
-      detailById={detailById}
+      detailById={{}}
       roles={roles as string[]}
     />
   );

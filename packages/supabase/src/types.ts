@@ -2294,6 +2294,112 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"][]
       }
+      get_account_balances: {
+        Args: { p_from?: string | null; p_to?: string | null }
+        Returns: {
+          account_id: string
+          balance: number
+          code: string
+          name: string
+          normal_balance: string
+          parent_id: string | null
+          total_credit: number
+          total_debit: number
+          type: string
+        }[]
+      }
+      get_account_ledger: {
+        Args: {
+          p_account_id: string
+          p_from?: string | null
+          p_to?: string | null
+        }
+        Returns: {
+          account_code: string
+          account_description: string | null
+          account_id: string
+          account_is_active: boolean
+          account_is_system: boolean
+          account_name: string
+          account_normal_balance: string
+          account_parent_id: string | null
+          account_type: string
+          closing_balance: number
+          credit: number | null
+          debit: number | null
+          description: string | null
+          entry_date: string | null
+          entry_id: string | null
+          entry_number: string | null
+          line_description: string | null
+          line_id: string | null
+          opening_balance: number
+          running_balance: number | null
+          source_id: string | null
+          source_type: string | null
+          status: string | null
+          total_credit: number
+          total_debit: number
+        }[]
+      }
+      get_purchase_order_list: {
+        Args: {
+          p_limit?: number
+          p_status?: string | null
+          p_supplier_id?: string | null
+        }
+        Returns: {
+          created_at: string
+          expected_date: string | null
+          id: string
+          line_count: number
+          order_date: string
+          po_number: string
+          status: string
+          supplier_id: string
+          supplier_name: string
+          total: number
+        }[]
+      }
+      get_receivable_purchase_orders: {
+        Args: never
+        Returns: {
+          expected_date: string | null
+          id: string
+          order_date: string
+          po_number: string
+          status: string
+          supplier_name: string
+          total: number
+          total_ordered: number
+          total_received: number
+          total_remaining: number
+        }[]
+      }
+      get_sales_invoice_list: {
+        Args: { p_limit?: number }
+        Returns: {
+          channel: string
+          created_at: string
+          customer_id: string | null
+          customer_name: string
+          discount: number
+          due_date: string | null
+          id: string
+          invoice_date: string
+          invoice_number: string
+          line_count: number
+          marketplace_fee: number
+          marketplace_order_id: string | null
+          notes: string | null
+          paid_amount: number
+          shipping: number
+          status: string
+          subtotal: number
+          tax: number
+          total: number
+        }[]
+      }
       get_inventory_page: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string | null }
         Returns: {

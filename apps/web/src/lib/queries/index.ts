@@ -512,6 +512,46 @@ export async function getPurchaseOrders(opts?: {
   status?: string;
   supplierId?: string;
 }): Promise<PoListRow[]> {
+  return measureServer("query.purchaseOrders", async () => {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("get_purchase_order_list", {
+      p_limit: 1000,
+      p_status: opts?.status ?? null,
+      p_supplier_id: opts?.supplierId ?? null,
+    });
+
+    if (error) return getPurchaseOrdersLegacy(opts);
+
+    return ((data as Array<{
+      id: string;
+      po_number: string;
+      supplier_id: string;
+      supplier_name: string;
+      order_date: string;
+      expected_date: string | null;
+      status: PoListRow["status"];
+      total: number;
+      line_count: number;
+      created_at: string;
+    }> | null) ?? []).map((r) => ({
+      id: r.id,
+      po_number: r.po_number,
+      supplier_id: r.supplier_id,
+      supplier_name: r.supplier_name,
+      order_date: r.order_date,
+      expected_date: r.expected_date,
+      status: r.status,
+      total: Number(r.total),
+      line_count: Number(r.line_count),
+      created_at: r.created_at,
+    }));
+  });
+}
+
+async function getPurchaseOrdersLegacy(opts?: {
+  status?: string;
+  supplierId?: string;
+}): Promise<PoListRow[]> {
   const supabase = await createClient();
   let query = supabase
     .from("purchase_orders")
@@ -779,6 +819,59 @@ export type SalesInvoiceRow = {
 };
 
 export async function getSalesInvoices(): Promise<SalesInvoiceRow[]> {
+  return measureServer("query.salesInvoices", async () => {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("get_sales_invoice_list", {
+      p_limit: 1000,
+    });
+
+    if (error) return getSalesInvoicesLegacy();
+
+    return ((data as Array<{
+      id: string;
+      invoice_number: string;
+      customer_id: string | null;
+      customer_name: string;
+      channel: SalesInvoiceRow["channel"];
+      invoice_date: string;
+      due_date: string | null;
+      subtotal: number;
+      discount: number;
+      shipping: number;
+      marketplace_fee: number;
+      tax: number;
+      total: number;
+      paid_amount: number;
+      status: SalesInvoiceRow["status"];
+      marketplace_order_id: string | null;
+      notes: string | null;
+      created_at: string;
+      line_count: number;
+    }> | null) ?? []).map((r) => ({
+      id: r.id,
+      invoice_number: r.invoice_number,
+      customer_id: r.customer_id,
+      customer_name: r.customer_name,
+      channel: r.channel,
+      invoice_date: r.invoice_date,
+      due_date: r.due_date,
+      subtotal: Number(r.subtotal),
+      discount: Number(r.discount),
+      shipping: Number(r.shipping),
+      marketplace_fee: Number(r.marketplace_fee),
+      tax: Number(r.tax),
+      total: Number(r.total),
+      paid_amount: Number(r.paid_amount),
+      status: r.status,
+      marketplace_order_id: r.marketplace_order_id,
+      notes: r.notes,
+      created_at: r.created_at,
+      line_count: Number(r.line_count),
+    }));
+  });
+}
+
+async function getSalesInvoicesLegacy(): Promise<SalesInvoiceRow[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("sales_invoices")
@@ -1702,6 +1795,41 @@ export type ReceivablePoRow = {
 export async function getPurchaseOrdersForReceiving(): Promise<
   ReceivablePoRow[]
 > {
+  return measureServer("query.purchaseOrdersForReceiving", async () => {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("get_receivable_purchase_orders");
+
+    if (error) return getPurchaseOrdersForReceivingLegacy();
+
+    return ((data as Array<{
+      id: string;
+      po_number: string;
+      supplier_name: string;
+      order_date: string;
+      expected_date: string | null;
+      status: ReceivablePoRow["status"];
+      total: number;
+      total_ordered: number;
+      total_received: number;
+      total_remaining: number;
+    }> | null) ?? []).map((r) => ({
+      id: r.id,
+      po_number: r.po_number,
+      supplier_name: r.supplier_name,
+      order_date: r.order_date,
+      expected_date: r.expected_date,
+      status: r.status,
+      total: Number(r.total),
+      total_ordered: Number(r.total_ordered),
+      total_received: Number(r.total_received),
+      total_remaining: Number(r.total_remaining),
+    }));
+  });
+}
+
+async function getPurchaseOrdersForReceivingLegacy(): Promise<
+  ReceivablePoRow[]
+> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("purchase_orders")
@@ -1877,6 +2005,43 @@ export async function getAccountBalances(opts?: {
   from?: string;
   to?: string;
 }): Promise<AccountBalance[]> {
+  return measureServer("query.accountBalances", async () => {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("get_account_balances", {
+      p_from: opts?.from ?? null,
+      p_to: opts?.to ?? null,
+    });
+
+    if (error) return getAccountBalancesLegacy(opts);
+
+    return ((data as Array<{
+      account_id: string;
+      code: string;
+      name: string;
+      type: AccountBalance["type"];
+      normal_balance: AccountBalance["normal_balance"];
+      parent_id: string | null;
+      total_debit: number;
+      total_credit: number;
+      balance: number;
+    }> | null) ?? []).map((row) => ({
+      account_id: row.account_id,
+      code: row.code,
+      name: row.name,
+      type: row.type,
+      normal_balance: row.normal_balance,
+      parent_id: row.parent_id,
+      total_debit: Number(row.total_debit),
+      total_credit: Number(row.total_credit),
+      balance: Number(row.balance),
+    }));
+  });
+}
+
+async function getAccountBalancesLegacy(opts?: {
+  from?: string;
+  to?: string;
+}): Promise<AccountBalance[]> {
   const supabase = await createClient();
   const { data: accounts } = await supabase
     .from("chart_of_accounts")
@@ -1971,6 +2136,98 @@ export type AccountLedgerResult = {
 };
 
 export async function getAccountLedger(args: {
+  account_id: string;
+  from?: string;
+  to?: string;
+}): Promise<AccountLedgerResult> {
+  return measureServer("query.accountLedger", async () => {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("get_account_ledger", {
+      p_account_id: args.account_id,
+      p_from: args.from ?? null,
+      p_to: args.to ?? null,
+    });
+
+    if (error) return getAccountLedgerLegacy(args);
+
+    type LedgerRpcRow = {
+      account_id: string;
+      account_code: string;
+      account_name: string;
+      account_type: AccountBalance["type"];
+      account_normal_balance: AccountBalance["normal_balance"];
+      account_parent_id: string | null;
+      account_is_active: boolean;
+      account_is_system: boolean;
+      account_description: string | null;
+      opening_balance: number;
+      closing_balance: number;
+      total_debit: number;
+      total_credit: number;
+      line_id: string | null;
+      entry_id: string | null;
+      entry_number: string | null;
+      entry_date: string | null;
+      description: string | null;
+      source_type: string | null;
+      source_id: string | null;
+      status: AccountLedgerEntry["status"] | null;
+      debit: number | null;
+      credit: number | null;
+      line_description: string | null;
+      running_balance: number | null;
+    };
+
+    const rows = ((data as LedgerRpcRow[] | null) ?? []);
+    const first = rows[0];
+    if (!first) {
+      return {
+        account: null,
+        opening_balance: 0,
+        closing_balance: 0,
+        total_debit: 0,
+        total_credit: 0,
+        entries: [],
+      };
+    }
+
+    return {
+      account: {
+        id: first.account_id,
+        code: first.account_code,
+        name: first.account_name,
+        type: first.account_type,
+        normal_balance: first.account_normal_balance,
+        parent_id: first.account_parent_id,
+        is_active: first.account_is_active,
+        is_system: first.account_is_system,
+        description: first.account_description,
+      },
+      opening_balance: Number(first.opening_balance),
+      closing_balance: Number(first.closing_balance),
+      total_debit: Number(first.total_debit),
+      total_credit: Number(first.total_credit),
+      entries: rows
+        .filter((r) => r.line_id && r.entry_id && r.entry_number && r.entry_date && r.status)
+        .map((r) => ({
+          line_id: r.line_id!,
+          entry_id: r.entry_id!,
+          entry_number: r.entry_number!,
+          entry_date: r.entry_date!,
+          description: r.description ?? "",
+          source_type: r.source_type ?? "manual",
+          source_id: r.source_id,
+          status: r.status!,
+          debit: Number(r.debit ?? 0),
+          credit: Number(r.credit ?? 0),
+          line_description: r.line_description,
+          running_balance: Number(r.running_balance ?? 0),
+        })),
+    };
+  });
+}
+
+async function getAccountLedgerLegacy(args: {
   account_id: string;
   from?: string;
   to?: string;

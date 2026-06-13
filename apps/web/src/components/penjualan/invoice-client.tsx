@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -28,6 +28,7 @@ import {
   issueSalesInvoice,
   cancelSalesInvoice,
   deleteSalesInvoice,
+  loadSalesInvoiceDetailAction,
 } from "@/lib/actions/sales-invoices";
 import type {
   SalesInvoiceRow,
@@ -155,6 +156,13 @@ export function SalesInvoiceClient({
   const [channelFilter, setChannelFilter] = useState<CustomerChannel | "all">(
     "all",
   );
+  const [detailCache, setDetailCache] =
+    useState<Record<string, SalesInvoiceDetail>>(detailById);
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDetailCache(detailById);
+  }, [detailById]);
 
   const canManage =
     roles.includes("owner") ||
@@ -242,6 +250,37 @@ export function SalesInvoiceClient({
 
   function openView(inv: SalesInvoiceDetail) {
     setEditing({ mode: "view", inv });
+  }
+
+  async function loadDetail(id: string): Promise<SalesInvoiceDetail | null> {
+    const cached = detailCache[id];
+    if (cached) return cached;
+
+    setDetailLoadingId(id);
+    try {
+      const result = (await loadSalesInvoiceDetailAction(id)) as {
+        data?: SalesInvoiceDetail;
+        error?: string;
+      };
+      if (result.error || !result.data) {
+        toast.push(result.error ?? "Detail invoice tidak ditemukan", "error");
+        return null;
+      }
+      setDetailCache((prev) => ({ ...prev, [id]: result.data! }));
+      return result.data;
+    } finally {
+      setDetailLoadingId((current) => (current === id ? null : current));
+    }
+  }
+
+  async function openViewById(id: string) {
+    const detail = await loadDetail(id);
+    if (detail) openView(detail);
+  }
+
+  async function openEditById(id: string) {
+    const detail = await loadDetail(id);
+    if (detail) openEdit(detail);
   }
 
   function close() {
@@ -585,7 +624,7 @@ export function SalesInvoiceClient({
             <tbody>
               {filtered.map((i) => {
                 const remaining = i.total - i.paid_amount;
-                const detail = detailById[i.id];
+                const detailLoading = detailLoadingId === i.id;
                 return (
                   <tr
                     key={i.id}
@@ -642,19 +681,19 @@ export function SalesInvoiceClient({
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex items-center gap-1">
-                        {detail ? (
+                        <button
+                          onClick={() => void openViewById(i.id)}
+                          disabled={detailLoading}
+                          className="rounded p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white disabled:cursor-wait disabled:opacity-40"
+                          title="Detail"
+                        >
+                          <Eye size={14} strokeWidth={1.8} />
+                        </button>
+                        {canManage && i.status === "draft" ? (
                           <button
-                            onClick={() => openView(detail)}
-                            className="rounded p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white"
-                            title="Detail"
-                          >
-                            <Eye size={14} strokeWidth={1.8} />
-                          </button>
-                        ) : null}
-                        {canManage && detail && i.status === "draft" ? (
-                          <button
-                            onClick={() => openEdit(detail)}
-                            className="rounded p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white"
+                            onClick={() => void openEditById(i.id)}
+                            disabled={detailLoading}
+                            className="rounded p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white disabled:cursor-wait disabled:opacity-40"
                             title="Edit"
                           >
                             <Pencil size={14} strokeWidth={1.8} />

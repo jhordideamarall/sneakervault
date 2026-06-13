@@ -22,6 +22,7 @@ import {
   cancelPurchaseOrder,
   deletePurchaseOrder,
   updatePurchaseOrder,
+  loadPoDetailAction,
 } from "@/lib/actions/purchase-orders";
 import { createSupplier } from "@/lib/actions/suppliers";
 import type {
@@ -136,12 +137,19 @@ export function PurchaseOrderClient({
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<PoStatus | "all">("all");
   const [supplierOptions, setSupplierOptions] = useState<SupplierOpt[]>(suppliers);
+  const [detailCache, setDetailCache] =
+    useState<Record<string, PoDetail>>(detailById);
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
     queueMicrotask(() => {
       setSupplierOptions(suppliers);
     });
   }, [suppliers]);
+
+  useEffect(() => {
+    setDetailCache(detailById);
+  }, [detailById]);
 
   const canManage = roles.includes("owner") || roles.includes("finance");
   const canDelete = roles.includes("owner");
@@ -230,6 +238,37 @@ export function PurchaseOrderClient({
 
   function openView(po: PoDetail) {
     setEditing({ mode: "view", po });
+  }
+
+  async function loadDetail(id: string): Promise<PoDetail | null> {
+    const cached = detailCache[id];
+    if (cached) return cached;
+
+    setDetailLoadingId(id);
+    try {
+      const result = (await loadPoDetailAction(id)) as {
+        data?: PoDetail;
+        error?: string;
+      };
+      if (result.error || !result.data) {
+        toast.push(result.error ?? "Detail PO tidak ditemukan", "error");
+        return null;
+      }
+      setDetailCache((prev) => ({ ...prev, [id]: result.data! }));
+      return result.data;
+    } finally {
+      setDetailLoadingId((current) => (current === id ? null : current));
+    }
+  }
+
+  async function openViewById(id: string) {
+    const detail = await loadDetail(id);
+    if (detail) openView(detail);
+  }
+
+  async function openEditById(id: string) {
+    const detail = await loadDetail(id);
+    if (detail) openEdit(detail);
   }
 
   function close() {
@@ -541,7 +580,7 @@ export function PurchaseOrderClient({
             </thead>
             <tbody>
               {filtered.map((o) => {
-                const detail = detailById[o.id];
+                const detailLoading = detailLoadingId === o.id;
                 return (
                   <tr
                     key={o.id}
@@ -574,19 +613,19 @@ export function PurchaseOrderClient({
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex items-center gap-1">
-                        {detail ? (
+                        <button
+                          onClick={() => void openViewById(o.id)}
+                          disabled={detailLoading}
+                          className="rounded p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white disabled:cursor-wait disabled:opacity-40"
+                          title="Lihat detail"
+                        >
+                          <Eye size={14} strokeWidth={1.8} />
+                        </button>
+                        {canManage && o.status === "draft" ? (
                           <button
-                            onClick={() => openView(detail)}
-                            className="rounded p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white"
-                            title="Lihat detail"
-                          >
-                            <Eye size={14} strokeWidth={1.8} />
-                          </button>
-                        ) : null}
-                        {canManage && detail && o.status === "draft" ? (
-                          <button
-                            onClick={() => openEdit(detail)}
-                            className="rounded p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white"
+                            onClick={() => void openEditById(o.id)}
+                            disabled={detailLoading}
+                            className="rounded p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white disabled:cursor-wait disabled:opacity-40"
                             title="Edit"
                           >
                             <Pencil size={14} strokeWidth={1.8} />

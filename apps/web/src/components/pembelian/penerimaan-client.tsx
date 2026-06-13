@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -13,6 +13,7 @@ import { useToast } from "@/components/toast";
 import { QuickTip } from "@/components/ui/quick-tip";
 import { formatRupiah as fmtRupiah, formatDate as fmtDate } from "@/lib/format";
 import { receivePurchaseOrder } from "@/lib/actions/purchase-receive";
+import { loadPoDetailAction } from "@/lib/actions/purchase-orders";
 import type { ReceivablePoRow, PoDetail } from "@/lib/queries";
 import {
   PackagePlus,
@@ -52,6 +53,13 @@ export function PenerimaanClient({
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [detailCache, setDetailCache] =
+    useState<Record<string, PoDetail>>(detailById);
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDetailCache(detailById);
+  }, [detailById]);
 
   const canReceive =
     roles.includes("owner") ||
@@ -95,6 +103,32 @@ export function PenerimaanClient({
     );
     setNotes("");
     setFormError(null);
+  }
+
+  async function loadDetail(id: string): Promise<PoDetail | null> {
+    const cached = detailCache[id];
+    if (cached) return cached;
+
+    setDetailLoadingId(id);
+    try {
+      const result = (await loadPoDetailAction(id)) as {
+        data?: PoDetail;
+        error?: string;
+      };
+      if (result.error || !result.data) {
+        toast.push(result.error ?? "Detail PO tidak ditemukan", "error");
+        return null;
+      }
+      setDetailCache((prev) => ({ ...prev, [id]: result.data! }));
+      return result.data;
+    } finally {
+      setDetailLoadingId((current) => (current === id ? null : current));
+    }
+  }
+
+  async function startReceiveById(id: string) {
+    const detail = await loadDetail(id);
+    if (detail) startReceive(detail);
   }
 
   function close() {
@@ -256,7 +290,7 @@ export function PenerimaanClient({
               p.total_ordered > 0
                 ? Math.round((p.total_received / p.total_ordered) * 100)
                 : 0;
-            const detail = detailById[p.id];
+            const detailLoading = detailLoadingId === p.id;
             return (
               <div
                 key={p.id}
@@ -322,9 +356,10 @@ export function PenerimaanClient({
                       {fmtRupiah(p.total)}
                     </div>
                   </div>
-                  {canReceive && detail ? (
+                  {canReceive ? (
                     <Button
-                      onClick={() => startReceive(detail)}
+                      onClick={() => void startReceiveById(p.id)}
+                      disabled={detailLoading}
                       className="gap-1.5"
                     >
                       <PackagePlus size={14} strokeWidth={2} />

@@ -29,6 +29,14 @@ function computeTotals(args: ComputeArgs): { subtotal: number; total: number } {
   return { subtotal, total: Math.max(0, total) };
 }
 
+export async function loadSalesInvoiceDetailAction(id: string) {
+  await requireRole([...ROLES]);
+  const { getSalesInvoiceById } = await import("@/lib/queries");
+  const detail = await getSalesInvoiceById(id);
+  if (!detail) return { error: "Invoice tidak ditemukan" };
+  return { data: detail };
+}
+
 export async function createSalesInvoice(
   input: unknown,
   options?: { issue?: boolean },
