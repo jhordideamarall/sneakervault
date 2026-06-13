@@ -28,7 +28,7 @@ pnpm --filter @sneakervault/web dev    # atau: pnpm dev (turbo)
 ```
 Env (`apps/web/.env.local`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_APP_URL`.
 
-**UAT feedback module:** set `NEXT_PUBLIC_UAT_MODE=true` selama UAT untuk menampilkan tombol "Lapor Masalah" (FAB) + menu Feedback UAT; kosongkan/`false` setelah go-live. `NEXT_PUBLIC_APP_VERSION` terisi otomatis dari `VERCEL_GIT_COMMIT_SHA` (fallback `dev` saat lokal) — dipakai sebagai konteks build di tiap laporan. Lihat `docs/superpowers/specs/2026-06-13-uat-feedback-module-design.md`.
+**UAT feedback module:** tombol "Lapor Masalah" (FAB) + menu Feedback UAT **tampil default** (fase UAT). Untuk menyembunyikan FAB pasca go-live, set `NEXT_PUBLIC_UAT_MODE=false` lalu redeploy (env `NEXT_PUBLIC_*` di-inline saat build, jadi perlu build ulang). `NEXT_PUBLIC_APP_VERSION` terisi otomatis dari `VERCEL_GIT_COMMIT_SHA` (fallback `dev` saat lokal) — dipakai sebagai konteks build di tiap laporan. Lihat `docs/superpowers/specs/2026-06-13-uat-feedback-module-design.md`.
 
 ### Login Demo (setelah reset DB 2026-06-12)
 - **owner@sneakervault.com** — satu-satunya akun, role `owner`. (4 user demo lain sudah dihapus saat reset.)
