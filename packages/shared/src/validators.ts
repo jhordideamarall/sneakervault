@@ -490,3 +490,28 @@ export const updateSessionStatusSchema = z.object({
 });
 
 export type UpdateSessionStatusInput = z.infer<typeof updateSessionStatusSchema>;
+
+// ─── Feedback UAT ──────────────────────────────────────────
+export const feedbackInputSchema = z.object({
+  title: z.string().trim().min(3, "Judul minimal 3 karakter").max(160),
+  description: z.string().trim().min(5, "Deskripsi minimal 5 karakter").max(4000),
+  severity: z.enum(["blocker", "mengganggu", "minor"]),
+  page_path: z.string().trim().max(300).optional(),
+  // client-captured context (untrusted; role/version added server-side):
+  user_agent: z.string().max(500).optional(),
+  viewport: z.string().max(40).optional(),
+});
+
+export const feedbackCommentSchema = z.object({
+  report_id: z.string().uuid(),
+  body: z.string().trim().min(1, "Komentar kosong").max(4000),
+});
+
+export const feedbackStatusSchema = z.object({
+  report_id: z.string().uuid(),
+  status: z.enum(["baru", "diproses", "selesai", "ditolak"]),
+});
+
+export type FeedbackInput = z.infer<typeof feedbackInputSchema>;
+export type FeedbackCommentInput = z.infer<typeof feedbackCommentSchema>;
+export type FeedbackStatusInput = z.infer<typeof feedbackStatusSchema>;
