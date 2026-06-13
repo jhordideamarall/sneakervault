@@ -29,12 +29,20 @@ const QUICK_EMOJIS = [
   "😘", "🤗", "😴", "🤝", "👀", "🚀", "✅", "❌",
 ];
 
-export function MailGlobalDialog({ userId }: { userId: string }) {
-  const [open, setOpen] = React.useState(false);
+export function MailGlobalDialog({
+  userId,
+  initialOpen = false,
+  initialSelectedId = null,
+}: {
+  userId: string;
+  initialOpen?: boolean;
+  initialSelectedId?: string | null;
+}) {
+  const [open, setOpen] = React.useState(initialOpen);
   const activeUserId = open ? userId : undefined;
   const { messages, conversations, contacts, markAsRead, sendMessage } = useInbox(activeUserId);
   const { onlineUsers } = usePresence(activeUserId);
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [selectedId, setSelectedId] = React.useState<string | null>(initialSelectedId);
   const [chatInput, setChatInput] = React.useState("");
   const [replyingTo, setReplyingTo] = React.useState<InternalMessage | null>(null);
   const [attachments, setAttachments] = React.useState<{ name: string, url: string, type: string }[]>([]);

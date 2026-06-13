@@ -2294,6 +2294,45 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"][]
       }
+      get_inventory_page: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string | null }
+        Returns: {
+          barcode: string
+          brand: string
+          color: string | null
+          condition: Database["public"]["Enums"]["product_condition"]
+          created_at: string
+          defect_reason: string | null
+          dormant_qty: number
+          first_inbound_at: string | null
+          hpp: number
+          id: string
+          image_url: string | null
+          is_active: boolean
+          model: string
+          normal_qty: number
+          price_offline: number
+          quantity: number
+          sell_price: number
+          size: number
+          sku: string
+          supplier_name: string | null
+          total_models: number
+          total_qty: number
+          total_sku: number
+        }[]
+      }
+      get_inventory_summary: {
+        Args: { p_search?: string | null }
+        Returns: {
+          defect_qty: number
+          dormant_qty: number
+          normal_qty: number
+          total_models: number
+          total_qty: number
+          total_sku: number
+        }[]
+      }
       has_any_role: {
         Args: { required: Database["public"]["Enums"]["user_role"][] }
         Returns: boolean

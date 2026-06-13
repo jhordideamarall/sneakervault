@@ -9,7 +9,7 @@ import { headers } from "next/headers";
 import { hasRouteAccess } from "@/config/permissions";
 import type { Role } from "@sneakervault/shared";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@sneakervault/ui";
-import { MailGlobalDialog } from "@/components/dashboard/mail/mail-global-dialog";
+import { MailGlobalHost } from "@/components/dashboard/mail/mail-global-host";
 import { RealtimeProvider } from "@/components/dashboard/realtime-provider";
 import { ViewAsBanner } from "@/components/dashboard/view-as-banner";
 import { FeedbackFab } from "@/components/feedback/feedback-fab";
@@ -42,7 +42,7 @@ export default async function DashboardLayout({
     <DateFilterProvider>
     <RightPanelProvider>
     <div className="flex h-screen w-full overflow-hidden bg-[#1F1F1E] gap-2 p-2">
-      <MailGlobalDialog userId={profile.id} />
+      <MailGlobalHost userId={profile.id} />
       <FeedbackFab userId={profile.id} />
       <RealtimeProvider />
       <ResizablePanelGroup direction="horizontal" className="flex-1">

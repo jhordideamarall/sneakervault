@@ -1,7 +1,10 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { createClient } from "@sneakervault/supabase/server";
+import { AUTH_USER_ID_HEADER } from "@sneakervault/supabase/middleware";
 import { ROLES, type Role } from "@sneakervault/shared";
+import { measureServer } from "@/lib/server-perf";
 
 /**
  * Cookie that lets a real owner preview the app as another role (view-as).
@@ -28,17 +31,23 @@ export const VIEW_AS_COOKIE = "view_as_role";
  * always holds the true roles for the few places that must ignore the preview
  * (the view-as toggle itself, the banner gate).
  */
-export const getCurrentUserCached = cache(async () => {
+export const getCurrentUserCached = cache(async () => measureServer("auth.currentUser", async () => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  const requestHeaders = await headers();
+  let userId = requestHeaders.get(AUTH_USER_ID_HEADER);
+
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+    userId = user.id;
+  }
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("id, full_name, email, roles, avatar_url, is_active")
-    .eq("id", user.id)
+    .eq("id", userId)
     .maybeSingle();
 
   if (!profile?.is_active) return null;
@@ -63,4 +72,4 @@ export const getCurrentUserCached = cache(async () => {
     view_as: viewAs,
     is_preview: viewAs !== null,
   };
-});
+}));

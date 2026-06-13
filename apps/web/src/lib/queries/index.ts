@@ -1,5 +1,6 @@
 import { createClient } from "@sneakervault/supabase/server";
 import { getCurrentUser } from "@/lib/actions/auth";
+import { measureServer } from "@/lib/server-perf";
 import type { ExpenseStatus, PaymentMethod } from "@sneakervault/shared";
 import {
   daysInWIBMonth,
@@ -76,6 +77,84 @@ export async function getProducts(filters?: {
 }
 
 export async function getInventoryProducts(filters?: {
+  search?: string;
+  page?: number;
+  limit?: number;
+}): Promise<{
+  data: unknown[];
+  totalSku: number;
+  totalModels: number;
+  page: number;
+  limit: number;
+  summary: {
+    totalQty: number;
+    normalQty: number;
+    defectQty: number;
+    dormantQty: number;
+  };
+  error: unknown;
+}> {
+  return measureServer("query.inventoryProducts", async () => {
+    const supabase = await createClient();
+    const requestedPage = Math.max(1, filters?.page ?? 1);
+    const limit = Math.max(1, filters?.limit ?? 50);
+    const search = filters?.search?.trim() || null;
+
+    const summaryRes = await supabase.rpc("get_inventory_summary", {
+      p_search: search,
+    });
+
+    if (summaryRes.error) return getInventoryProductsLegacy(filters);
+
+    const summaryRow = summaryRes.data?.[0];
+    const totalModels = Number(summaryRow?.total_models ?? 0);
+    const totalSku = Number(summaryRow?.total_sku ?? 0);
+    const totalPages = Math.max(1, Math.ceil(totalModels / limit));
+    const page = Math.min(requestedPage, totalPages);
+
+    if (totalModels === 0) {
+      return {
+        data: [],
+        totalSku,
+        totalModels,
+        page: 1,
+        limit,
+        summary: {
+          totalQty: Number(summaryRow?.total_qty ?? 0),
+          normalQty: Number(summaryRow?.normal_qty ?? 0),
+          defectQty: Number(summaryRow?.defect_qty ?? 0),
+          dormantQty: Number(summaryRow?.dormant_qty ?? 0),
+        },
+        error: null,
+      };
+    }
+
+    const productsRes = await supabase.rpc("get_inventory_page", {
+      p_search: search,
+      p_limit: limit,
+      p_offset: (page - 1) * limit,
+    });
+
+    if (productsRes.error) return getInventoryProductsLegacy(filters);
+
+    return {
+      data: productsRes.data ?? [],
+      totalSku,
+      totalModels,
+      page,
+      limit,
+      summary: {
+        totalQty: Number(summaryRow?.total_qty ?? 0),
+        normalQty: Number(summaryRow?.normal_qty ?? 0),
+        defectQty: Number(summaryRow?.defect_qty ?? 0),
+        dormantQty: Number(summaryRow?.dormant_qty ?? 0),
+      },
+      error: productsRes.error,
+    };
+  });
+}
+
+async function getInventoryProductsLegacy(filters?: {
   search?: string;
   page?: number;
   limit?: number;
@@ -2431,6 +2510,67 @@ export async function getProfitReport(
   const revenue = rows.reduce((s, r) => s + Number(r.sell_price ?? 0), 0);
   const cost = rows.reduce((s, r) => s + Number(r.unit_hpp ?? 0), 0);
   return { revenue, cost, profit: revenue - cost, items: rows.length };
+}
+
+export async function getMonthlyProfitTrend(monthCount = 6): Promise<
+  { month: string; revenue: number; profit: number }[]
+> {
+  return measureServer("query.monthlyProfitTrend", async () => {
+    await requireOwnerOrFinance();
+    const supabase = await createClient();
+    const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+    const now = nowWIB();
+    const monthStarts: { year: number; month: number; label: string; key: string }[] = [];
+
+    for (let i = monthCount - 1; i >= 0; i--) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+      const year = d.getUTCFullYear();
+      const month = d.getUTCMonth();
+      monthStarts.push({
+        year,
+        month,
+        label: months[month]!,
+        key: `${year}-${String(month + 1).padStart(2, "0")}`,
+      });
+    }
+
+    const first = monthStarts[0];
+    const last = monthStarts[monthStarts.length - 1];
+    if (!first || !last) return [];
+
+    const { data } = await supabase
+      .from("packing_items")
+      .select("sell_price, unit_hpp, packing_sessions!inner(status, completed_at)")
+      .eq("packing_sessions.status", "completed")
+      .not("packing_sessions.completed_at", "is", null)
+      .gte("packing_sessions.completed_at", wibStartOfMonth(first.year, first.month))
+      .lt("packing_sessions.completed_at", wibStartOfNextMonth(last.year, last.month));
+
+    const byMonth = new Map<string, { revenue: number; cost: number }>();
+
+    for (const row of (data ?? []) as {
+      sell_price: number | null;
+      unit_hpp: number | null;
+      packing_sessions: MaybeRelation<{ completed_at: string | null }>;
+    }[]) {
+      const session = firstRelation(row.packing_sessions);
+      if (!session?.completed_at) continue;
+      const key = `${getWIBYear(session.completed_at)}-${String(getWIBMonth(session.completed_at) + 1).padStart(2, "0")}`;
+      const current = byMonth.get(key) ?? { revenue: 0, cost: 0 };
+      current.revenue += Number(row.sell_price ?? 0);
+      current.cost += Number(row.unit_hpp ?? 0);
+      byMonth.set(key, current);
+    }
+
+    return monthStarts.map(({ key, label }) => {
+      const current = byMonth.get(key) ?? { revenue: 0, cost: 0 };
+      return {
+        month: label,
+        revenue: current.revenue,
+        profit: current.revenue - current.cost,
+      };
+    });
+  });
 }
 
 export type FinancialSummaryModel = {

@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import { primaryRole } from "@/lib/auth-helpers";
 import { Greeting } from "@/components/dashboard/greeting";
 import { WorkspaceSubtitle } from "@/components/dashboard/workspace-subtitle";
-import { getBestsellers, getMonthlySales, getStockByBrand, getProfitReport } from "@/lib/queries";
+import { getBestsellers, getMonthlyProfitTrend, getMonthlySales, getStockByBrand } from "@/lib/queries";
 import { RevenueChart, StockPieChart, TopProductsChart, WeeklySalesChart } from "@/components/dashboard/workspace-charts";
 import { PendingActionsTable } from "@/components/dashboard/pending-actions-table";
 import { RecentOrdersTable } from "@/components/dashboard/recent-orders-table";
@@ -129,23 +129,12 @@ export default async function WorkspacePage() {
 }
 
 async function OwnerCharts() {
-  const [stockByBrand, bestsellers, salesData] = await Promise.all([
+  const [stockByBrand, bestsellers, salesData, revenueData] = await Promise.all([
     getStockByBrand(),
     getBestsellers(5),
     getMonthlySales(),
+    getMonthlyProfitTrend(6),
   ]);
-
-  // Build monthly revenue/profit from last 6 months
-  const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-  const now = new Date();
-  const revenueData: { month: string; revenue: number; profit: number }[] = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const from = d.toISOString();
-    const to = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString();
-    const report = await getProfitReport(from, to);
-    revenueData.push({ month: months[d.getMonth()]!, revenue: report.revenue, profit: report.profit });
-  }
 
   const topProducts = bestsellers.map((b) => ({ name: `${b.brand} ${b.model}`, count: b.count }));
   const weeklySales = (salesData.weeks as { week: string; terjual: number }[]).slice(-12);
