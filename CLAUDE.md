@@ -20,6 +20,16 @@
 - Jangan jalankan `db:reset` tanpa konfirmasi eksplisit.
 - Jangan hardcode UUID atau ID yang di-generate database.
 
+#### Reset Data (WAJIB — reset yang aman)
+Saat reset/clear database, **HANYA buang data transaksi/demo**. Tabel config/seed & akun **HARUS SELALU UTUH** — jangan pernah di-truncate/hapus:
+- `profiles` (akun login — kalau kehapus, terkunci dari app)
+- `chart_of_accounts` / **COA** (master akun jurnal — kalau kehapus, semua posting jurnal rusak)
+- `expense_categories`, `app_settings`, `fiscal_periods`, `bank_accounts`, `notification_preferences`
+- Struktur tabel/RLS/RPC/index/sequence definisi (truncate data saja, jangan drop objek)
+
+Boleh dibuang saat reset (transaksi/demo): `products`, `stock_movements`, `product_condition_history`, `sales_invoices(+lines)`, `purchase_orders/invoices/batches(+lines)`, `packing_sessions(+items)`, `returns`, `stock_opname_*`, `bank_transactions`, `customers/customer_payments(+alloc)`, `vendor_payments(+alloc)`, `expenses`, `journal_entries(+lines)`, `delete_requests`, `activity_logs`, `marketplace_imports`, `marketplace_sku_map`, `internal_messages`, `feedback_*`.
+- Pakai `TRUNCATE ... RESTART IDENTITY CASCADE` + reset sequence penomoran (mis. `feedback_report_seq`). Verifikasi via MCP setelah reset (config utuh, transaksi 0).
+
 ### Aturan Git
 - Jangan push langsung ke `main`/`master`.
 - Jangan `git reset --hard`, `git push --force`, atau `git clean -f` tanpa konfirmasi.
