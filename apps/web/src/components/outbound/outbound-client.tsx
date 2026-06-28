@@ -2,8 +2,10 @@
 
 import { useState, useTransition, useCallback } from "react";
 import {
+  addPackingItemManual,
   createPackingSession,
   scanPackingItem,
+  searchProductsForPacking,
   removePackingItem,
   cancelPackingSession,
   finalizePackingSession,
@@ -13,6 +15,7 @@ import {
   Button, Card, Input, Select, FieldLabel, FieldError, Alert, Badge,
 } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
+import { formatRupiah } from "@/lib/format";
 import { useHardwareScanner } from "@sneakervault/barcode";
 import { CameraScanner } from "@/components/scanner/camera-scanner";
 import { 
@@ -44,6 +47,21 @@ type Item = {
   size_label?: string | null;
 };
 
+type PackingProduct = {
+  id: string;
+  brand: string;
+  model: string;
+  sku: string;
+  barcode: string;
+  size: number | null;
+  size_label?: string | null;
+  color: string | null;
+  quantity: number;
+  sell_price: number;
+  price_offline?: number | null;
+  image_url?: string | null;
+};
+
 export function OutboundClient() {
   const toast = useToast();
   const [pending, startTransition] = useTransition();
@@ -53,6 +71,8 @@ export function OutboundClient() {
   const [items, setItems] = useState<Item[]>([]);
   const [scanBarcode, setScanBarcode] = useState("");
   const [showCamera, setShowCamera] = useState(false);
+  const [manualQuery, setManualQuery] = useState("");
+  const [manualResults, setManualResults] = useState<PackingProduct[]>([]);
 
   const [form, setForm] = useState({
     platform: "shopee",
@@ -60,6 +80,45 @@ export function OutboundClient() {
     courier: "jne",
     courier_custom: "",
   });
+
+  const appendPackingResult = useCallback((payload: {
+    product: {
+      id: string;
+      brand: string;
+      model: string;
+      size: number | null;
+      size_label?: string | null;
+      barcode?: string | null;
+      quantity?: number | null;
+    };
+    item: { id: string };
+  }, fallbackBarcode: string, label: "ditambahkan" | "discanned") => {
+    const { product, item } = payload;
+    const sizeLabel = product.size_label ?? product.size ?? "-";
+    const barcodeValue = product.barcode ?? fallbackBarcode;
+    setItems((prev) => [
+      ...prev,
+      {
+        id: item.id,
+        product_id: product.id,
+        barcode: barcodeValue,
+        brand: product.brand,
+        model: product.model,
+        size: product.size,
+        size_label: product.size_label,
+      },
+    ]);
+    setManualResults((prev) =>
+      prev
+        .map((p) =>
+          p.id === product.id
+            ? { ...p, quantity: Math.max(0, Number(product.quantity ?? p.quantity - 1)) }
+            : p,
+        )
+        .filter((p) => p.quantity > 0),
+    );
+    toast.push(`Item ${label}: ${product.brand} ${product.model} size ${sizeLabel}`, "success");
+  }, [toast]);
 
   const doScanItem = useCallback((code: string) => {
     if (!session || !code.trim()) return;
@@ -71,29 +130,47 @@ export function OutboundClient() {
         return;
       }
       if ("data" in result && result.data) {
-        const { product, item } = result.data as {
-          product: { id: string; brand: string; model: string; size: number | null; size_label?: string | null };
+        const payload = result.data as {
+          product: { id: string; brand: string; model: string; size: number | null; size_label?: string | null; barcode?: string | null; quantity?: number | null };
           item: { id: string };
         };
-        const sizeLabel = product.size_label ?? product.size ?? "-";
-        setItems((prev) => [
-          ...prev,
-          {
-            id: item.id,
-            product_id: product.id,
-            barcode: code.trim(),
-            brand: product.brand,
-            model: product.model,
-            size: product.size,
-            size_label: product.size_label,
-          },
-        ]);
+        appendPackingResult(payload, code.trim(), "discanned");
         setScanBarcode("");
-        toast.push(`Stok dikurangi: ${product.brand} ${product.model} size ${sizeLabel}`, "success");
       }
     });
     setShowCamera(false);
-  }, [session, toast]);
+  }, [appendPackingResult, session]);
+
+  function handleManualSearch() {
+    startTransition(async () => {
+      const result = await searchProductsForPacking(manualQuery);
+      if ("error" in result && typeof result.error === "string") {
+        toast.push(result.error, "error");
+        return;
+      }
+      const data = "data" in result ? (result.data as PackingProduct[]) : [];
+      setManualResults(data);
+      if (data.length === 0) toast.push("Produk tidak ditemukan atau stok habis", "info");
+    });
+  }
+
+  function handleManualAdd(product: PackingProduct) {
+    if (!session) return;
+    startTransition(async () => {
+      const result = await addPackingItemManual(session.id, product.id);
+      if ("error" in result && typeof result.error === "string") {
+        toast.push(result.error, "error");
+        return;
+      }
+      if ("data" in result && result.data) {
+        const payload = result.data as {
+          product: { id: string; brand: string; model: string; size: number | null; size_label?: string | null; barcode?: string | null; quantity?: number | null };
+          item: { id: string };
+        };
+        appendPackingResult(payload, product.barcode, "ditambahkan");
+      }
+    });
+  }
 
   // Hardware scanner (USB)
   useHardwareScanner({ onScan: doScanItem, enabled: !!session });
@@ -125,6 +202,8 @@ export function OutboundClient() {
           courier: s.courier as string,
           platform_order_id: (s.platform_order_id as string) ?? null,
         });
+        setManualQuery("");
+        setManualResults([]);
         toast.push("Sesi packing dimulai", "success");
       }
     });
@@ -174,6 +253,8 @@ export function OutboundClient() {
     setSession(null);
     setItems([]);
     setScanBarcode("");
+    setManualQuery("");
+    setManualResults([]);
     setForm({ platform: "shopee", platform_order_id: "", courier: "jne", courier_custom: "" });
   }
 
@@ -286,26 +367,96 @@ export function OutboundClient() {
           ) : (
             <>
                <Card className="border-white/[0.06] bg-[#262626] p-6 shadow-xl">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-white/40 flex items-center gap-2 mb-6">
-                    <QrCode size={16} /> Scan Item Produk
-                  </h3>
+                  <div className="mb-5 flex flex-col gap-1">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white/55">
+                      <Search size={16} /> Tambah Item Manual
+                    </h3>
+                    <p className="text-xs leading-relaxed text-white/35">
+                      Prioritas gudang: cari produk dari SKU, barcode, brand, model, warna, atau size. Scan tetap tersedia di bawah.
+                    </p>
+                  </div>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={16} />
                       <Input
-                        value={scanBarcode}
-                        onChange={(e) => setScanBarcode(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && doScanItem(scanBarcode)}
-                        placeholder="Scan barcode sepatu..."
+                        value={manualQuery}
+                        onChange={(e) => setManualQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleManualSearch()}
+                        placeholder="Cari SKU, barcode, brand, model, warna, size..."
                         disabled={pending}
                         autoFocus
                         className="pl-10 h-12 rounded-xl bg-white/[0.03] border-white/10"
                       />
                     </div>
-                    <Button onClick={() => doScanItem(scanBarcode)} disabled={pending || !scanBarcode} className="h-12 bg-white text-black font-bold px-6 rounded-xl">
+                    <Button onClick={handleManualSearch} disabled={pending} className="h-12 bg-white text-black font-bold px-6 rounded-xl">
+                       Cari Produk
+                    </Button>
+                  </div>
+
+                  <div className="mt-5 space-y-2">
+                    {manualResults.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.015] px-4 py-5 text-center text-xs text-white/35">
+                        Ketik kata kunci lalu cari. Produk yang muncul hanya stok tersedia.
+                      </div>
+                    ) : (
+                      manualResults.map((product) => {
+                        const sizeLabel = product.size_label ?? product.size ?? "-";
+                        const price = Number(product.price_offline ?? 0) > 0 ? Number(product.price_offline) : Number(product.sell_price);
+                        return (
+                          <div key={product.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.05] bg-white/[0.025] p-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="truncate text-sm font-bold text-white/90">
+                                  {product.brand} {product.model}
+                                </span>
+                                <Badge tone="info" className="h-5 border-none px-2 py-0 text-[10px]">
+                                  Size {sizeLabel}
+                                </Badge>
+                                <Badge tone={product.quantity <= 2 ? "warning" : "success"} className="h-5 border-none px-2 py-0 text-[10px]">
+                                  {product.quantity} stok
+                                </Badge>
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-white/35">
+                                <span>SKU {product.sku}</span>
+                                <span>Barcode {product.barcode}</span>
+                                <span>{formatRupiah(price)}</span>
+                                {product.color ? <span>{product.color}</span> : null}
+                              </div>
+                            </div>
+                            <Button
+                              onClick={() => handleManualAdd(product)}
+                              disabled={pending || product.quantity <= 0}
+                              className="h-9 shrink-0 rounded-lg bg-emerald-400 px-4 text-xs font-bold text-black hover:bg-emerald-300"
+                            >
+                              Tambah
+                            </Button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+               </Card>
+
+               <Card className="border-white/[0.05] bg-[#222] p-5 shadow-xl">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-white/35 flex items-center gap-2 mb-4">
+                    <QrCode size={16} /> Scan Barcode Opsional
+                  </h3>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <QrCode className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={16} />
+                      <Input
+                        value={scanBarcode}
+                        onChange={(e) => setScanBarcode(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && doScanItem(scanBarcode)}
+                        placeholder="Scan atau ketik barcode sepatu..."
+                        disabled={pending}
+                        className="pl-10 h-11 rounded-xl bg-white/[0.03] border-white/10"
+                      />
+                    </div>
+                    <Button onClick={() => doScanItem(scanBarcode)} disabled={pending || !scanBarcode} className="h-11 bg-white text-black font-bold px-5 rounded-xl">
                        Scan
                     </Button>
-                    <Button variant="secondary" onClick={() => setShowCamera(!showCamera)} className="h-12 w-12 rounded-xl border-white/10">
+                    <Button variant="secondary" onClick={() => setShowCamera(!showCamera)} className="h-11 w-11 rounded-xl border-white/10">
                        <Camera size={20} />
                     </Button>
                   </div>
@@ -326,7 +477,7 @@ export function OutboundClient() {
                   {items.length === 0 ? (
                     <div className="py-12 flex flex-col items-center justify-center opacity-10">
                        <PackageMinus size={48} />
-                       <p className="text-sm font-medium mt-2 text-center">Belum ada item.<br/>Gunakan scanner untuk menambah.</p>
+                       <p className="text-sm font-medium mt-2 text-center">Belum ada item.<br/>Cari produk manual atau scan barcode.</p>
                     </div>
                   ) : (
                     <div className="space-y-3">

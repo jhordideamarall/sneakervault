@@ -72,29 +72,29 @@ export function PosCustomerCombobox({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-left transition-colors hover:bg-slate-100"
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.08]"
       >
         <span className="flex min-w-0 items-center gap-2">
-          <User className="size-4 shrink-0 text-slate-400" />
-          <span className="truncate text-[11px] font-black uppercase tracking-wide text-slate-600">
+          <User className="size-4 shrink-0 text-white/35" />
+          <span className="truncate text-[11px] font-black uppercase tracking-wide text-white/70">
             {selected?.name ?? "Walk-in Customer"}
           </span>
         </span>
-        <ChevronDown className="size-4 shrink-0 text-slate-400" />
+        <ChevronDown className="size-4 shrink-0 text-white/35" />
       </button>
 
       {open ? (
-        <div className="absolute bottom-full z-20 mb-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <div className="absolute bottom-full z-20 mb-2 w-full overflow-hidden rounded-xl border border-white/[0.08] bg-[#2b2b2b] shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-200">
           {!adding ? (
             <>
-              <div className="relative border-b border-slate-100 p-2">
-                <Search className="absolute left-4 top-1/2 size-3.5 -translate-y-1/2 text-slate-300" />
+              <div className="relative border-b border-white/[0.06] p-2">
+                <Search className="absolute left-4 top-1/2 size-3.5 -translate-y-1/2 text-white/25" />
                 <input
                   autoFocus
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   placeholder="Cari customer…"
-                  className="h-9 w-full rounded-lg bg-slate-50 pl-8 pr-3 text-[13px] outline-none"
+                  className="h-9 w-full rounded-lg bg-white/[0.05] pl-8 pr-3 text-[13px] text-white outline-none placeholder:text-white/30"
                 />
               </div>
               <div className="max-h-52 overflow-y-auto p-1">
@@ -104,7 +104,7 @@ export function PosCustomerCombobox({
                     onSelect(null);
                     setOpen(false);
                   }}
-                  className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-bold text-slate-500 hover:bg-slate-50"
+                  className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-bold text-white/60 hover:bg-white/[0.06]"
                 >
                   Walk-in Customer
                   {!selected ? <Check className="size-3.5 text-[#E5484D]" /> : null}
@@ -117,14 +117,14 @@ export function PosCustomerCombobox({
                       onSelect({ id: c.id, name: c.name });
                       setOpen(false);
                     }}
-                    className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left hover:bg-slate-50"
+                    className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left hover:bg-white/[0.06]"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-bold text-slate-800">
+                      <span className="block truncate text-[13px] font-bold text-white/85">
                         {c.name}
                       </span>
                       {c.phone ? (
-                        <span className="block text-[11px] text-slate-400">{c.phone}</span>
+                        <span className="block text-[11px] text-white/35">{c.phone}</span>
                       ) : null}
                     </span>
                     {selected?.id === c.id ? (
@@ -133,7 +133,7 @@ export function PosCustomerCombobox({
                   </button>
                 ))}
                 {filtered.length === 0 ? (
-                  <p className="px-3 py-3 text-center text-[12px] text-slate-400">
+                  <p className="px-3 py-3 text-center text-[12px] text-white/35">
                     Tidak ada customer
                   </p>
                 ) : null}
@@ -144,7 +144,7 @@ export function PosCustomerCombobox({
                   setAdding(true);
                   setName(q);
                 }}
-                className="flex w-full items-center gap-2 border-t border-slate-100 px-3 py-2.5 text-[12px] font-black uppercase tracking-wide text-[#E5484D] hover:bg-rose-50"
+                className="flex w-full items-center gap-2 border-t border-white/[0.06] px-3 py-2.5 text-[12px] font-black uppercase tracking-wide text-rose-300 hover:bg-white/[0.06]"
               >
                 <Plus className="size-3.5" /> Tambah customer baru
               </button>
@@ -152,11 +152,11 @@ export function PosCustomerCombobox({
           ) : (
             <div className="space-y-2 p-3">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/35">
                   Customer Baru
                 </span>
                 <button type="button" onClick={() => setAdding(false)}>
-                  <X className="size-3.5 text-slate-400" />
+                  <X className="size-3.5 text-white/35" />
                 </button>
               </div>
               <input
@@ -164,19 +164,19 @@ export function PosCustomerCombobox({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Nama customer *"
-                className="h-9 w-full rounded-lg bg-slate-50 px-3 text-[13px] outline-none"
+                className="h-9 w-full rounded-lg bg-white/[0.05] px-3 text-[13px] text-white outline-none placeholder:text-white/30"
               />
               <input
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="No. HP (opsional)"
-                className="h-9 w-full rounded-lg bg-slate-50 px-3 text-[13px] outline-none"
+                className="h-9 w-full rounded-lg bg-white/[0.05] px-3 text-[13px] text-white outline-none placeholder:text-white/30"
               />
               <button
                 type="button"
                 onClick={save}
                 disabled={pending}
-                className="h-9 w-full rounded-lg bg-slate-900 text-[12px] font-black uppercase tracking-widest text-white disabled:opacity-50"
+                className="h-9 w-full rounded-lg bg-white text-[12px] font-black uppercase tracking-widest text-black disabled:opacity-50"
               >
                 {pending ? "Menyimpan…" : "Simpan & Pilih"}
               </button>

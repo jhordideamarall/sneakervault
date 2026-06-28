@@ -188,7 +188,7 @@ export function PosClient({
       customer_name: customerName,
       payment_label: PAYMENT_LABELS[payment.payment_method] ?? "Lainnya",
       lines: cart.map((l) => ({
-        name: `${l.product.brand} ${l.product.model}${l.product.color ? ` ${l.product.color}` : ""} · ${l.product.size}`,
+        name: `${l.product.brand} ${l.product.model}${l.product.color ? ` ${l.product.color}` : ""} · ${l.product.size_label ?? l.product.size ?? "-"}`,
         qty: l.qty,
         price: l.unit_price,
       })),
@@ -240,53 +240,53 @@ export function PosClient({
   }
 
   return (
-    <div className="flex h-full min-h-[560px] overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900">
+    <div className="flex h-full min-h-[640px] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1f1f1f] text-white shadow-xl">
       {/* LEFT — search + grid */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 p-4">
+        <div className="flex items-center gap-2 border-b border-white/[0.06] p-4">
           <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-slate-300" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-white/25" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Cari produk, brand, warna…"
-              className="h-12 w-full rounded-xl border-none bg-slate-50 pl-11 pr-3 text-sm font-bold text-slate-900 shadow-inner outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-[#E5484D]/30"
+              className="h-12 w-full rounded-xl border border-white/[0.08] bg-white/[0.04] pl-11 pr-3 text-sm font-bold text-white outline-none placeholder:text-white/30 focus:border-[#E5484D]/40 focus:ring-2 focus:ring-[#E5484D]/20"
             />
           </div>
-          <div className="relative w-48">
-            <ScanBarcode className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-slate-300" />
+          <div className="relative hidden w-44 sm:block">
+            <ScanBarcode className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-white/25" />
             <input
               ref={barcodeRef}
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && scan()}
               placeholder="Scan barcode"
-              className="h-12 w-full rounded-xl border-none bg-slate-50 pl-11 pr-3 text-sm font-bold text-slate-900 shadow-inner outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-[#E5484D]/30"
+              className="h-12 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] pl-11 pr-3 text-sm font-bold text-white outline-none placeholder:text-white/30 focus:border-[#E5484D]/40 focus:ring-2 focus:ring-[#E5484D]/20"
             />
           </div>
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
             title="Pengaturan struk"
-            className="grid size-12 place-items-center rounded-xl bg-slate-50 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            className="grid size-12 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white/35 transition-colors hover:bg-white/[0.08] hover:text-white/80"
           >
             <Settings2 className="size-4" />
           </button>
         </div>
 
         {brands.length > 1 ? (
-          <div className="flex items-center gap-1 overflow-x-auto px-4 pb-3">
-            <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-slate-100 p-1.5 shadow-inner">
+          <div className="flex items-center gap-1 overflow-x-auto px-4 py-3">
+            <div className="flex items-center gap-1 rounded-xl border border-white/[0.08] bg-white/[0.035] p-1">
               {brands.map((b) => (
                 <button
                   key={b}
                   type="button"
                   onClick={() => setBrand(b)}
                   className={cn(
-                    "h-8 whitespace-nowrap rounded-xl px-4 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95",
+                    "h-8 whitespace-nowrap rounded-lg px-4 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95",
                     brand === b
-                      ? "bg-white text-slate-900 shadow-md ring-1 ring-black/5"
-                      : "text-slate-400 hover:text-slate-600",
+                      ? "bg-white text-black shadow-md"
+                      : "text-white/40 hover:bg-white/[0.05] hover:text-white/80",
                   )}
                 >
                   {b === "all" ? "Semua" : b}
@@ -298,19 +298,19 @@ export function PosClient({
 
         <div className="flex-1 overflow-y-auto px-4 pb-6">
           {visibleGroups.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-6 text-center">
-              <Package className="mb-3 size-10 text-slate-300" />
+            <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] px-6 text-center">
+              <Package className="mb-3 size-10 text-white/15" />
               {products.length === 0 ? (
                 <>
-                  <p className="text-sm font-bold text-slate-700">Belum ada produk di sistem</p>
-                  <p className="mt-1 max-w-xs text-xs text-slate-400">
+                  <p className="text-sm font-bold text-white/80">Belum ada produk di sistem</p>
+                  <p className="mt-1 max-w-xs text-xs text-white/40">
                     Tambahkan stok lewat Gudang → Barang Masuk, atau import data di Pengaturan → Sinkronisasi Data.
                   </p>
                 </>
               ) : (
                 <>
-                  <p className="text-sm font-bold text-slate-700">Produk tidak ditemukan</p>
-                  <p className="mt-1 text-xs text-slate-400">Coba ubah kata kunci atau brand.</p>
+                  <p className="text-sm font-bold text-white/80">Produk tidak ditemukan</p>
+                  <p className="mt-1 text-xs text-white/40">Coba ubah kata kunci atau brand.</p>
                 </>
               )}
             </div>
@@ -325,17 +325,17 @@ export function PosClient({
       </div>
 
       {/* RIGHT — cart */}
-      <div className="hidden w-[340px] flex-col border-l border-slate-200 bg-slate-50 md:flex xl:w-[380px]">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4 shadow-sm">
+      <div className="hidden w-[340px] flex-col border-l border-white/[0.08] bg-[#242424] md:flex xl:w-[380px]">
+        <div className="flex items-center justify-between border-b border-white/[0.06] bg-[#262626] px-5 py-4">
           <div className="flex items-center gap-2">
-            <ShoppingCart className="size-4 text-slate-900" />
+            <ShoppingCart className="size-4 text-white/80" />
             <span className="text-sm font-black uppercase tracking-widest">Keranjang</span>
           </div>
           {cart.length > 0 ? (
             <button
               type="button"
               onClick={clearCart}
-              className="text-[10px] font-black uppercase tracking-wide text-rose-500 hover:text-rose-600"
+              className="text-[10px] font-black uppercase tracking-wide text-rose-300 hover:text-rose-200"
             >
               Kosongkan
             </button>
@@ -344,7 +344,7 @@ export function PosClient({
 
         <div className="flex-1 overflow-y-auto p-3">
           {cart.length === 0 ? (
-            <div className="flex h-64 flex-col items-center justify-center text-slate-300">
+            <div className="flex h-64 flex-col items-center justify-center text-white/20">
               <Package className="mb-3 size-10 stroke-[1.25px]" />
               <p className="text-[10px] font-black uppercase tracking-[0.3em]">Keranjang kosong</p>
             </div>
@@ -353,9 +353,9 @@ export function PosClient({
               {cart.map((l) => (
                 <div
                   key={l.product.id}
-                  className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-2.5 shadow-sm animate-in fade-in slide-in-from-right-4 duration-300"
+                  className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.035] p-2.5 animate-in fade-in slide-in-from-right-4 duration-300"
                 >
-                  <div className="size-10 shrink-0 overflow-hidden rounded-lg border border-slate-100 bg-slate-50">
+                  <div className="size-10 shrink-0 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.04]">
                     {l.product.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -365,33 +365,33 @@ export function PosClient({
                       />
                     ) : (
                       <div className="grid h-full place-items-center">
-                        <Package className="size-4 text-slate-300" />
+                        <Package className="size-4 text-white/20" />
                       </div>
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[11px] font-black uppercase leading-tight text-slate-800">
+                    <p className="truncate text-[11px] font-black uppercase leading-tight text-white/90">
                       {l.product.brand} {l.product.model}
                     </p>
-                    <p className="mt-0.5 text-[11px] font-black tabular-nums tracking-tighter text-slate-400">
-                      Size {l.product.size} · {rp(l.unit_price)}
+                    <p className="mt-0.5 text-[11px] font-black tabular-nums tracking-tighter text-white/35">
+                      Size {l.product.size_label ?? l.product.size ?? "-"} · {rp(l.unit_price)}
                     </p>
                   </div>
-                  <div className="flex h-9 items-center rounded-xl border border-slate-100 bg-slate-50 p-1">
+                  <div className="flex h-9 items-center rounded-xl border border-white/[0.06] bg-black/20 p-1">
                     <button
                       type="button"
                       onClick={() => setQty(l.product.id, l.qty - 1)}
-                      className="grid size-6 place-items-center rounded-lg text-slate-400 hover:bg-white hover:text-slate-900"
+                      className="grid size-6 place-items-center rounded-lg text-white/35 hover:bg-white/[0.08] hover:text-white"
                     >
                       <Minus className="size-3" />
                     </button>
-                    <span className="w-6 text-center text-xs font-black tabular-nums text-slate-900">
+                    <span className="w-6 text-center text-xs font-black tabular-nums text-white">
                       {l.qty}
                     </span>
                     <button
                       type="button"
                       onClick={() => setQty(l.product.id, l.qty + 1)}
-                      className="grid size-6 place-items-center rounded-lg text-slate-400 hover:bg-white hover:text-slate-900"
+                      className="grid size-6 place-items-center rounded-lg text-white/35 hover:bg-white/[0.08] hover:text-white"
                     >
                       <Plus className="size-3" />
                     </button>
@@ -402,7 +402,7 @@ export function PosClient({
           )}
         </div>
 
-        <div className="space-y-3 border-t border-slate-200 bg-white p-4 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.06)]">
+        <div className="space-y-3 border-t border-white/[0.06] bg-[#262626] p-4">
           <PosCustomerCombobox
             customers={customers}
             selected={customer}
@@ -411,7 +411,7 @@ export function PosClient({
           />
 
           <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-black uppercase tracking-widest text-slate-300">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-black uppercase tracking-widest text-white/30">
               Diskon
             </span>
             <NumberInput
@@ -419,24 +419,24 @@ export function PosClient({
               value={discount || ""}
               onValueChange={(value) => setDiscount(Math.max(0, value))}
               placeholder="0"
-              className="h-10 w-full rounded-xl !border-none !bg-slate-50 pl-16 pr-3 text-right text-sm font-black tabular-nums !text-slate-900 outline-none focus:!ring-0"
+              className="h-10 w-full rounded-xl !border !border-white/[0.08] !bg-white/[0.04] pl-16 pr-3 text-right text-sm font-black tabular-nums !text-white outline-none focus:!ring-0"
             />
           </div>
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">
+              <span className="text-[10px] font-black uppercase tracking-widest text-white/30">
                 Subtotal
               </span>
-              <span className="text-xs font-black tabular-nums text-slate-500">
+              <span className="text-xs font-black tabular-nums text-white/50">
                 {rp(totals.subtotal)}
               </span>
             </div>
-            <div className="flex items-end justify-between border-t border-slate-50 px-1 pt-2">
-              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-900">
+            <div className="flex items-end justify-between border-t border-white/[0.06] px-1 pt-2">
+              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white/80">
                 Total
               </span>
-              <span className="text-2xl font-black tabular-nums tracking-tighter text-slate-900">
+              <span className="text-2xl font-black tabular-nums tracking-tighter text-white">
                 {rp(totals.total)}
               </span>
             </div>
