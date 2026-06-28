@@ -294,18 +294,20 @@ async function ChannelAndExpenseTables({ from, to }: { from: string; to: string 
               <th className="px-6 py-3 text-left font-medium">Channel</th>
               <th className="px-6 py-3 text-right font-medium">Invoice</th>
               <th className="px-6 py-3 text-right font-medium">Revenue</th>
+              <th className="px-6 py-3 text-right font-medium">Fee</th>
               <th className="px-6 py-3 text-right font-medium">Profit</th>
               <th className="px-6 py-3 text-right font-medium">Margin</th>
             </tr>
           </thead>
           <tbody>
             {channelProfit.length === 0 ? (
-              <tr><td colSpan={5} className="px-6 py-8 text-center text-sm text-white/25">Belum ada data channel</td></tr>
+              <tr><td colSpan={6} className="px-6 py-8 text-center text-sm text-white/25">Belum ada data channel</td></tr>
             ) : channelProfit.map((row) => (
               <tr key={row.channel} className="border-b border-white/[0.02]">
                 <td className="px-6 py-3 text-sm font-medium capitalize text-white/75">{row.channel}</td>
                 <td className="px-6 py-3 text-right text-xs text-white/50">{row.invoices}</td>
                 <td className="px-6 py-3 text-right text-xs text-white/50">Rp {formatNum(row.revenue)}</td>
+                <td className="px-6 py-3 text-right text-xs text-white/50">Rp {formatNum(row.marketplace_fee)}</td>
                 <td className="px-6 py-3 text-right text-xs font-semibold text-emerald-300">Rp {formatNum(row.profit)}</td>
                 <td className="px-6 py-3 text-right text-xs text-white/60">{row.margin.toFixed(1)}%</td>
               </tr>
@@ -327,7 +329,12 @@ async function ChannelAndExpenseTables({ from, to }: { from: string; to: string 
             ) : marketplaceCosts.map((row) => (
               <div key={row.channel} className="flex items-center justify-between py-2 text-sm">
                 <span className="capitalize text-white/70">{row.channel}</span>
-                <span className="text-white/50">Fee Rp {formatNum(row.marketplace_fee)}</span>
+                <span className="text-right text-white/50">
+                  Fee Rp {formatNum(row.marketplace_fee)}
+                  <span className="ml-2 text-[10px] uppercase text-white/25">
+                    {row.fee_source === "settlement_actual" ? "Settlement" : row.fee_source === "mixed" ? "Settlement+Estimasi" : row.fee_source === "order_estimate" ? "Estimasi" : "-"}
+                  </span>
+                </span>
               </div>
             ))}
           </div>

@@ -54,6 +54,10 @@ type Product = {
   hpp: number;
   sell_price: number;
   price_offline: number;
+  price_website: number | null;
+  price_shopee: number | null;
+  price_tiktok: number | null;
+  price_tokopedia: number | null;
   image_url: string | null;
   condition: ProductCondition;
   defect_reason: string | null;
@@ -159,6 +163,10 @@ function groupByModel(products: Product[]): ModelGroup[] {
 function formatPriceRange(min: number, max: number): string {
   if (min === max) return formatRupiah(min);
   return `${formatRupiah(min)} – ${formatRupiah(max)}`;
+}
+
+function channelPrice(price: number | null | undefined, fallback: number) {
+  return price ?? fallback;
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
@@ -285,6 +293,10 @@ export function InventoryClient({
               ...(showHpp ? ["HPP"] : []),
               "Harga Online",
               "Harga Offline",
+              "Harga Website",
+              "Harga Shopee",
+              "Harga TikTok",
+              "Harga Tokopedia",
             ]}
             rows={displayProducts.map((p) => {
               const g = groups.find((gr) => gr.brand === p.brand && gr.model === p.model);
@@ -300,6 +312,10 @@ export function InventoryClient({
                 ...(showHpp ? [hppForRow] : []),
                 p.sell_price,
                 p.price_offline,
+                channelPrice(p.price_website, p.sell_price),
+                channelPrice(p.price_shopee, p.sell_price),
+                channelPrice(p.price_tiktok, p.sell_price),
+                channelPrice(p.price_tokopedia, p.sell_price),
               ];
             })}
             pdfLabel="Produk PDF"
@@ -614,7 +630,7 @@ function ModelGroupRow({
       {expanded && (
         <div className="border-t border-white/[0.04] bg-[#1f1f1f] px-4 py-3">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-xs [&_th]:px-3 [&_td]:px-3 [&_th:first-child]:pl-0 [&_td:first-child]:pl-0 [&_th:last-child]:pr-0 [&_td:last-child]:pr-0">
+            <table className="w-full min-w-[1120px] text-xs [&_th]:px-3 [&_td]:px-3 [&_th:first-child]:pl-0 [&_td:first-child]:pl-0 [&_th:last-child]:pr-0 [&_td:last-child]:pr-0">
               <thead>
                 <tr className="text-left text-white/40">
                   <th className="py-2 font-medium">Size</th>
@@ -623,6 +639,10 @@ function ModelGroupRow({
                   <th className="py-2 text-right font-medium">Stok</th>
                   <th className="py-2 text-right font-medium">Online</th>
                   <th className="py-2 text-right font-medium">Offline</th>
+                  <th className="py-2 text-right font-medium">Website</th>
+                  <th className="py-2 text-right font-medium">Shopee</th>
+                  <th className="py-2 text-right font-medium">TikTok</th>
+                  <th className="py-2 text-right font-medium">Tokopedia</th>
                   <th className="py-2 pl-6 font-medium">Kondisi</th>
                   {(canEdit || canChangeCondition) && (
                     <th className="py-2 text-right font-medium"></th>
@@ -657,6 +677,10 @@ function ModelGroupRow({
                     <td className="py-2.5 text-right tabular-nums text-emerald-400">
                       {formatRupiah(v.price_offline)}
                     </td>
+                    <ChannelPriceCell value={v.price_website} fallback={v.sell_price} />
+                    <ChannelPriceCell value={v.price_shopee} fallback={v.sell_price} />
+                    <ChannelPriceCell value={v.price_tiktok} fallback={v.sell_price} />
+                    <ChannelPriceCell value={v.price_tokopedia} fallback={v.sell_price} />
                     <td className="py-2.5 pl-6">
                       <ConditionBadge condition={v.condition} />
                       {v.defect_reason && (
@@ -703,6 +727,27 @@ function ModelGroupRow({
         </div>
       )}
     </li>
+  );
+}
+
+function ChannelPriceCell({
+  value,
+  fallback,
+}: {
+  value: number | null;
+  fallback: number;
+}) {
+  const usesFallback = value == null;
+  return (
+    <td
+      className={cn(
+        "py-2.5 text-right tabular-nums",
+        usesFallback ? "text-white/45" : "text-white",
+      )}
+      title={usesFallback ? "Belum diisi khusus, pakai Harga Online" : undefined}
+    >
+      {formatRupiah(channelPrice(value, fallback))}
+    </td>
   );
 }
 

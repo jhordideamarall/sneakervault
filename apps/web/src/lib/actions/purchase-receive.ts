@@ -38,7 +38,7 @@ export async function receivePurchaseOrder(input: unknown) {
 
   const { data: poLines, error: linesErr } = await supabase
     .from("purchase_order_lines")
-    .select("id, product_id, ordered_qty, received_qty, unit_cost, new_brand, new_model, new_size, new_color, new_sku")
+    .select("id, product_id, ordered_qty, received_qty, unit_cost, new_brand, new_model, new_size, new_size_label, new_color, new_sku")
     .eq("po_id", po_id);
   if (linesErr || !poLines)
     return { error: { _form: ["Gagal membaca line PO"] } };
@@ -75,33 +75,41 @@ export async function receivePurchaseOrder(input: unknown) {
     let productId = ln.product_id as string | null;
     if (!productId) {
       const sku = (ln.new_sku ?? "").trim();
-      if (!sku || !ln.new_brand || !ln.new_model || ln.new_size == null) {
+      const sizeLabel = String(
+        (ln as { new_size_label?: string | null }).new_size_label ??
+          (ln.new_size != null ? ln.new_size : ""),
+      ).trim();
+      if (!sku || !ln.new_brand || !ln.new_model || !sizeLabel) {
         return { error: { _form: ["Item baru PO tidak lengkap (brand/model/size/SKU)"] } };
       }
       const { data: existingProd } = await supabase
         .from("products")
         .select("id")
         .eq("sku", sku)
+        .eq("size_label", sizeLabel)
         .maybeSingle();
       if (existingProd) {
         productId = existingProd.id;
       } else {
-        const { data: created, error: cErr } = await supabase
+        const productPayload = {
+          brand: ln.new_brand,
+          model: ln.new_model,
+          size_label: sizeLabel,
+          color: ln.new_color ?? null,
+          sku,
+          barcode: sku,
+          hpp: 0,
+          sell_price: Number(ln.unit_cost),
+          price_offline: Number(ln.unit_cost),
+          quantity: 0,
+          is_active: true,
+          first_inbound_at: new Date().toISOString(),
+        } as Record<string, unknown>;
+        if (ln.new_size != null) productPayload.size = ln.new_size;
+
+        const { data: created, error: cErr } = await (supabase as any)
           .from("products")
-          .insert({
-            brand: ln.new_brand,
-            model: ln.new_model,
-            size: ln.new_size,
-            color: ln.new_color ?? null,
-            sku,
-            barcode: sku,
-            hpp: 0,
-            sell_price: Number(ln.unit_cost),
-            price_offline: Number(ln.unit_cost),
-            quantity: 0,
-            is_active: true,
-            first_inbound_at: new Date().toISOString(),
-          })
+          .insert(productPayload)
           .select("id")
           .single();
         if (cErr) return { error: { _form: [`Gagal membuat produk ${sku}: ${cErr.message}`] } };

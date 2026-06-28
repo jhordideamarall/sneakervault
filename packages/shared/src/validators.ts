@@ -46,6 +46,10 @@ export const productUpdateSchema = z.object({
   hpp: z.coerce.number().nonnegative().optional(),
   sell_price: z.coerce.number().nonnegative().optional(),
   price_offline: z.coerce.number().nonnegative().optional(),
+  price_website: z.coerce.number().nonnegative().nullable().optional(),
+  price_shopee: z.coerce.number().nonnegative().nullable().optional(),
+  price_tiktok: z.coerce.number().nonnegative().nullable().optional(),
+  price_tokopedia: z.coerce.number().nonnegative().nullable().optional(),
   color: z.string().optional(),
   image_url: z.string().url().nullable().optional().or(z.literal("")),
   default_supplier_id: z.string().uuid().nullable().optional(),
@@ -89,6 +93,13 @@ export const packingSessionInputSchema = z
     ]),
     courier_custom: z.string().optional(),
   })
+  .refine(
+    (d) => d.platform === "offline" || !!d.platform_order_id?.trim(),
+    {
+      message: "Nomor order marketplace wajib diisi untuk Shopee/TikTok/Tokopedia/platform online",
+      path: ["platform_order_id"],
+    },
+  )
   .refine((d) => d.platform === "offline" || d.courier !== "offline", {
     message: "Kurir wajib dipilih jika platform bukan offline",
     path: ["courier"],
@@ -196,13 +207,17 @@ export const poLineInputSchema = z
     new_brand: z.string().trim().optional(),
     new_model: z.string().trim().optional(),
     new_size: z.coerce.number().optional(),
+    new_size_label: z.string().trim().optional(),
     new_color: z.string().trim().optional(),
     new_sku: z.string().trim().optional(),
   })
   .refine(
     (l) =>
       !!l.product_id ||
-      (!!l.new_brand && !!l.new_model && l.new_size != null && !!l.new_sku),
+      (!!l.new_brand &&
+        !!l.new_model &&
+        (l.new_size != null || !!l.new_size_label) &&
+        !!l.new_sku),
     { message: "Item baru wajib isi brand, model, size, dan SKU" },
   );
 
@@ -282,6 +297,75 @@ export type PurchaseInvoiceStatus =
   | "partial"
   | "paid"
   | "cancelled";
+
+// ─── Pre Order ────────────────────────────────────────────
+export const preOrderSourceSchema = z.enum(["manual", "marketplace"]);
+
+export const preOrderChannelSchema = z.enum([
+  "manual",
+  "wa",
+  "shopee",
+  "tiktok",
+  "tokopedia",
+  "offline",
+  "website",
+  "other",
+]);
+
+export const preOrderStatusSchema = z.enum([
+  "review",
+  "ready_from_stock",
+  "needs_purchase",
+  "purchase_created",
+  "waiting_stock",
+  "ready_to_pack",
+  "packed",
+  "cancelled",
+]);
+
+export const preOrderLineInputSchema = z.object({
+  product_id: z.string().uuid().optional().nullable(),
+  sku: z.string().trim().min(1, "SKU wajib diisi"),
+  product_name: z.string().trim().min(1, "Nama produk wajib diisi"),
+  brand: z.string().trim().optional(),
+  model: z.string().trim().optional(),
+  color: z.string().trim().optional(),
+  size_label: z.string().trim().min(1, "Size wajib dipilih atau diisi custom"),
+  size_value: z.coerce.number().positive().optional().nullable(),
+  requested_qty: z.coerce.number().int().positive("Qty harus lebih dari 0"),
+  unit_price: z.coerce.number().nonnegative().default(0),
+  estimated_cost: z.coerce.number().nonnegative().default(0),
+  notes: z.string().trim().optional(),
+});
+
+export const preOrderInputSchema = z
+  .object({
+    source: preOrderSourceSchema.default("manual"),
+    channel: preOrderChannelSchema.default("manual"),
+    marketplace_order_id: z.string().trim().optional(),
+    customer_id: z.string().uuid().optional().nullable(),
+    customer_name: z.string().trim().min(1, "Nama customer wajib diisi"),
+    order_date: z.string().min(1, "Tanggal order wajib diisi"),
+    deadline_date: z.string().optional().nullable(),
+    marketplace_status: z.string().trim().optional(),
+    notes: z.string().trim().optional(),
+    lines: z.array(preOrderLineInputSchema).min(1, "Minimal 1 item"),
+  })
+  .refine(
+    (d) => d.source !== "marketplace" || !!d.marketplace_order_id?.trim(),
+    {
+      message: "Nomor order marketplace wajib diisi untuk Pre Order Marketplace",
+      path: ["marketplace_order_id"],
+    },
+  )
+  .refine((d) => d.source !== "marketplace" || d.channel !== "manual", {
+    message: "Channel marketplace wajib Shopee, TikTok, Tokopedia, atau platform lain",
+    path: ["channel"],
+  });
+
+export type PreOrderInput = z.infer<typeof preOrderInputSchema>;
+export type PreOrderLineInput = z.infer<typeof preOrderLineInputSchema>;
+export type PreOrderStatusInput = z.infer<typeof preOrderStatusSchema>;
 
 // ─── Vendor Payment (Phase 2 — Pembayaran Vendor) ──────────
 export const paymentMethodEnum = z.enum([

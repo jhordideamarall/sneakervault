@@ -282,8 +282,8 @@ export function MutasiBankClient({
                 <th className="px-4 py-3 font-medium">Deskripsi</th>
                 <th className="px-4 py-3 font-medium">Akun</th>
                 <th className="px-4 py-3 font-medium">Sumber</th>
-                <th className="px-4 py-3 text-right font-medium">Debit</th>
-                <th className="px-4 py-3 text-right font-medium">Kredit</th>
+                <th className="px-4 py-3 text-right font-medium">Uang Keluar</th>
+                <th className="px-4 py-3 text-right font-medium">Uang Masuk</th>
                 <th className="px-4 py-3 text-right font-medium">Saldo</th>
                 <th
                   className="px-4 py-3 text-center font-medium"
@@ -438,10 +438,10 @@ export function MutasiBankClient({
                 >
                   <div className="flex items-center gap-2 text-sm font-medium text-white">
                     <ArrowDownLeft size={14} strokeWidth={1.8} />
-                    Uang Masuk (Credit)
+                    Uang Masuk
                   </div>
                   <p className="mt-0.5 text-[11px] text-white/50">
-                    Setoran, refund vendor, dll
+                    Menambah saldo kas/bank: setoran, penerimaan, refund vendor
                   </p>
                 </button>
                 <button
@@ -454,10 +454,10 @@ export function MutasiBankClient({
                 >
                   <div className="flex items-center gap-2 text-sm font-medium text-white">
                     <ArrowUpRight size={14} strokeWidth={1.8} />
-                    Uang Keluar (Debit)
+                    Uang Keluar
                   </div>
                   <p className="mt-0.5 text-[11px] text-white/50">
-                    Biaya admin, ops, dll
+                    Mengurangi saldo kas/bank: biaya admin, operasional, transfer keluar
                   </p>
                 </button>
               </div>

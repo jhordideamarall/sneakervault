@@ -124,26 +124,27 @@ export async function updateManualJournalEntry(data: {
 
   const supabase = await createClient();
 
-  // Verify entry exists and is editable (manual + posted)
+  // Verify entry exists and is editable. Owner/finance may override posted
+  // system journals for accounting corrections; source documents are not
+  // changed by this action.
   const { data: existing } = await supabase
     .from("journal_entries")
-    .select("id, source_type, status")
+    .select("id, source_type, status, entry_date, description, notes, total_debit, total_credit")
     .eq("id", data.id)
     .single();
 
   if (!existing) {
     return { error: { _form: ["Jurnal tidak ditemukan"] } };
   }
-  const ex = existing as { source_type: string; status: string };
-  if (ex.source_type !== "manual") {
-    return {
-      error: {
-        _form: [
-          "Hanya jurnal manual yang bisa diedit. Jurnal otomatis dari transaksi harus dikoreksi lewat modul asalnya.",
-        ],
-      },
-    };
-  }
+  const ex = existing as {
+    source_type: string;
+    status: string;
+    entry_date: string;
+    description: string;
+    notes: string | null;
+    total_debit: number;
+    total_credit: number;
+  };
   if (ex.status === "reversed") {
     return { error: { _form: ["Jurnal yang sudah di-reverse tidak bisa diedit"] } };
   }
@@ -175,7 +176,10 @@ export async function updateManualJournalEntry(data: {
   }
 
   // Delete old lines + insert new
-  await supabase.from("journal_lines").delete().eq("entry_id", data.id);
+  const { error: deleteLinesErr } = await supabase.from("journal_lines").delete().eq("entry_id", data.id);
+  if (deleteLinesErr) {
+    return { error: { _form: [`Gagal menghapus line lama: ${deleteLinesErr.message}`] } };
+  }
 
   const lineRows = data.lines.map((l, idx) => ({
     entry_id: data.id,
@@ -193,12 +197,30 @@ export async function updateManualJournalEntry(data: {
 
   await logActivity({
     user_id: profile.id,
-    action: "update_manual_journal",
+    action: ex.source_type === "manual" ? "update_manual_journal" : "manual_override_journal",
     entity_type: "journal_entry",
     entity_id: data.id,
+    old_data: {
+      source_type: ex.source_type,
+      entry_date: ex.entry_date,
+      description: ex.description,
+      notes: ex.notes,
+      total_debit: ex.total_debit,
+      total_credit: ex.total_credit,
+    },
+    new_data: {
+      source_type: ex.source_type,
+      entry_date: data.entry_date,
+      description: data.description,
+      notes: data.notes ?? null,
+      total_debit: totalDebit,
+      total_credit: totalCredit,
+      lines: data.lines,
+    },
   });
 
   revalidatePath("/buku-besar/journal");
+  revalidatePath("/laporan-keuangan");
   return { success: true };
 }
 

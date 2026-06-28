@@ -83,6 +83,11 @@ export function JournalClient({
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const canManage = roles.includes("owner") || roles.includes("finance");
+  const editingEntry = useMemo(
+    () => entries.find((e) => e.id === editingId) ?? null,
+    [entries, editingId],
+  );
+  const isEditingSystemJournal = !!editingEntry && editingEntry.source_type !== "manual";
 
   // Only leaf accounts (no children) for cleaner picker
   const leafAccounts = useMemo(() => {
@@ -99,6 +104,7 @@ export function JournalClient({
       return (
         e.entry_number.toLowerCase().includes(q) ||
         e.description.toLowerCase().includes(q) ||
+        (e.notes ?? "").toLowerCase().includes(q) ||
         e.lines.some(
           (l) =>
             l.account_code.includes(q) || l.account_name.toLowerCase().includes(q),
@@ -210,7 +216,10 @@ export function JournalClient({
           setFormError(r.error._form?.[0] ?? "Gagal update jurnal");
           return;
         }
-        toast.push("Jurnal berhasil diupdate", "success");
+        toast.push(
+          isEditingSystemJournal ? "Koreksi jurnal sistem disimpan" : "Jurnal berhasil diupdate",
+          "success",
+        );
       } else {
         const r = (await createManualJournalEntry({
           entry_date: manualDate,
@@ -315,11 +324,17 @@ export function JournalClient({
             <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-4">
               <div>
                 <h2 className="text-base font-semibold text-white">
-                  {editingId ? "Edit Jurnal Manual" : "Jurnal Penyesuaian Manual"}
+                  {editingId
+                    ? isEditingSystemJournal
+                      ? "Koreksi Jurnal Sistem"
+                      : "Edit Jurnal Manual"
+                    : "Jurnal Penyesuaian Manual"}
                 </h2>
                 <p className="text-xs text-white/40 mt-0.5">
-                  {editingId
-                    ? "Ubah detail jurnal. Saldo akun akan ter-update otomatis."
+                  {editingId && isEditingSystemJournal
+                    ? "Override accounting manual untuk jurnal otomatis. Invoice, stok, dan mutasi bank asal tidak ikut berubah."
+                    : editingId
+                      ? "Ubah detail jurnal. Saldo akun akan ter-update otomatis."
                     : "Untuk koreksi & penyesuaian yang tidak berkaitan dengan kas, pembelian, atau penjualan"}
                 </p>
               </div>
@@ -332,6 +347,14 @@ export function JournalClient({
             </div>
 
             <div className="p-6 space-y-4">
+              {isEditingSystemJournal ? (
+                <Alert tone="warning">
+                  Koreksi ini hanya mengubah posting buku besar. Data transaksi sumber tetap
+                  seperti semula, jadi pastikan total debit dan kredit balance serta catatan
+                  koreksinya jelas.
+                </Alert>
+              ) : null}
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-white/60">Tanggal</label>
@@ -494,8 +517,9 @@ export function JournalClient({
       >
         Jurnal dari <strong>pembelian, penjualan, dan kas bank</strong> dicatat <em>otomatis</em> oleh sistem
         — tidak perlu diinput manual di sini. Halaman ini untuk <strong>penyesuaian accounting</strong>:
-        koreksi, penyusutan, alokasi prepaid, dll. Hanya jurnal manual (icon{" "}
-        <PenLine size={10} strokeWidth={1.9} className="inline-block translate-y-[1px]" />) yang bisa di-edit / di-hapus.
+        koreksi, penyusutan, alokasi prepaid, dll. Owner/Finance bisa mengedit jurnal posted sebagai
+        koreksi manual; edit jurnal otomatis tidak mengubah invoice, stok, atau bank sumbernya. Hapus
+        tetap dibatasi untuk jurnal manual saja.
       </QuickTip>
 
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-white/[0.06] bg-[#262626] p-3">
@@ -629,22 +653,24 @@ export function JournalClient({
                       </td>
                       {canManage ? (
                         <td className="px-3 py-3 text-right">
-                          {e.source_type === "manual" && e.status !== "reversed" ? (
+                          {e.status !== "reversed" ? (
                             <div className="flex items-center justify-end gap-1" onClick={(ev) => ev.stopPropagation()}>
                               <button
                                 onClick={() => openEdit(e)}
                                 className="flex h-7 w-7 items-center justify-center rounded text-white/40 hover:bg-white/[0.06] hover:text-sky-300 transition-colors"
-                                title="Edit jurnal"
+                                title={e.source_type === "manual" ? "Edit jurnal" : "Koreksi jurnal sistem"}
                               >
                                 <Pencil size={13} strokeWidth={1.9} />
                               </button>
-                              <button
-                                onClick={() => setConfirmDelete(e.id)}
-                                className="flex h-7 w-7 items-center justify-center rounded text-white/40 hover:bg-white/[0.06] hover:text-red-300 transition-colors"
-                                title="Hapus jurnal"
-                              >
-                                <Trash2 size={13} strokeWidth={1.9} />
-                              </button>
+                              {e.source_type === "manual" ? (
+                                <button
+                                  onClick={() => setConfirmDelete(e.id)}
+                                  className="flex h-7 w-7 items-center justify-center rounded text-white/40 hover:bg-white/[0.06] hover:text-red-300 transition-colors"
+                                  title="Hapus jurnal manual"
+                                >
+                                  <Trash2 size={13} strokeWidth={1.9} />
+                                </button>
+                              ) : null}
                             </div>
                           ) : (
                             <span className="text-[10px] text-white/20">—</span>

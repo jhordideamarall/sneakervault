@@ -104,6 +104,7 @@ const navGroups: NavGroup[] = [
       { href: "/penjualan/invoice", label: "Invoice Penjualan", icon: i(FileText) },
       { href: "/penjualan/penerimaan-kas", label: "Penerimaan Kas", icon: i(Wallet) },
       { href: "/penjualan/import-marketplace", label: "Import Pesanan", icon: i(Upload) },
+      { href: "/pre-order", label: "Pre Order", icon: i(ClipboardList) },
       { href: "/penjualan/settlement", label: "Rekonsiliasi Settlement", icon: i(Wallet) },
       { href: "/sold", label: "Terjual", icon: i(DollarSign) },
     ],

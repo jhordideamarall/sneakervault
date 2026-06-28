@@ -40,7 +40,8 @@ type Item = {
   barcode: string;
   brand: string;
   model: string;
-  size: number;
+  size: number | null;
+  size_label?: string | null;
 };
 
 export function OutboundClient() {
@@ -71,9 +72,10 @@ export function OutboundClient() {
       }
       if ("data" in result && result.data) {
         const { product, item } = result.data as {
-          product: { id: string; brand: string; model: string; size: number };
+          product: { id: string; brand: string; model: string; size: number | null; size_label?: string | null };
           item: { id: string };
         };
+        const sizeLabel = product.size_label ?? product.size ?? "-";
         setItems((prev) => [
           ...prev,
           {
@@ -83,10 +85,11 @@ export function OutboundClient() {
             brand: product.brand,
             model: product.model,
             size: product.size,
+            size_label: product.size_label,
           },
         ]);
         setScanBarcode("");
-        toast.push(`+ ${product.brand} ${product.model} size ${product.size}`, "success");
+        toast.push(`Stok dikurangi: ${product.brand} ${product.model} size ${sizeLabel}`, "success");
       }
     });
     setShowCamera(false);
@@ -161,7 +164,7 @@ export function OutboundClient() {
         toast.push(result.error, "error");
         return;
       }
-      toast.push("Packing selesai, siap kirim", "success");
+      toast.push("Scan item selesai. Stok sudah keluar; lanjut ubah status ke Dikirim dari daftar order.", "success");
       // Keep session but update local status? For now reset for simplicity
       resetSession();
     });
@@ -182,7 +185,7 @@ export function OutboundClient() {
           Packing (Outbound)
         </h1>
         <p className="text-white/50">
-          Proses pesanan keluar dan kurangi stok secara real-time.
+          Proses pesanan keluar berdasarkan nomor order marketplace dan kurangi stok secara real-time.
         </p>
       </div>
 
@@ -216,8 +219,14 @@ export function OutboundClient() {
                   </div>
                 )}
                 <div className="space-y-2 pt-2">
-                  <FieldLabel>Order ID / Nomor Order</FieldLabel>
-                  <Input value={form.platform_order_id} onChange={(e) => setForm({ ...form, platform_order_id: e.target.value })} placeholder="ID dari Marketplace atau WA" />
+                  <FieldLabel required={form.platform !== "offline"}>
+                    Nomor Order Marketplace
+                  </FieldLabel>
+                  <Input value={form.platform_order_id} onChange={(e) => setForm({ ...form, platform_order_id: e.target.value })} placeholder="Contoh: 260621N06KGD52" />
+                  <FieldError message={fieldErrors.platform_order_id} />
+                  <p className="text-[11px] leading-relaxed text-white/35">
+                    Wajib untuk Shopee/TikTok/Tokopedia supaya gudang bisa cocokan label packing dengan order marketplace.
+                  </p>
                 </div>
               </div>
 
@@ -246,14 +255,18 @@ export function OutboundClient() {
                      <span className="text-sm font-bold text-white uppercase">{session.courier}</span>
                   </div>
                   <div className="flex justify-between">
-                     <span className="text-xs text-white/40 font-medium">Order ID</span>
+                     <span className="text-xs text-white/40 font-medium">Order Marketplace</span>
                      <span className="text-sm font-mono font-bold text-white">{session.platform_order_id ?? "N/A"}</span>
                   </div>
                </div>
 
+               <Alert tone="info" className="mt-5 text-xs leading-relaxed">
+                 Setiap scan langsung mengurangi stok. Jika item dihapus atau sesi dibatalkan saat masih PACKING, stok otomatis dikembalikan.
+               </Alert>
+
                <div className="mt-8 pt-6 border-t border-white/[0.04] space-y-3">
                   <Button variant="secondary" onClick={handleFinalize} disabled={pending || items.length === 0} className="w-full h-11 border-white/5">
-                    Selesai & Tutup Sesi
+                    Selesai Scan Item
                   </Button>
                   <Button variant="ghost" onClick={handleCancel} disabled={pending} className="w-full h-11 text-red-400 hover:bg-red-500/10">
                     <XCircle size={14} className="mr-2" /> Batalkan Sesi
@@ -322,7 +335,7 @@ export function OutboundClient() {
                           <div className="flex flex-col gap-1">
                              <div className="flex items-center gap-2">
                                 <span className="text-sm font-bold text-white/90">{item.brand} {item.model}</span>
-                                <Badge tone="info" className="text-[10px] h-4 py-0 px-1.5 border-none">Size {item.size}</Badge>
+                                <Badge tone="info" className="text-[10px] h-4 py-0 px-1.5 border-none">Size {item.size_label ?? item.size ?? "-"}</Badge>
                              </div>
                              <div className="flex items-center gap-2 text-[10px] text-white/30 font-mono">
                                 <QrCode size={10} />
