@@ -105,32 +105,34 @@ export function PosProductCard({
           </div>
         </div>
 
-        <div className="mt-auto flex flex-wrap gap-1.5 border-t border-white/[0.05] pt-2.5">
-          {sizes.map((v) => {
-            const disabled = v.quantity <= 0;
-            const sizeLabel =
-              v.size_label ??
-              (v.size == null
-                ? "-"
-                : Number(v.size).toFixed(2).replace(/\.?0+$/, ""));
-            return (
-              <button
-                key={v.id}
-                type="button"
-                disabled={disabled}
-                onClick={() => onAdd(v)}
-                title={`Size ${sizeLabel} · stok ${v.quantity}`}
-                className={cn(
-                  "min-w-[34px] rounded-lg px-2 py-1.5 text-[11px] font-black tabular-nums transition-all active:scale-95",
-                  disabled
-                    ? "cursor-not-allowed bg-white/[0.03] text-white/20 line-through"
-                    : "bg-white/[0.06] text-white/75 hover:bg-[#E5484D] hover:text-white",
-                )}
-              >
-                {sizeLabel}
-              </button>
-            );
-          })}
+        <div className="mt-auto border-t border-white/[0.05] pt-2.5">
+          <div className="flex h-8 flex-nowrap gap-1.5 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {sizes.map((v) => {
+              const disabled = v.quantity <= 0;
+              const sizeLabel =
+                v.size_label ??
+                (v.size == null
+                  ? "-"
+                  : Number(v.size).toFixed(2).replace(/\.?0+$/, ""));
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onAdd(v)}
+                  title={`Size ${sizeLabel} · stok ${v.quantity}`}
+                  className={cn(
+                    "h-7 min-w-[38px] shrink-0 rounded-lg px-2 text-[11px] font-black tabular-nums transition-all active:scale-95",
+                    disabled
+                      ? "cursor-not-allowed bg-white/[0.03] text-white/20 line-through"
+                      : "bg-white/[0.06] text-white/75 hover:bg-[#E5484D] hover:text-white",
+                  )}
+                >
+                  {sizeLabel}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

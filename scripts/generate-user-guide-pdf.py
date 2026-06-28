@@ -5,7 +5,7 @@ from pathlib import Path
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import (
@@ -23,6 +23,16 @@ from reportlab.platypus import (
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "output" / "pdf" / "panduan-alur-pemakaian-sneakervault-dewinst.pdf"
+PAGE_SIZE = landscape(A4)
+MARGIN_X = 1.25 * cm
+MARGIN_TOP = 1.45 * cm
+MARGIN_BOTTOM = 1.15 * cm
+CONTENT_WIDTH = PAGE_SIZE[0] - (2 * MARGIN_X)
+
+
+def widths(*parts: float) -> list[float]:
+    total = sum(parts)
+    return [CONTENT_WIDTH * part / total for part in parts]
 
 
 def p(text: str, style: ParagraphStyle) -> Paragraph:
@@ -78,15 +88,15 @@ def section(title: str, children: list[object]) -> list[object]:
 
 def page_header_footer(canvas, doc) -> None:
     canvas.saveState()
-    width, height = A4
+    width, height = PAGE_SIZE
     canvas.setFillColor(colors.HexColor("#111827"))
     canvas.setFont("Helvetica-Bold", 9)
-    canvas.drawString(1.45 * cm, height - 1.05 * cm, "SneakerVault - Dewinst.id")
+    canvas.drawString(MARGIN_X, height - 0.95 * cm, "SneakerVault - Dewinst.id")
     canvas.setFillColor(colors.HexColor("#6B7280"))
     canvas.setFont("Helvetica", 8)
-    canvas.drawRightString(width - 1.45 * cm, 0.95 * cm, f"Halaman {doc.page}")
+    canvas.drawRightString(width - MARGIN_X, 0.8 * cm, f"Halaman {doc.page}")
     canvas.setStrokeColor(colors.HexColor("#E5E7EB"))
-    canvas.line(1.45 * cm, height - 1.25 * cm, width - 1.45 * cm, height - 1.25 * cm)
+    canvas.line(MARGIN_X, height - 1.15 * cm, width - MARGIN_X, height - 1.15 * cm)
     canvas.restoreState()
 
 
@@ -165,13 +175,13 @@ def build_story() -> list[object]:
     today = "29 Juni 2026"
 
     story += [
-        Spacer(1, 2.0 * cm),
+        Spacer(1, 1.0 * cm),
         p("Panduan Alur Pemakaian SneakerVault", TITLE),
         Spacer(1, 0.15 * cm),
         p("Dewinst.id - Pembelian, Pre Order, POS, Marketplace, Packing, Settlement, dan Akuntansi", SUBTITLE),
         Spacer(1, 0.35 * cm),
         p(f"Versi UAT - diperbarui {today}", SUBTITLE),
-        Spacer(1, 1.2 * cm),
+        Spacer(1, 0.65 * cm),
         flow_table(
             [
                 ["Tujuan", "Cara membaca panduan"],
@@ -184,9 +194,9 @@ def build_story() -> list[object]:
                     "Satu order hanya boleh punya satu jalur stok keluar. Jangan proses order yang sama dua kali di import invoice dan packing manual.",
                 ],
             ],
-            [7.6 * cm, 8.4 * cm],
+            widths(1, 1),
         ),
-        Spacer(1, 0.7 * cm),
+        Spacer(1, 0.45 * cm),
         p("Ringkasan Flow Utama", H2),
         numbered(
             [
@@ -232,7 +242,7 @@ def build_story() -> list[object]:
                     ["Buku Besar > Chart of Accounts", "COA pendapatan, HPP, persediaan, piutang, hutang, biaya marketplace.", "Menentukan posting jurnal otomatis dan laporan finance."],
                     ["Audit & Pengaturan", "Role user dan periode fiskal.", "Mencegah transaksi di periode terkunci dan membatasi akses menu."],
                 ],
-                [4.4 * cm, 6.2 * cm, 5.4 * cm],
+                widths(0.9, 1.55, 1.55),
             )
         ],
     )
@@ -258,7 +268,7 @@ def build_story() -> list[object]:
                     ["Faktur pembelian", "Stok tidak berubah lagi.", "Hutang usaha terbentuk."],
                     ["Bayar vendor", "Stok tidak berubah.", "Kas/bank berkurang dan hutang berkurang."],
                 ],
-                [4.4 * cm, 5.6 * cm, 6.0 * cm],
+                widths(0.9, 1.45, 1.65),
             ),
         ],
     )
@@ -277,7 +287,7 @@ def build_story() -> list[object]:
                     ["Stock ready tapi ditandai PO marketplace", "Sistem tetap menandai sumber PO dan bisa membuat reservasi stok jika item tersedia.", "Gudang melihat order marketplace secara eksplisit, lalu packing sesuai SOP."],
                     ["Tidak match SKU/size", "Import menampilkan error SKU, size, dan format data yang dibutuhkan.", "Perbaiki mapping atau master produk, lalu import ulang."],
                 ],
-                [3.8 * cm, 6.5 * cm, 5.7 * cm],
+                widths(0.9, 1.65, 1.45),
             ),
             p("Catatan ukuran sepatu: gunakan picker untuk size umum. Gunakan custom untuk ukuran Adidas seperti 42 2/3 atau format lain yang tidak ada di picker.", BODY),
         ],
@@ -305,7 +315,7 @@ def build_story() -> list[object]:
                     ["Akun kas/bank", "Menentukan mutasi dan laporan arus kas."],
                     ["Struk", "Bisa dicetak atau disimpan sebagai bukti pembayaran toko."],
                 ],
-                [6.0 * cm, 10.0 * cm],
+                widths(1.0, 3.0),
             ),
         ],
     )
@@ -336,7 +346,7 @@ def build_story() -> list[object]:
                     ["Duplicate", "Order sudah pernah diproses.", "Tidak dibuat ulang."],
                     ["Error", "SKU, size, qty, format, atau stok tidak memenuhi aturan.", "Baca pesan, perbaiki master/mapping/template, lalu import ulang."],
                 ],
-                [3.6 * cm, 6.0 * cm, 6.4 * cm],
+                widths(0.85, 1.45, 1.7),
             ),
             p("Aturan penting: satu order hanya boleh punya satu jalur stok keluar. Jika order marketplace sudah diproses menjadi invoice yang mengurangi stok, jangan ulangi order yang sama lewat packing manual yang juga mengurangi stok.", BODY),
         ],
@@ -367,7 +377,7 @@ def build_story() -> list[object]:
                     ["Item salah ditambahkan", "Hapus item dari sesi agar stok kembali."],
                     ["Sesi salah dibuat", "Batalkan sesi agar semua stok kembali dan audit tercatat."],
                 ],
-                [5.2 * cm, 10.8 * cm],
+                widths(1.1, 2.9),
             ),
         ],
     )
@@ -398,7 +408,7 @@ def build_story() -> list[object]:
                     ["Shipping dan subsidi", "Pendapatan/biaya sesuai sheet dan mapping settlement."],
                     ["Refund/return", "Diproses sebagai pembatalan, retur, atau penyesuaian tergantung status invoice dan settlement."],
                 ],
-                [5.2 * cm, 10.8 * cm],
+                widths(1.1, 2.9),
             ),
         ],
     )
@@ -415,7 +425,7 @@ def build_story() -> list[object]:
                     ["Finance", "Akun bank, settlement, pembayaran vendor, jurnal, laporan operasional, laba rugi, dan arus kas."],
                     ["Owner", "Review laporan, margin channel, fee marketplace, pre order outstanding, dan audit log."],
                 ],
-                [4.0 * cm, 12.0 * cm],
+                widths(0.8, 3.2),
             )
         ],
     )
@@ -445,11 +455,11 @@ def main() -> None:
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     doc = SimpleDocTemplate(
         str(OUTPUT),
-        pagesize=A4,
-        leftMargin=1.45 * cm,
-        rightMargin=1.45 * cm,
-        topMargin=1.55 * cm,
-        bottomMargin=1.35 * cm,
+        pagesize=PAGE_SIZE,
+        leftMargin=MARGIN_X,
+        rightMargin=MARGIN_X,
+        topMargin=MARGIN_TOP,
+        bottomMargin=MARGIN_BOTTOM,
         title="Panduan Alur Pemakaian SneakerVault - Dewinst.id",
         author="SneakerVault",
     )
