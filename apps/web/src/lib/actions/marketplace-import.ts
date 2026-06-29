@@ -177,12 +177,12 @@ function productPayloadFromMarketplaceLine(channel: MarketplaceChannel, line: Ma
       size,
       color: null,
       barcode: `MP-${channel}-${line.sku}-${size}`.slice(0, 120),
-      quantity: Math.max(0, Math.trunc(line.qty)),
+      quantity: 0,
       hpp: 0,
       sell_price: Math.max(0, line.unit_price),
       price_offline: Math.max(0, line.unit_price),
       is_active: true,
-      first_inbound_at: line.qty > 0 ? new Date().toISOString() : null,
+      first_inbound_at: null,
     },
   };
 }
@@ -408,11 +408,16 @@ async function resolveOrders(
     });
 
     const already = Boolean(existingInvoice || existingPreOrder);
-    const blocked = lines.some((l) => l.issue !== "ok");
+    const hardBlocked = lines.some((l) => l.issue === "unmapped");
+    const lowStock = lines.some((l) => l.issue === "low_stock");
     const statusKind = o.status_kind ?? "normal";
-    let status: OrderDiff["status"] = already ? "duplicate" : blocked ? "blocked" : "ready";
+    let status: OrderDiff["status"] = already ? "duplicate" : hardBlocked ? "blocked" : "ready";
     let cancelReason: string | undefined;
     let statusReason: string | undefined;
+    if (!already && !hardBlocked && lowStock) {
+      statusReason =
+        "Invoice tetap bisa dibuat karena import marketplace tidak mengurangi stok. Stok akan divalidasi dan turun saat Packing / Outbound.";
+    }
 
     if (statusKind !== "normal") {
       if (!existingInvoice && existingPreOrder) {
@@ -430,7 +435,7 @@ async function resolveOrders(
         }
       } else if (!existingInvoice) {
         status = "cancel_unmatched";
-        cancelReason = "Order batal/return belum pernah diimport ke invoice sistem. Tidak ada stok yang dikembalikan.";
+        cancelReason = "Order batal/return belum pernah diimport ke invoice sistem. Tidak ada invoice yang dibatalkan.";
       } else if (existingInvoice.status === "cancelled") {
         status = "cancel_duplicate";
         cancelReason = `Invoice ${existingInvoice.invoice_number} sudah dibatalkan sebelumnya.`;
@@ -444,7 +449,7 @@ async function resolveOrders(
           `Invoice ${existingInvoice.invoice_number} sudah paid/settlement. Perlu proses refund/return settlement sebelum stok dikembalikan.`;
       } else if (["issued", "partial"].includes(existingInvoice.status)) {
         status = "cancel_ready";
-        cancelReason = `Invoice ${existingInvoice.invoice_number} outstanding; aman untuk auto-cancel dan restock.`;
+        cancelReason = `Invoice ${existingInvoice.invoice_number} outstanding; aman untuk auto-cancel. Stok hanya dikembalikan jika invoice lama pernah mengurangi stok.`;
       } else {
         status = "cancel_blocked";
         cancelReason = `Invoice ${existingInvoice.invoice_number} status ${existingInvoice.status}; tidak aman untuk auto-cancel.`;
@@ -642,18 +647,6 @@ export async function createProductFromMarketplaceLine(
       .single();
     if (error) return { error: error.message };
     productId = data.id;
-
-    if (parsed.data.qty > 0) {
-      const movement = await createStockMovement(supabase, {
-        product_id: productId,
-        type: "inbound",
-        quantity: parsed.data.qty,
-        unit_cost: 0,
-        reference_type: "opening_balance",
-        notes: `Bootstrap dari import order ${channel}: HPP belum diisi`,
-      });
-      if (movement.error) return { error: movement.error };
-    }
   }
 
   const mapped = await mapSkuToProduct(supabase, profile.id, channel, parsed.data.sku, productId);
@@ -679,7 +672,6 @@ export async function createMissingProductsFromMarketplaceOrders(
   const supabase = await createClient();
   const diffs = await resolveOrders(supabase, channel, orders);
   const lines = new Map<string, MarketplaceOrderLine>();
-  const qtyBySku = new Map<string, number>();
 
   for (const order of diffs) {
     if (order.status === "duplicate") continue;
@@ -697,7 +689,6 @@ export async function createMissingProductsFromMarketplaceOrders(
           variation_name: line.variation_name,
         });
       }
-      qtyBySku.set(line.sku, (qtyBySku.get(line.sku) ?? 0) + line.qty);
     }
   }
 
@@ -706,8 +697,7 @@ export async function createMissingProductsFromMarketplaceOrders(
   const errors: { sku: string; reason: string }[] = [];
 
   for (const [sku, line] of lines) {
-    const qty = qtyBySku.get(sku) ?? 0;
-    const payload = productPayloadFromMarketplaceLine(channel, { ...line, qty });
+    const payload = productPayloadFromMarketplaceLine(channel, { ...line, qty: 0 });
     if ("error" in payload) {
       errors.push({ sku, reason: payload.error ?? "Produk gagal dibuat" });
       continue;
@@ -738,17 +728,6 @@ export async function createMissingProductsFromMarketplaceOrders(
       }
       productId = data.id;
       created++;
-      if (qty > 0) {
-        const movement = await createStockMovement(supabase, {
-          product_id: productId,
-          type: "inbound",
-          quantity: qty,
-          unit_cost: 0,
-          reference_type: "opening_balance",
-          notes: `Bootstrap dari import order ${channel}: HPP belum diisi`,
-        });
-        if (movement.error) errors.push({ sku, reason: movement.error });
-      }
     }
 
     const mapped = await mapSkuToProduct(supabase, profile.id, channel, sku, productId);
@@ -897,8 +876,9 @@ function preOrderInputFromDiff(order: OrderDiff, fileName?: string) {
 
 /**
  * Commit approved orders. Re-resolves server-side (authoritative), then posts
- * each ready order through the atomic RPC (invoice + lines + stock + journal in
- * one transaction). Blocked/duplicate orders are skipped. Records the batch in
+ * each ready order through the atomic RPC (invoice + lines + AR/revenue journal
+ * in one transaction). Stok fisik dan HPP/persediaan keluar terjadi di Packing
+ * / Outbound. Blocked/duplicate orders are skipped. Records the batch in
  * marketplace_imports as the import-source audit/label.
  */
 export async function commitMarketplaceOrders(
@@ -1046,6 +1026,7 @@ export async function commitMarketplaceOrders(
         `Import ${channel.toUpperCase()}`,
         `Order Marketplace ${order.order_id}`,
         `Jenis ${order.order_kind === "preorder" ? "Pre Order Marketplace" : "Order Langsung"}`,
+        "Stok belum turun; stok fisik turun saat Packing / Outbound",
         order.marketplace_status ? `Status Marketplace: ${order.marketplace_status}` : null,
         fileName || null,
       ].filter(Boolean).join(" • "),

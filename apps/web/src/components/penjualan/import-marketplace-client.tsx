@@ -190,7 +190,10 @@ export function ImportMarketplaceClient() {
         startTransition(async () => {
           try {
             await runReconcile(channel, parsed);
-            setFileStatus({ tone: "success", message: "Review siap. Baris bermasalah akan tetap tampil sampai SKU/size/stok diperbaiki." });
+            setFileStatus({
+              tone: "success",
+              message: "Review siap. Import marketplace membuat invoice dan jurnal piutang/pendapatan; stok fisik belum turun dan akan turun saat Packing / Outbound.",
+            });
             setState("review");
           } catch (error) {
             setFileStatus({
@@ -229,7 +232,7 @@ export function ImportMarketplaceClient() {
       setState("result");
       if (r.success > 0 || r.preorders > 0 || r.cancelled > 0) {
         toast.push(
-          `${r.success} invoice, ${r.preorders} pre order, ${r.cancelled} cancel/release diproses`,
+          `${r.success} invoice, ${r.preorders} pre order, ${r.cancelled} cancel/release diproses. Stok marketplace turun saat Packing / Outbound.`,
           "success",
         );
       }
@@ -252,7 +255,7 @@ export function ImportMarketplaceClient() {
           </div>
           <h2 className="mb-2 text-lg font-semibold text-white">Import Pesanan Marketplace</h2>
           <p className="mb-6 max-w-sm text-sm text-white/50">
-            Pilih channel, lalu upload laporan pesanan/order report. Jangan pakai template stok atau settlement di menu ini.
+            Pilih channel, lalu upload laporan pesanan/order report. Import ini membuat invoice dan audit order, bukan mengurangi stok gudang.
           </p>
 
           {fileStatus && (
@@ -293,7 +296,9 @@ export function ImportMarketplaceClient() {
               className="hidden"
             />
           </label>
-          <p className="mt-4 text-xs text-white/30">File order report Excel/CSV dari {channelMeta.label} Seller Center</p>
+          <p className="mt-4 text-xs text-white/30">
+            File order report Excel/CSV dari {channelMeta.label} Seller Center. Stok turun saat barang diproses di Packing / Outbound.
+          </p>
         </Card>
       )}
 
@@ -314,7 +319,7 @@ export function ImportMarketplaceClient() {
       {state === "processing" && (
         <Card className="flex flex-col items-center justify-center py-16 text-center">
           <div className="mb-4 size-10 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-          <p className="text-sm text-white/50">Menyimpan order dan Pre Order ke sistem…</p>
+          <p className="text-sm text-white/50">Menyimpan invoice/order tanpa mengurangi stok gudang…</p>
         </Card>
       )}
 
@@ -332,7 +337,7 @@ export function ImportMarketplaceClient() {
 }
 
 function statusBadge(status: OrderDiff["status"]) {
-  if (status === "ready") return <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Siap Jadi Invoice</Badge>;
+  if (status === "ready") return <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Siap Invoice</Badge>;
   if (status === "duplicate") return <Badge className="bg-white/[0.06] text-white/40 border-white/10">Sudah diimport</Badge>;
   if (status === "preorder_ready") return <Badge className="bg-sky-500/10 text-sky-300 border-sky-500/20">Masuk Pre Order</Badge>;
   if (status === "preorder_review") return <Badge className="bg-amber-500/10 text-amber-300 border-amber-500/20">Pre Order Review</Badge>;
@@ -410,6 +415,10 @@ function ReviewDiff({
         <SummaryStat label="Siap Cancel" value={summary.cancel_ready} tone="text-sky-300" />
         <SummaryStat label="Perlu tindakan" value={summary.blocked} tone="text-amber-400" />
         <SummaryStat label="Sudah diproses" value={summary.duplicate + summary.preorder_duplicate + summary.cancel_duplicate + cancelIssues} tone="text-white/50" />
+      </div>
+
+      <div className="rounded-lg border border-sky-500/20 bg-sky-500/[0.06] px-4 py-3 text-xs leading-relaxed text-sky-100/75">
+        Import order marketplace hanya membuat invoice, jurnal piutang/pendapatan, dan label order. Stok fisik, stock movement, serta HPP-persediaan keluar baru diposting saat tim gudang memproses barang di <b>Packing / Outbound</b>.
       </div>
 
       {summary.unmapped_skus.length > 0 && (
@@ -546,9 +555,9 @@ function LineRow({
           )}
           {line.issue === "low_stock" && !isPreOrder && (
             <div className="max-w-xs text-right">
-              <Badge className="bg-red-500/10 text-red-400 border-red-500/20">Stok {line.product?.quantity} &lt; {line.qty}</Badge>
-              <div className="mt-1 text-[11px] leading-relaxed text-red-200/70">
-                Tambah stok lewat Barang Masuk atau Stock Opname, lalu review ulang.
+              <Badge className="bg-amber-500/10 text-amber-300 border-amber-500/20">Stok {line.product?.quantity} / butuh {line.qty}</Badge>
+              <div className="mt-1 text-[11px] leading-relaxed text-amber-100/70">
+                Invoice tetap bisa dibuat. Stok belum turun di import; packing nanti akan menolak jika stok fisik belum cukup.
               </div>
             </div>
           )}
@@ -671,7 +680,7 @@ function ResultView({
           )}
         </div>
         <h2 className="mb-2 text-2xl font-bold text-white">Import Selesai</h2>
-        <p className="mb-8 text-white/50">Hasil pemrosesan laporan {channelLabel}.</p>
+        <p className="mb-8 text-white/50">Hasil pemrosesan laporan {channelLabel}. Stok gudang belum berubah; lanjutkan barang keluar dari Packing / Outbound.</p>
 
         <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-5">
           <div className="rounded-xl bg-white/[0.03] p-4">

@@ -375,7 +375,8 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         ],
         efek: [
           "Baris siap membuat invoice belum terbayar.",
-          "Stok turun saat import dikonfirmasi.",
+          "Stok tidak turun saat import; stok fisik turun saat Packing / Outbound.",
+          "Jurnal import mencatat piutang, pendapatan, diskon, dan estimasi fee marketplace. HPP/persediaan keluar diposting saat packing.",
           "Mapping SKU disimpan untuk import berikutnya.",
           "Ongkir/diskon/nilai order dibaca; biaya final tetap dari settlement.",
         ],
@@ -529,11 +530,12 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         fungsi: "Mencatat barang yang keluar lewat sesi packing manual.",
         aturan: [
           "Scan item yang benar sebelum finalisasi.",
-          "Jangan dipakai ulang untuk order marketplace yang stoknya sudah turun dari Import Pesanan.",
+          "Untuk order marketplace, isi nomor order yang sama dengan invoice agar item tervalidasi dan stok turun di jalur packing.",
           "Isi platform/order ID/kurir agar audit pengiriman jelas.",
         ],
         efek: [
-          "Finalisasi packing menurunkan stok.",
+          "Item yang ditambahkan ke sesi packing langsung menurunkan stok. Jika item dihapus atau sesi dibatalkan saat masih packing, stok dikembalikan.",
+          "Untuk invoice marketplace baru, HPP/persediaan keluar diposting saat item dipacking.",
           "Riwayat keluar masuk ke monitoring terjual/outbound.",
         ],
         koreksi: [
@@ -1002,7 +1004,7 @@ export default function PanduanPage() {
               <li>Kalau database kosong, bootstrap produk dulu dari <b>Inventori → Import Produk</b> memakai file produk/listing marketplace.</li>
               <li>Buka <b>Penjualan → Import Pesanan</b>, pilih channel yang benar, lalu upload file pesanan resmi.</li>
               <li>Jika SKU belum dikenali, klik <b>Petakan SKU</b> ke produk sistem. Mapping ini disimpan untuk import berikutnya.</li>
-              <li>Konfirmasi hanya baris yang siap. Hasilnya menjadi <b>Invoice Penjualan belum terbayar</b> dan stok sistem berkurang.</li>
+              <li>Konfirmasi hanya baris yang siap. Hasilnya menjadi <b>Invoice Penjualan belum terbayar</b>; stok sistem belum berkurang.</li>
               <li>Buka <b>Update Stok Marketplace</b>, upload template resmi, generate file, lalu upload balik ke seller center.</li>
             </ol>
           </Sub>
@@ -1014,8 +1016,8 @@ export default function PanduanPage() {
             <ol className="list-decimal space-y-1.5 pl-4">
               <li>Untuk transaksi toko, buka <b>POS Kasir</b>, scan/cari produk, pilih metode pembayaran, lalu checkout.</li>
               <li>Pakai <b>Inventori</b> untuk cek stok dan harga jual. HPP/modal tidak ditampilkan untuk role ini.</li>
-              <li>Untuk packing manual, buka <b>Packing / Outbound</b>, buat sesi, scan item, lalu tandai dikirim.</li>
-              <li>Jangan packing ulang order marketplace yang sudah dikonfirmasi lewat <b>Import Pesanan</b>; stoknya sudah turun di proses import.</li>
+              <li>Untuk packing manual, buka <b>Packing / Outbound</b>, buat sesi, isi nomor order marketplace bila ada, tambah item, lalu tandai dikirim.</li>
+              <li>Order marketplace dari <b>Import Pesanan</b> tetap perlu packing agar stok fisik dan HPP/persediaan keluar tercatat.</li>
             </ol>
           </Sub>
 
@@ -1149,7 +1151,8 @@ export default function PanduanPage() {
           <Sub icon={<Upload size={15} />} title="Import Order">
             Penjualan → Import Pesanan. Pilih channel <b>Shopee / Tokopedia / TikTok</b> → upload Excel pesanan → layar
             <b> Review Diff</b> (cocok / stok kurang / SKU asing / sudah diimport). SKU asing bisa <b>dipetakan</b> (diingat untuk
-            berikutnya) → Konfirmasi → jadi invoice <b>belum terbayar</b> + stok turun + jurnal. Aman re-upload (idempotent).
+            berikutnya) → Konfirmasi → jadi invoice <b>belum terbayar</b> + jurnal piutang/pendapatan. Stok turun saat Packing / Outbound.
+            Aman re-upload (idempotent).
           </Sub>
           <Sub icon={<Download size={15} />} title="Export Stok (Round-Trip)">
             Penjualan → Update Stok Marketplace. Download template Mass Update / Batch Edit dari Seller Center → upload di sini → sistem isi
@@ -1169,7 +1172,7 @@ export default function PanduanPage() {
           </Note>
           <Note>
             <b>Urutan marketplace yang benar:</b> Import Produk untuk bootstrap listing/stok awal → Import Pesanan untuk membuat invoice belum
-            terbayar dan menurunkan stok → Rekonsiliasi Settlement saat dana dilepas agar invoice lunas dan biaya marketplace tercatat.
+            terbayar → Packing / Outbound untuk stok fisik dan HPP keluar → Rekonsiliasi Settlement saat dana dilepas agar invoice lunas dan biaya marketplace tercatat.
           </Note>
         </div>
       </Section>

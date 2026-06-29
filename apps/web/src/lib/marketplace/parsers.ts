@@ -108,6 +108,15 @@ function hasKeys(row: Row | undefined, keys: string[]): boolean {
   return keys.every((key) => lower.has(key.toLowerCase().trim()));
 }
 
+function sumAliases(row: Row, aliases: string[]): number {
+  const lower = new Map(Object.keys(row).map((k) => [k.toLowerCase().trim(), k]));
+  return aliases.reduce((sum, alias) => {
+    const key = lower.get(alias.toLowerCase().trim());
+    if (!key) return sum;
+    return sum + readNumber(row[key]);
+  }, 0);
+}
+
 export function isExpectedOrderTemplate(channel: MarketplaceChannel, rows: Row[]): boolean {
   const first = rows[0];
   if (channel === "shopee") {
@@ -238,7 +247,14 @@ function parseShopee(rows: Row[]): MarketplaceOrder[] {
           Math.abs(readNumber(pick(row, ["Diskon Dari Penjual", "Total Diskon"]))) +
           Math.abs(readNumber(pick(row, ["Voucher Ditanggung Penjual"]))) +
           Math.abs(readNumber(pick(row, ["Paket Diskon (Diskon dari Penjual)"]))),
-        admin_fee: readNumber(pick(row, ["Biaya Administrasi", "Estimasi Potongan Biaya Pengiriman"])),
+        admin_fee: Math.abs(
+          sumAliases(row, [
+            "Biaya Administrasi",
+            "Biaya Layanan",
+            "Biaya Proses Pesanan",
+            "Estimasi Potongan Biaya Pengiriman",
+          ]),
+        ),
       });
     } else {
       const existing = map.get(orderId)!;
@@ -293,7 +309,18 @@ function parseTikTokLike(rows: Row[], channel: "tiktok" | "tokopedia"): Marketpl
         lines: [],
         shipping_fee: readNumber(pick(row, ["Shipping Fee After Discount", "Shipping Fee", "Ongkos Kirim"])),
         discount: Math.abs(readNumber(pick(row, ["SKU Seller Discount", "Seller Discount", "Diskon Penjual"]))),
-        admin_fee: readNumber(pick(row, ["Platform Commission", "Biaya Administrasi", "Komisi"])),
+        admin_fee: Math.abs(
+          sumAliases(row, [
+            "Platform Commission",
+            "Biaya Administrasi",
+            "Komisi",
+            "Biaya komisi platform",
+            "Buyer Service Fee",
+            "Handling Fee",
+            "Payment Fee",
+            "Transaction Fee",
+          ]),
+        ),
       });
     } else {
       const existing = map.get(orderId)!;

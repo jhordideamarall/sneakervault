@@ -340,15 +340,15 @@ def build_story() -> list[object]:
             flow_table(
                 [
                     ["Status hasil import", "Arti", "Tindakan user"],
-                    ["Order Langsung", "Produk match dan stok cukup.", "Commit. Sistem membuat invoice marketplace dan jurnal sesuai kanal."],
-                    ["Pre Order", "Status marketplace terbaca sebagai PO atau stok sistem kurang.", "Masuk menu Pre Order. Lanjut pembelian barang jika perlu."],
-                    ["Cancel/Return", "Order batal/refund dari marketplace.", "Sistem mencoba auto-cancel/restock jika aman. Jika sudah settlement, perlu proses refund/return."],
+                    ["Order Langsung", "Produk match dan invoice bisa dibuat.", "Commit. Sistem membuat invoice marketplace dan jurnal piutang/pendapatan; stok belum turun."],
+                    ["Pre Order", "Status marketplace terbaca sebagai PO atau SKU perlu review.", "Masuk menu Pre Order. Lanjut pembelian barang jika perlu."],
+                    ["Cancel/Return", "Order batal/refund dari marketplace.", "Sistem mencoba auto-cancel jika aman. Restock hanya untuk invoice lama yang memang pernah mengurangi stok."],
                     ["Duplicate", "Order sudah pernah diproses.", "Tidak dibuat ulang."],
-                    ["Error", "SKU, size, qty, format, atau stok tidak memenuhi aturan.", "Baca pesan, perbaiki master/mapping/template, lalu import ulang."],
+                    ["Error", "SKU, size, qty, atau format tidak memenuhi aturan.", "Baca pesan, perbaiki master/mapping/template, lalu import ulang."],
                 ],
                 widths(0.85, 1.45, 1.7),
             ),
-            p("Aturan penting: satu order hanya boleh punya satu jalur stok keluar. Jika order marketplace sudah diproses menjadi invoice yang mengurangi stok, jangan ulangi order yang sama lewat packing manual yang juga mengurangi stok.", BODY),
+            p("Aturan penting: Import Pesanan marketplace tidak mengurangi stok fisik. Stok, stock movement, dan HPP/persediaan keluar dicatat saat Packing / Outbound supaya gudang dan finance punya satu jalur barang keluar yang jelas.", BODY),
         ],
     )
 
@@ -362,7 +362,7 @@ def build_story() -> list[object]:
                     "Buat sesi packing. Untuk marketplace, isi platform, kurir, dan nomor order marketplace secara eksplisit agar label gudang tidak ambigu.",
                     "Saat sesi aktif, gunakan Tambah Item Manual. Cari SKU, barcode, brand, model, warna, atau size. Klik Tambah pada produk yang benar.",
                     "Jika scanner tersedia, gunakan Scan Barcode Opsional. Scanner hardware dan kamera tetap bisa dipakai.",
-                    "Setiap item yang ditambahkan mengurangi stok secara real-time melalui jalur atomic. Jika item dihapus saat sesi masih packing, stok dikembalikan.",
+                    "Setiap item yang ditambahkan mengurangi stok secara real-time melalui jalur atomic. Untuk order marketplace, sistem memvalidasi item terhadap invoice dan memposting HPP/persediaan keluar saat packing.",
                     "Jika sesi dibatalkan, semua item dalam sesi dikembalikan ke stok.",
                     "Klik Selesai Scan Item setelah daftar barang benar. Lanjutkan update status order menjadi dikirim/selesai sesuai menu order.",
                 ],

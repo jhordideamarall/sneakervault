@@ -129,6 +129,7 @@ function seedProductKey(sku: string, sizeNum: number) {
 }
 
 function importPayload(row: ImportProductRow) {
+  const fallbackPrice = row.price_offline || row.sell_price;
   return {
     brand: row.brand,
     model: row.model,
@@ -139,11 +140,11 @@ function importPayload(row: ImportProductRow) {
     quantity: row.quantity,
     hpp: row.hpp,
     sell_price: row.sell_price,
-    price_offline: row.price_offline || row.sell_price,
-    price_website: row.price_website ?? null,
-    price_shopee: row.price_shopee ?? null,
-    price_tiktok: row.price_tiktok ?? null,
-    price_tokopedia: row.price_tokopedia ?? null,
+    price_offline: fallbackPrice,
+    price_website: row.price_website ?? fallbackPrice,
+    price_shopee: row.price_shopee ?? fallbackPrice,
+    price_tiktok: row.price_tiktok ?? fallbackPrice,
+    price_tokopedia: row.price_tokopedia ?? fallbackPrice,
     is_active: true,
     first_inbound_at: row.quantity > 0 ? new Date().toISOString() : null,
   };

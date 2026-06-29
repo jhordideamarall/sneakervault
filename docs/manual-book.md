@@ -99,12 +99,13 @@ Flow import pesanan marketplace:
 2. Pilih channel: Shopee, TikTok, atau Tokopedia.
 3. Upload file pesanan resmi dari seller center.
 4. Review hasil:
-   - Siap: SKU cocok dan stok cukup.
-   - Perlu tindakan: SKU belum dikenali atau stok/HPP bermasalah.
+   - Siap: SKU cocok dan invoice bisa dibuat.
+   - Perlu tindakan: SKU belum dikenali atau format data bermasalah.
    - Sudah diimport: dilewati.
 5. Untuk SKU tidak dikenali, klik **Petakan SKU** ke produk sistem.
 6. Klik **Konfirmasi Import** untuk baris yang siap.
-7. Sistem membuat invoice penjualan belum terbayar, mengurangi stok, dan membuat jurnal.
+7. Sistem membuat invoice penjualan belum terbayar dan jurnal piutang/pendapatan. Stok fisik belum turun.
+8. Buka **Packing / Outbound** untuk memproses barang keluar. Di tahap ini stok, stock movement, dan HPP/persediaan keluar dicatat.
 
 Flow update stok marketplace:
 
@@ -231,11 +232,11 @@ Bagian ini menjelaskan setiap menu dari sisi operasional: siapa yang boleh akses
 
 | Menu | Akses | Fungsi | Aturan | Efek sistem | Koreksi |
 | --- | --- | --- | --- | --- | --- |
-| Order Masuk | Semua role | Monitoring order yang perlu diproses atau dicek status. | Order marketplace resmi masuk lewat Import Pesanan. Cek status sebelum packing agar stok tidak turun dua kali. | Menampilkan order dan status; tidak melunasi invoice. | Jika order dobel, cek import marketplace/packing/POS. |
+| Order Masuk | Semua role | Monitoring order yang perlu diproses atau dicek status. | Order marketplace resmi masuk lewat Import Pesanan lalu dipacking dari Packing / Outbound. | Menampilkan order dan status; tidak melunasi invoice. | Jika order dobel, cek import marketplace/packing/POS. |
 | POS Kasir | Owner, Shopkeeper, Finance | Checkout penjualan offline. | Produk harus punya stok siap jual. Pilih customer atau Walk-in. Pilih metode bayar dan akun kas/bank. Jangan pakai untuk order marketplace yang sudah diimport. | Invoice dibuat, stok turun, kas/bank masuk, jurnal otomatis. | Batalkan/reverse invoice/penerimaan sesuai status jika salah transaksi. |
 | Invoice Penjualan | Owner, Finance, Admin Online | Membuat dan mengelola tagihan customer. | Draft belum menurunkan stok. Terbitkan untuk membuat transaksi berlaku. Marketplace belum lunas sebelum settlement/penerimaan. | Invoice terbit membentuk piutang, stok turun, status menjadi belum bayar/sebagian/lunas. | Edit selama draft atau sebelum pembayaran kompleks. Setelah pembayaran, gunakan cancel/reversal sesuai status. |
 | Penerimaan Kas | Owner, Finance | Mencatat pembayaran customer ke invoice. | Pilih invoice outstanding dan akun bank/kas tujuan. Jangan input manual untuk marketplace yang akan dilunasi settlement. | Kas/bank bertambah, piutang turun, jurnal penerimaan terbentuk. | Reverse penerimaan jika salah bank/tanggal/nominal. |
-| Import Pesanan | Owner, Finance, Admin Online | Mengubah file pesanan Shopee/TikTok/Tokopedia menjadi invoice belum terbayar. | Pilih channel eksplisit. Gunakan file resmi seller center. SKU asing harus dipetakan/dibuat. Size wajib numerik; `Size Lain? Ready`, `Default`, atau kosong ditolak. | Baris siap membuat invoice belum bayar, stok turun, mapping SKU disimpan. Ongkir/diskon/nilai order dibaca; biaya final dari settlement. | Petakan SKU, buat produk dulu, atau upload ulang di channel yang benar. |
+| Import Pesanan | Owner, Finance, Admin Online | Mengubah file pesanan Shopee/TikTok/Tokopedia menjadi invoice belum terbayar. | Pilih channel eksplisit. Gunakan file resmi seller center. SKU asing harus dipetakan/dibuat. Size wajib numerik; `Size Lain? Ready`, `Default`, atau kosong ditolak. | Baris siap membuat invoice belum bayar tanpa mengurangi stok. Jurnal import mencatat piutang/pendapatan/diskon/estimasi fee; HPP dan persediaan keluar dicatat saat packing. | Petakan SKU, buat produk dulu, atau upload ulang di channel yang benar. |
 | Update Stok Marketplace | Owner, Finance, Admin Online | Mengisi template stok/harga marketplace dari stok sistem. | Download template resmi seller center. Pilih Shopee/TikTok/Tokopedia. Centang update harga hanya jika ingin menimpa harga marketplace. | Tidak mengubah stok sistem. Menghasilkan file Excel baru untuk upload balik ke marketplace. | Jika banyak SKU tidak cocok, cek import produk/mapping SKU. Row non-size Shopee sengaja dilewati. |
 | Rekonsiliasi Settlement | Owner, Finance | Mengubah laporan pencairan dana marketplace menjadi penerimaan dan biaya marketplace aktual. | Dipakai satu kali saat dana dilepas. Pesanan harus sudah diimport. Pilih channel, bank tujuan, tanggal cair, referensi. | Invoice marketplace lunas/sebagian, mutasi bank bersih dibuat, biaya marketplace dan selisih ongkir dijurnal. | Jika tidak match, cek periode/order ID/channel. Jika bank/tanggal salah, reverse/koreksi sebelum tutup buku. |
 | Terjual | Owner, Admin Online, Finance | Riwayat barang yang sudah keluar/terjual. | Dipakai untuk baca riwayat dan audit, bukan input penjualan. | Tidak mengubah stok/jurnal. | Jika tidak muncul, cek invoice/order/packing. Jika dobel, audit jalur POS/import/packing. |
@@ -248,7 +249,7 @@ Bagian ini menjelaskan setiap menu dari sisi operasional: siapa yang boleh akses
 | Barang Masuk | Owner, Admin Gudang | Input stok fisik langsung ke gudang. | Scan barcode atau isi produk baru jika barcode belum ada. Qty dan harga modal wajib benar. | Stok bertambah, HPP diperbarui, mutasi stok dan log tercatat. | Jika qty salah, koreksi lewat opname/koreksi stok. Jika produk salah, audit barcode/SKU sebelum transaksi turunannya terjadi. |
 | Stock Opname | Owner, Admin Gudang, Finance | Mencocokkan stok sistem dengan stok fisik. | Semua item sesi harus dihitung sebelum submit. Selisih wajib diberi catatan. Approval diperlukan untuk penyesuaian final. | Approval membuat penyesuaian stok dan jurnal otomatis. | Cancel sesi jika scope salah. Ulang hitung sebelum approval jika selisih belum jelas. |
 | Generate Barcode | Owner, Admin Gudang | Membuat/cetak label barcode internal. | Pastikan brand, model, size, dan SKU benar sebelum cetak. | Barcode bisa dipakai di inbound, POS, packing, opname. | Regenerate hanya jika barcode lama salah/tidak bisa dipakai. |
-| Packing / Outbound | Owner, Shopkeeper | Mencatat barang keluar lewat packing manual. | Scan item benar. Jangan dipakai untuk order marketplace yang stoknya sudah turun dari Import Pesanan. Isi platform/order ID/kurir. | Finalisasi packing menurunkan stok dan masuk riwayat keluar. | Cancel sebelum finalisasi jika salah scan. Setelah final, koreksi lewat retur/opname sesuai kondisi fisik. |
+| Packing / Outbound | Owner, Shopkeeper | Mencatat barang keluar lewat packing manual. | Scan/tambah item benar. Untuk marketplace, isi platform dan nomor order agar sistem memvalidasi item terhadap invoice. | Item yang ditambahkan langsung menurunkan stok. Untuk invoice marketplace baru, HPP/persediaan keluar juga diposting saat packing. | Cancel sebelum finalisasi jika salah scan. Setelah final, koreksi lewat retur/opname sesuai kondisi fisik. |
 | Retur | Owner, Admin Gudang, Admin Online | Refund, tukar size, dan barang kembali. | Admin Online catat konteks; Gudang verifikasi fisik. Tentukan barang kembali normal/defect/tindakan lain. | Stok bisa kembali, pindah status, atau keluar lagi untuk pengganti. | Koreksi sebelum retur ditutup. Setelah selesai, koreksi lewat stok/opname dan catatan finance bila ada refund. |
 
 ### Kas dan Bank
@@ -368,7 +369,7 @@ Cek urutan:
 - Sistem adalah sumber kebenaran stok dan finance.
 - Excel marketplace hanya media import/export, bukan database utama.
 - Jangan import file custom bebas.
-- Jangan packing ulang order marketplace yang stoknya sudah turun lewat import pesanan.
+- Import Pesanan marketplace tidak mengurangi stok; stok marketplace turun saat Packing / Outbound.
 - Settlement dilakukan satu kali saat dana sudah dilepas marketplace.
 - Semua transaksi penting dibuat atomik; jika gagal di tengah, data tidak setengah jadi.
 - HPP hanya boleh dilihat role Owner dan Finance.
