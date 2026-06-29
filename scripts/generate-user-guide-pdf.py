@@ -186,26 +186,26 @@ def build_story() -> list[object]:
             [
                 ["Tujuan", "Cara membaca panduan"],
                 [
-                    "Menjelaskan flow operasional dari barang masuk sampai penjualan, packing, settlement, laporan, dan jurnal.",
-                    "Ikuti urutan flow. Setiap flow memuat menu yang dibuka, tindakan user, dan dampak sistem.",
+                    "Menjelaskan alur operasional dari barang masuk sampai penjualan, packing, settlement, laporan, dan jurnal.",
+                    "Ikuti urutan alurnya. Setiap bagian menjelaskan menu yang dibuka, tindakan pengguna, dan dampak ke sistem.",
                 ],
                 [
-                    "Mengurangi area ambigu untuk user gudang, admin online, shopkeeper, dan finance.",
-                    "Satu order hanya boleh punya satu jalur stok keluar. Jangan proses order yang sama dua kali di import invoice dan packing manual.",
+                    "Membantu tim gudang, admin online, kasir, dan finance memakai sistem tanpa salah langkah.",
+                    "Jangan membuat order yang sama dari dua menu berbeda. Untuk marketplace, Import Pesanan membuat invoice; Packing / Outbound mencatat barang keluar.",
                 ],
             ],
             widths(1, 1),
         ),
         Spacer(1, 0.45 * cm),
-        p("Ringkasan Flow Utama", H2),
+        p("Ringkasan Alur Utama", H2),
         numbered(
             [
-                "Setup master data: produk, supplier, akun bank/kas, COA, dan periode fiskal.",
+                "Siapkan data awal: produk, supplier, akun bank/kas, COA, dan periode fiskal.",
                 "Pembelian barang: buat PO, terima barang, catat faktur pembelian, bayar vendor.",
-                "Pre Order: masuk dari input manual atau otomatis dari import marketplace berstatus PO/low-stock.",
+                "Pre Order: masuk dari input manual atau otomatis dari import marketplace yang terbaca sebagai PO.",
                 "POS kasir: cari produk manual, pilih size, bayar, sistem membuat invoice, kas/bank, stok, dan jurnal.",
-                "Marketplace: import pesanan, baca hasil validasi, commit order valid, lanjut settlement saat dana cair.",
-                "Packing/Outbound: manual add produk menjadi prioritas, scan barcode tetap opsional untuk validasi cepat.",
+                "Marketplace: import pesanan, baca hasil validasi, konfirmasi order valid, lanjut packing, lalu settlement saat dana cair.",
+                "Packing / Outbound: tambah produk manual menjadi prioritas; scan barcode tetap tersedia sebagai alat bantu.",
                 "Finance: cek bank, settlement, jurnal, laporan operasional, laba rugi, dan arus kas.",
             ],
             BODY,
@@ -214,16 +214,16 @@ def build_story() -> list[object]:
     ]
 
     story += section(
-        "1. Prinsip Data yang Tidak Boleh Dilanggar",
+        "1. Prinsip Data Penting",
         [
             bullet(
                 [
                     "Identitas produk adalah SKU + size. SKU sama dengan size berbeda adalah variant, bukan produk dobel.",
                     "Size harus ditampilkan dari size_label agar ukuran seperti 42 2/3 atau 37.5 tidak berubah menjadi angka desimal panjang.",
-                    "HPP hanya berasal dari internal: pembelian barang, penerimaan barang, atau update master produk oleh role yang berhak.",
+                    "HPP hanya berasal dari data internal: pembelian barang, penerimaan barang, atau update master produk oleh peran yang berhak.",
                     "Marketplace tidak menjadi sumber HPP. Data marketplace dipakai untuk order, harga jual kanal, biaya, status, dan settlement.",
-                    "Stok sistem adalah sumber kebenaran. Update stok marketplace berarti push stok sistem ke marketplace, bukan tarik stok dari marketplace.",
-                    "Setiap error import harus persisten dan bisa dibaca: nomor order, SKU, size, alasan mismatch, dan format data yang diharapkan.",
+                    "Stok sistem adalah sumber utama. Update stok marketplace berarti mengirim stok dari sistem ke marketplace, bukan mengambil stok dari marketplace.",
+                    "Pesan error import harus tetap terlihat dan mudah dibaca: nomor order, SKU, size, alasan tidak cocok, dan format data yang diharapkan.",
                 ],
                 BODY,
             )
@@ -236,11 +236,11 @@ def build_story() -> list[object]:
             flow_table(
                 [
                     ["Menu", "Yang diisi", "Dampak"],
-                    ["Master Data > Produk", "Brand, model, SKU, size_label, warna, barcode, harga jual tiap kanal.", "Produk muncul di inventori, POS, pre order, dan packing picker."],
+                    ["Master Data > Produk", "Brand, model, SKU, size_label, warna, barcode, dan harga jual tiap kanal.", "Produk muncul di inventori, POS, Pre Order, dan pencarian packing."],
                     ["Master Data > Supplier", "Nama supplier dan kontak.", "Dipakai saat membuat pembelian barang dan faktur vendor."],
                     ["Kas & Bank > Akun Bank", "Akun kas/bank aktif, termasuk akun dummy UAT jika belum ada rekening final.", "Dipakai POS, pembayaran vendor, penerimaan settlement, dan laporan kas."],
-                    ["Buku Besar > Chart of Accounts", "COA pendapatan, HPP, persediaan, piutang, hutang, biaya marketplace.", "Menentukan posting jurnal otomatis dan laporan finance."],
-                    ["Audit & Pengaturan", "Role user dan periode fiskal.", "Mencegah transaksi di periode terkunci dan membatasi akses menu."],
+                    ["Buku Besar > Chart of Accounts", "COA untuk pendapatan, HPP, persediaan, piutang, hutang, dan biaya marketplace.", "Menentukan jurnal otomatis dan laporan finance."],
+                    ["Audit & Pengaturan", "Peran pengguna dan periode fiskal.", "Mencegah transaksi di periode terkunci dan membatasi akses menu."],
                 ],
                 widths(0.9, 1.55, 1.55),
             )
@@ -248,12 +248,12 @@ def build_story() -> list[object]:
     )
 
     story += section(
-        "3. Flow Pembelian Barang Sampai Stok Masuk",
+        "3. Alur Pembelian Barang Sampai Stok Masuk",
         [
             numbered(
                 [
-                    "Buka Pembelian > Pembelian Barang. Buat PO untuk produk existing atau produk baru. Untuk sepatu baru, isi SKU, brand, model, warna, size picker/custom, qty, dan estimasi harga beli.",
-                    "Jika barang datang, buka Pembelian > Penerimaan Barang. Terima item sesuai PO. Sistem menambah stok dan memperbarui HPP sesuai unit cost penerimaan.",
+                    "Buka Pembelian > Pembelian Barang. Buat PO untuk produk yang sudah ada atau produk baru. Untuk sepatu baru, isi SKU, brand, model, warna, ukuran, qty, dan estimasi harga beli.",
+                    "Jika barang datang, buka Pembelian > Penerimaan Barang. Terima item sesuai PO. Sistem menambah stok dan memperbarui HPP sesuai harga barang yang diterima.",
                     "Buka Pembelian > Faktur Pembelian untuk mencatat tagihan vendor. Sistem membentuk hutang usaha dan jurnal pembelian.",
                     "Buka Pembelian > Bayar Vendor saat pembayaran dilakukan. Pilih akun bank/kas, tanggal, dan nominal. Sistem mencatat mutasi bank dan jurnal pembayaran.",
                     "Cek Gudang > Inventori. Produk harus muncul dengan stok, HPP, harga offline, dan harga marketplace jika sudah diisi.",
@@ -264,7 +264,7 @@ def build_story() -> list[object]:
                 [
                     ["Tahap", "Stok", "Akuntansi"],
                     ["PO dibuat", "Belum berubah.", "Belum ada jurnal wajib kecuali DP jika diisi."],
-                    ["Penerimaan barang", "Stok bertambah.", "Persediaan dan HPP internal ter-update."],
+                    ["Penerimaan barang", "Stok bertambah.", "Persediaan dan HPP internal diperbarui."],
                     ["Faktur pembelian", "Stok tidak berubah lagi.", "Hutang usaha terbentuk."],
                     ["Bayar vendor", "Stok tidak berubah.", "Kas/bank berkurang dan hutang berkurang."],
                 ],
@@ -276,32 +276,32 @@ def build_story() -> list[object]:
     story += [PageBreak()]
 
     story += section(
-        "4. Flow Pre Order",
+        "4. Alur Pre Order",
         [
-            p("Pre Order dipakai ketika customer meminta sepatu yang belum ready, atau ketika import marketplace membaca order sebagai PO/low-stock. Stok pre order harus jelas terpisah dari stok ready.", BODY),
+            p("Pre Order dipakai ketika pelanggan meminta sepatu yang belum tersedia, atau ketika import marketplace membaca order sebagai PO. Stok Pre Order harus jelas terpisah dari stok siap jual.", BODY),
             flow_table(
                 [
                     ["Sumber PO", "Cara masuk", "Tindakan berikutnya"],
-                    ["Manual customer", "Penjualan > Pre Order > Input Manual. Pilih produk existing atau input produk baru manual, lalu pilih size dari picker/custom.", "Sistem mencatat kebutuhan beli. Jika barang belum ada, lanjut buat PO pembelian."],
-                    ["Marketplace", "Penjualan > Import Pesanan. Sistem membaca status marketplace dan order kind. PO dari marketplace masuk otomatis ke menu Pre Order.", "Admin online review hasil import. Jika valid, commit. Tidak perlu input ulang manual."],
-                    ["Stock ready tapi ditandai PO marketplace", "Sistem tetap menandai sumber PO dan bisa membuat reservasi stok jika item tersedia.", "Gudang melihat order marketplace secara eksplisit, lalu packing sesuai SOP."],
-                    ["Tidak match SKU/size", "Import menampilkan error SKU, size, dan format data yang dibutuhkan.", "Perbaiki mapping atau master produk, lalu import ulang."],
+                    ["Input manual", "Penjualan > Pre Order > Input Manual. Pilih produk yang sudah ada atau isi produk baru, lalu pilih ukuran dari daftar atau isi manual.", "Sistem mencatat kebutuhan beli. Jika barang belum ada, lanjut buat PO pembelian."],
+                    ["Marketplace", "Penjualan > Import Pesanan. Sistem membaca status marketplace dan jenis order. PO dari marketplace masuk otomatis ke menu Pre Order.", "Admin online cek hasil import. Jika valid, konfirmasi. Tidak perlu input ulang manual."],
+                    ["Stok tersedia tapi ditandai PO marketplace", "Sistem tetap menandai sumber PO dan bisa membuat alokasi stok jika item tersedia.", "Gudang melihat nomor order marketplace dengan jelas, lalu packing sesuai SOP."],
+                    ["SKU/size tidak cocok", "Import menampilkan SKU, size, dan format data yang dibutuhkan.", "Perbaiki pemetaan SKU atau master produk, lalu import ulang."],
                 ],
                 widths(0.9, 1.65, 1.45),
             ),
-            p("Catatan ukuran sepatu: gunakan picker untuk size umum. Gunakan custom untuk ukuran Adidas seperti 42 2/3 atau format lain yang tidak ada di picker.", BODY),
+            p("Catatan ukuran sepatu: gunakan daftar ukuran untuk size umum. Gunakan isi manual untuk ukuran Adidas seperti 42 2/3 atau format lain yang belum ada di daftar.", BODY),
         ],
     )
 
     story += section(
-        "5. Flow POS Kasir",
+        "5. Alur POS Kasir",
         [
             numbered(
                 [
                     "Buka Penjualan > POS Kasir.",
-                    "Cari produk dari search utama. Pilih brand jika perlu. Pilih size dari chip ukuran yang tampil di kartu produk.",
+                    "Cari produk dari kolom pencarian. Pilih brand jika perlu. Pilih size dari pilihan ukuran yang tampil di kartu produk.",
                     "Jika memakai scanner, scan barcode di kolom barcode opsional. Scan menambah item ke keranjang jika stok tersedia.",
-                    "Pilih customer. Untuk pembeli toko biasa, gunakan Walk-in Customer. Untuk customer baru, tambah dari selector customer.",
+                    "Pilih pelanggan. Untuk pembeli toko biasa, gunakan Walk-in Customer. Untuk pelanggan baru, tambah dari pilihan pelanggan.",
                     "Isi diskon jika ada. Klik Bayar, pilih Tunai, Transfer, atau QRIS, lalu pilih akun kas/bank.",
                     "Setelah pembayaran berhasil, sistem membuat invoice lunas, penerimaan kas/bank, stok keluar, HPP, dan jurnal penjualan.",
                 ],
@@ -311,7 +311,7 @@ def build_story() -> list[object]:
                 [
                     ["Yang harus dicek kasir", "Alasan"],
                     ["Size dan qty di keranjang", "Mencegah salah ukuran sebelum pembayaran."],
-                    ["Harga offline", "POS memakai harga offline. Jika kosong, sistem memakai harga jual fallback."],
+                    ["Harga offline", "POS memakai harga offline. Jika kosong, sistem memakai harga jual utama."],
                     ["Akun kas/bank", "Menentukan mutasi dan laporan arus kas."],
                     ["Struk", "Bisa dicetak atau disimpan sebagai bukti pembayaran toko."],
                 ],
@@ -320,60 +320,58 @@ def build_story() -> list[object]:
         ],
     )
 
-    story += [PageBreak()]
-
     story += section(
-        "6. Flow Marketplace - Shopee, TikTok, Tokopedia",
+        "6. Alur Marketplace - Shopee, TikTok, Tokopedia",
         [
             numbered(
                 [
                     "Buka Penjualan > Import Pesanan.",
                     "Pilih channel: Shopee, TikTok Shop, atau Tokopedia.",
                     "Upload file template pesanan sesuai marketplace.",
-                    "Tunggu loading sampai selesai. Sistem membaca semua sheet/kolom yang relevan, lalu menampilkan preview.",
-                    "Baca status tiap order: Order Langsung, Pre Order, Cancel/Return, Duplicate, atau Error.",
-                    "Commit hanya setelah preview bersih atau error sudah dipahami. Error mismatch sengaja boleh muncul di UAT untuk melihat respon sistem.",
-                    "Setelah commit, cek Invoice Penjualan untuk order valid, Pre Order untuk order PO, dan pesan error untuk item yang tidak bisa masuk.",
+                    "Tunggu proses baca file sampai selesai. Sistem membaca semua sheet/kolom yang relevan, lalu menampilkan pratinjau.",
+                    "Baca status tiap order: Order Langsung, Pre Order, Cancel/Return, Duplikat, atau Error.",
+                    "Konfirmasi hanya setelah pratinjau aman atau error sudah dipahami. Error data tidak cocok memang boleh muncul saat UAT untuk melihat respon sistem.",
+                    "Setelah dikonfirmasi, cek Invoice Penjualan untuk order valid, Pre Order untuk order PO, dan pesan error untuk item yang tidak bisa masuk.",
                 ],
                 BODY,
             ),
             flow_table(
                 [
-                    ["Status hasil import", "Arti", "Tindakan user"],
-                    ["Order Langsung", "Produk match dan invoice bisa dibuat.", "Commit. Sistem membuat invoice marketplace dan jurnal piutang/pendapatan; stok belum turun."],
-                    ["Pre Order", "Status marketplace terbaca sebagai PO atau SKU perlu review.", "Masuk menu Pre Order. Lanjut pembelian barang jika perlu."],
-                    ["Cancel/Return", "Order batal/refund dari marketplace.", "Sistem mencoba auto-cancel jika aman. Restock hanya untuk invoice lama yang memang pernah mengurangi stok."],
-                    ["Duplicate", "Order sudah pernah diproses.", "Tidak dibuat ulang."],
-                    ["Error", "SKU, size, qty, atau format tidak memenuhi aturan.", "Baca pesan, perbaiki master/mapping/template, lalu import ulang."],
+                    ["Status hasil import", "Arti", "Tindakan pengguna"],
+                    ["Order Langsung", "Produk cocok dan invoice bisa dibuat.", "Konfirmasi. Sistem membuat invoice marketplace dan jurnal piutang/pendapatan; stok belum turun."],
+                    ["Pre Order", "Status marketplace terbaca sebagai PO atau SKU perlu dicek.", "Masuk menu Pre Order. Lanjut pembelian barang jika perlu."],
+                    ["Cancel/Return", "Order batal/refund dari marketplace.", "Sistem mencoba membatalkan otomatis jika aman. Stok hanya dikembalikan untuk invoice lama yang memang pernah mengurangi stok."],
+                    ["Duplikat", "Order sudah pernah diproses.", "Tidak dibuat ulang."],
+                    ["Error", "SKU, size, qty, atau format tidak memenuhi aturan.", "Baca pesan, perbaiki master produk/pemetaan/template, lalu import ulang."],
                 ],
                 widths(0.85, 1.45, 1.7),
             ),
-            p("Aturan penting: Import Pesanan marketplace tidak mengurangi stok fisik. Stok, stock movement, dan HPP/persediaan keluar dicatat saat Packing / Outbound supaya gudang dan finance punya satu jalur barang keluar yang jelas.", BODY),
+            p("Aturan penting: Import Pesanan marketplace tidak mengurangi stok fisik. Riwayat stok dan HPP/persediaan keluar dicatat saat Packing / Outbound supaya gudang dan finance punya satu catatan barang keluar yang jelas.", BODY),
         ],
     )
 
     story += section(
-        "7. Flow Packing / Outbound",
+        "7. Alur Packing / Outbound",
         [
-            p("Untuk UAT saat ini, packing dibuat manual-first. Artinya operator gudang menambah item dari pencarian produk terlebih dahulu. Scan barcode tetap ada sebagai opsi validasi cepat.", BODY),
+            p("Untuk UAT saat ini, packing diprioritaskan lewat tambah produk manual. Operator gudang mencari produk lalu menambahkannya ke sesi. Scan barcode tetap ada sebagai alat bantu validasi cepat.", BODY),
             numbered(
                 [
                     "Buka Packing / Outbound.",
                     "Buat sesi packing. Untuk marketplace, isi platform, kurir, dan nomor order marketplace secara eksplisit agar label gudang tidak ambigu.",
                     "Saat sesi aktif, gunakan Tambah Item Manual. Cari SKU, barcode, brand, model, warna, atau size. Klik Tambah pada produk yang benar.",
                     "Jika scanner tersedia, gunakan Scan Barcode Opsional. Scanner hardware dan kamera tetap bisa dipakai.",
-                    "Setiap item yang ditambahkan mengurangi stok secara real-time melalui jalur atomic. Untuk order marketplace, sistem memvalidasi item terhadap invoice dan memposting HPP/persediaan keluar saat packing.",
+                    "Setiap item yang ditambahkan langsung mengurangi stok lewat transaksi yang aman. Untuk order marketplace, sistem mencocokkan item dengan invoice dan mencatat HPP/persediaan keluar saat packing.",
                     "Jika sesi dibatalkan, semua item dalam sesi dikembalikan ke stok.",
-                    "Klik Selesai Scan Item setelah daftar barang benar. Lanjutkan update status order menjadi dikirim/selesai sesuai menu order.",
+                    "Klik Selesai Scan Item setelah daftar barang benar. Lanjutkan ubah status order menjadi dikirim/selesai sesuai menu order.",
                 ],
                 BODY,
             ),
             flow_table(
                 [
                     ["Kondisi", "Respon sistem yang diharapkan"],
-                    ["Produk tidak ditemukan", "Tampilkan pesan produk tidak ditemukan, bukan gagal diam-diam."],
+                    ["Produk tidak ditemukan", "Tampilkan pesan produk tidak ditemukan, jangan gagal tanpa pesan."],
                     ["Stok habis", "Tampilkan pesan stok habis dan jangan membuat item packing."],
-                    ["Order marketplace punya reservasi Pre Order", "Packing mengonsumsi reservasi yang cocok dengan platform dan nomor order."],
+                    ["Order marketplace punya alokasi Pre Order", "Packing memakai alokasi yang cocok dengan platform dan nomor order."],
                     ["Item salah ditambahkan", "Hapus item dari sesi agar stok kembali."],
                     ["Sesi salah dibuat", "Batalkan sesi agar semua stok kembali dan audit tercatat."],
                 ],
@@ -385,16 +383,16 @@ def build_story() -> list[object]:
     story += [PageBreak()]
 
     story += section(
-        "8. Flow Settlement Marketplace dan Finance",
+        "8. Alur Settlement Marketplace dan Finance",
         [
             numbered(
                 [
                     "Buka Penjualan > Rekonsiliasi Settlement.",
                     "Pilih channel dan upload file settlement Shopee, TikTok, atau Tokopedia.",
-                    "Sistem membaca semua sheet yang relevan: pendapatan, shipping, seller fee, biaya layanan, diskon, refund, dan selisih.",
+                    "Sistem membaca semua sheet yang relevan: pendapatan, ongkir, biaya seller, biaya layanan, diskon, refund, dan selisih.",
                     "Cocokkan settlement dengan invoice marketplace berdasarkan nomor order marketplace.",
                     "Pilih akun bank penerima dana. Gunakan akun dummy UAT hanya untuk simulasi.",
-                    "Commit settlement setelah preview aman. Sistem mencatat penerimaan customer, mutasi bank, fee marketplace aktual, dan jurnal.",
+                    "Konfirmasi settlement setelah pratinjau aman. Sistem mencatat penerimaan pelanggan, mutasi bank, fee marketplace aktual, dan jurnal.",
                     "Cek Buku Besar > Jurnal Penyesuaian, Laporan > Laporan Operasional, Laba Rugi, dan Arus Kas.",
                 ],
                 BODY,
@@ -404,8 +402,8 @@ def build_story() -> list[object]:
                     ["Komponen settlement", "Masuk ke mana"],
                     ["Dana diterima", "Kas/bank dan pelunasan piutang invoice marketplace."],
                     ["Fee marketplace", "Beban marketplace/administrasi sesuai COA."],
-                    ["Diskon/promosi", "Beban diskon atau pengurang pendapatan sesuai mapping COA."],
-                    ["Shipping dan subsidi", "Pendapatan/biaya sesuai sheet dan mapping settlement."],
+                    ["Diskon/promosi", "Beban diskon atau pengurang pendapatan sesuai pemetaan COA."],
+                    ["Ongkir dan subsidi", "Pendapatan/biaya sesuai sheet dan pemetaan settlement."],
                     ["Refund/return", "Diproses sebagai pembatalan, retur, atau penyesuaian tergantung status invoice dan settlement."],
                 ],
                 widths(1.1, 2.9),
@@ -414,16 +412,16 @@ def build_story() -> list[object]:
     )
 
     story += section(
-        "9. Checklist Harian per Role",
+        "9. Checklist Harian per Peran",
         [
             flow_table(
                 [
-                    ["Role", "Checklist"],
+                    ["Peran", "Checklist"],
                     ["Admin Gudang", "Cek barang masuk, stok, barcode, packing manual, item salah, dan sesi packing belum selesai."],
-                    ["Admin Online", "Import pesanan marketplace, review error mismatch, commit order valid, cek Pre Order marketplace."],
-                    ["Shopkeeper", "POS kasir, customer, pembayaran, struk, dan kas akhir hari."],
+                    ["Admin Online", "Import pesanan marketplace, cek error data tidak cocok, konfirmasi order valid, cek Pre Order marketplace."],
+                    ["Shopkeeper", "POS kasir, pelanggan, pembayaran, struk, dan kas akhir hari."],
                     ["Finance", "Akun bank, settlement, pembayaran vendor, jurnal, laporan operasional, laba rugi, dan arus kas."],
-                    ["Owner", "Review laporan, margin channel, fee marketplace, pre order outstanding, dan audit log."],
+                    ["Owner", "Review laporan, margin channel, fee marketplace, Pre Order outstanding, dan riwayat audit."],
                 ],
                 widths(0.8, 3.2),
             )
@@ -435,11 +433,11 @@ def build_story() -> list[object]:
         [
             bullet(
                 [
-                    "SKU tidak match: SKU di file tidak ditemukan di master produk. Perbaiki SKU atau tambah produk.",
-                    "Size tidak match: size_label di marketplace berbeda dari master. Gunakan format yang sama, misalnya 42.5 atau 42 2/3.",
-                    "Stok kurang: order valid tetapi stok ready tidak cukup. Sistem harus mengarahkannya ke Pre Order atau menahan commit.",
-                    "Nomor order duplicate: order sudah pernah diimport. Jangan commit ulang.",
-                    "Settlement tidak match invoice: cek nomor order marketplace, channel, tanggal, dan status invoice.",
+                    "SKU tidak cocok: SKU di file tidak ditemukan di master produk. Perbaiki SKU atau tambah produk.",
+                    "Size tidak cocok: size_label di marketplace berbeda dari master. Gunakan format yang sama, misalnya 42.5 atau 42 2/3.",
+                    "Stok kurang: invoice marketplace tetap bisa dibuat, tetapi packing akan menolak barang keluar sampai stok fisik cukup.",
+                    "Nomor order duplikat: order sudah pernah diimport. Jangan konfirmasi ulang.",
+                    "Settlement tidak menemukan invoice: cek nomor order marketplace, channel, tanggal, dan status invoice.",
                     "Periode terkunci: transaksi tidak bisa masuk ke tanggal yang sudah tutup buku.",
                 ],
                 BODY,
