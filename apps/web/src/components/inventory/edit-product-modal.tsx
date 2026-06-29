@@ -33,6 +33,10 @@ type Props = {
     hpp: number;
     sell_price: number;
     price_offline: number;
+    price_website: number | null;
+    price_shopee: number | null;
+    price_tiktok: number | null;
+    price_tokopedia: number | null;
     image_url: string | null;
   };
   canEditPrice: boolean;
@@ -54,6 +58,10 @@ export function EditProductModal({
     hpp: product.hpp,
     sell_price: product.sell_price,
     price_offline: product.price_offline,
+    price_website: product.price_website ?? product.sell_price,
+    price_shopee: product.price_shopee ?? product.sell_price,
+    price_tiktok: product.price_tiktok ?? product.sell_price,
+    price_tokopedia: product.price_tokopedia ?? product.sell_price,
     color: product.color ?? "",
     image_url: product.image_url ?? "",
   });
@@ -93,6 +101,10 @@ export function EditProductModal({
         patch.hpp = form.hpp;
         patch.sell_price = form.sell_price;
         patch.price_offline = form.price_offline;
+        patch.price_website = form.price_website;
+        patch.price_shopee = form.price_shopee;
+        patch.price_tiktok = form.price_tiktok;
+        patch.price_tokopedia = form.price_tokopedia;
       }
       if (canEditImage) {
         patch.image_url = form.image_url.trim() || null;
@@ -192,6 +204,7 @@ export function EditProductModal({
           )}
 
           {canEditPrice ? (
+            <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
                 <FieldLabel htmlFor="hpp">HPP / Modal (Rp)</FieldLabel>
@@ -238,6 +251,62 @@ export function EditProductModal({
                 </p>
                 <FieldError message={fieldErrors.price_offline} />
               </div>
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-medium text-white/55">
+                Harga per channel
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <FieldLabel htmlFor="price_website">Website (Rp)</FieldLabel>
+                  <NumberInput
+                    id="price_website"
+                    min={0}
+                    value={form.price_website}
+                    onValueChange={(value) =>
+                      setForm({ ...form, price_website: value })
+                    }
+                  />
+                  <FieldError message={fieldErrors.price_website} />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="price_shopee">Shopee (Rp)</FieldLabel>
+                  <NumberInput
+                    id="price_shopee"
+                    min={0}
+                    value={form.price_shopee}
+                    onValueChange={(value) =>
+                      setForm({ ...form, price_shopee: value })
+                    }
+                  />
+                  <FieldError message={fieldErrors.price_shopee} />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="price_tiktok">TikTok (Rp)</FieldLabel>
+                  <NumberInput
+                    id="price_tiktok"
+                    min={0}
+                    value={form.price_tiktok}
+                    onValueChange={(value) =>
+                      setForm({ ...form, price_tiktok: value })
+                    }
+                  />
+                  <FieldError message={fieldErrors.price_tiktok} />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="price_tokopedia">Tokopedia (Rp)</FieldLabel>
+                  <NumberInput
+                    id="price_tokopedia"
+                    min={0}
+                    value={form.price_tokopedia}
+                    onValueChange={(value) =>
+                      setForm({ ...form, price_tokopedia: value })
+                    }
+                  />
+                  <FieldError message={fieldErrors.price_tokopedia} />
+                </div>
+              </div>
+            </div>
             </div>
           ) : (
             <Alert tone="info">

@@ -106,6 +106,24 @@ export type CoaNormalBalance = "debit" | "credit";
  */
 export type PriceChannel = "online" | "offline";
 
+export type PreOrderSource = "manual" | "marketplace";
+
+export type PreOrderStatus =
+  | "review"
+  | "ready_from_stock"
+  | "needs_purchase"
+  | "purchase_created"
+  | "waiting_stock"
+  | "ready_to_pack"
+  | "packed"
+  | "cancelled";
+
+export type StockReservationStatus =
+  | "active"
+  | "released"
+  | "consumed"
+  | "cancelled";
+
 /** UAT feedback module severity & lifecycle. */
 export type FeedbackSeverity = "blocker" | "mengganggu" | "minor";
 export type FeedbackStatus = "baru" | "diproses" | "selesai" | "ditolak";

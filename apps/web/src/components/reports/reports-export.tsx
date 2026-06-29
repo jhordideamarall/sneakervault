@@ -17,6 +17,8 @@ type InvoiceExport = {
   channel: string | null;
   discount: number | null;
   marketplace_fee: number | null;
+  settlement_fee_actual: number | null;
+  settlement_status: string | null;
   total: number | null;
   sales_invoice_lines: { qty: number | null; unit_cost: number | null }[] | null;
 };
@@ -43,7 +45,7 @@ export function ReportsExport() {
       supabase.from("packing_items").select("sell_price, unit_hpp, created_at, products(brand, model), packing_sessions!inner(status, platform)").in("packing_sessions.status", ["shipped", "completed", "has_return"]),
       supabase.from("packing_sessions").select("id, platform, status, created_at").in("status", ["packing", "shipped", "completed", "has_return"]),
       supabase.from("returns").select("id, status, return_type, created_at"),
-      supabase.from("sales_invoices").select("channel, subtotal, discount, shipping, marketplace_fee, total, status, sales_invoice_lines(qty, unit_cost)").neq("status", "cancelled"),
+      supabase.from("sales_invoices").select("channel, subtotal, discount, shipping, marketplace_fee, settlement_fee_actual, settlement_status, total, status, sales_invoice_lines(qty, unit_cost)").neq("status", "cancelled"),
       supabase.from("expenses").select("amount, status, expense_categories:category_id(name, account_code)").eq("status", "paid"),
     ]);
 
@@ -175,18 +177,21 @@ export function ReportsExport() {
       const lines = invoice.sales_invoice_lines ?? [];
       channelMap[channel].invoices++;
       channelMap[channel].revenue += Number(invoice.total ?? 0);
-      channelMap[channel].fee += Number(invoice.marketplace_fee ?? 0);
+      if (invoice.settlement_status === "released" && invoice.settlement_fee_actual != null) {
+        channelMap[channel].fee += Number(invoice.settlement_fee_actual ?? 0);
+      } else {
+        channelMap[channel].fee += Number(invoice.marketplace_fee ?? 0);
+      }
       channelMap[channel].discount += Number(invoice.discount ?? 0);
       for (const line of lines) {
         channelMap[channel].units += Number(line.qty ?? 0);
         channelMap[channel].cogs += Number(line.qty ?? 0) * Number(line.unit_cost ?? 0);
       }
     }
-
     const channelRows = Object.entries(channelMap)
-      .sort((a, b) => (b[1].revenue - b[1].cogs) - (a[1].revenue - a[1].cogs))
+      .sort((a, b) => (b[1].revenue - b[1].cogs - b[1].fee) - (a[1].revenue - a[1].cogs - a[1].fee))
       .map(([channel, d], i) => {
-        const profit = d.revenue - d.cogs;
+        const profit = d.revenue - d.cogs - d.fee;
         return [i + 1, channel, d.invoices, d.units, Math.round(d.revenue), Math.round(d.cogs), Math.round(d.fee), Math.round(profit), d.revenue > 0 ? `${((profit / d.revenue) * 100).toFixed(1)}%` : "0%"];
       });
 

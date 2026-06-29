@@ -86,7 +86,7 @@ export function OrdersClient({
           Order Masuk
         </h1>
         <p className="text-white/50">
-          Kelola alur pengiriman barang dari packing sampai selesai.
+          Kelola packing dan status kirim berdasarkan nomor order marketplace.
         </p>
       </div>
 
@@ -103,7 +103,7 @@ export function OrdersClient({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={16} />
             <input
               type="text"
-              placeholder="Cari ID Pesanan atau Platform..."
+              placeholder="Cari nomor order marketplace atau platform..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-xl bg-white/[0.03] border border-white/[0.08] py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-white/20"
@@ -131,7 +131,7 @@ export function OrdersClient({
           <table className="w-full text-sm text-left">
             <thead>
               <tr className="border-b border-white/[0.06] bg-white/[0.02] text-[11px] uppercase tracking-wider text-white/40">
-                <th className="px-4 py-3 font-medium">Order ID</th>
+                <th className="px-4 py-3 font-medium">Order Marketplace</th>
                 <th className="px-4 py-3 font-medium">Platform / Kurir</th>
                 <th className="px-4 py-3 font-medium">Petugas</th>
                 <th className="px-4 py-3 font-medium text-center">Status</th>

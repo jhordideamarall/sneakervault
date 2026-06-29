@@ -6,6 +6,7 @@ import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
 import { assertPeriodOpen } from "@/lib/fiscal-periods";
+import { z } from "zod";
 
 const ROLES = ["owner", "finance"] as const;
 
@@ -86,11 +87,13 @@ export async function createPurchaseOrder(input: unknown) {
     new_brand: l.product_id ? null : l.new_brand ?? null,
     new_model: l.product_id ? null : l.new_model ?? null,
     new_size: l.product_id ? null : l.new_size ?? null,
+    new_size_label:
+      l.product_id ? null : l.new_size_label ?? (l.new_size != null ? String(l.new_size) : null),
     new_color: l.product_id ? null : l.new_color ?? null,
     new_sku: l.product_id ? null : l.new_sku ?? null,
   }));
 
-  const { error: linesErr } = await supabase
+  const { error: linesErr } = await (supabase as any)
     .from("purchase_order_lines")
     .insert(lineRows);
 
@@ -269,10 +272,12 @@ export async function updatePurchaseOrder(id: string, input: unknown) {
     new_brand: l.product_id ? null : l.new_brand ?? null,
     new_model: l.product_id ? null : l.new_model ?? null,
     new_size: l.product_id ? null : l.new_size ?? null,
+    new_size_label:
+      l.product_id ? null : l.new_size_label ?? (l.new_size != null ? String(l.new_size) : null),
     new_color: l.product_id ? null : l.new_color ?? null,
     new_sku: l.product_id ? null : l.new_sku ?? null,
   }));
-  const { error: linesErr } = await supabase
+  const { error: linesErr } = await (supabase as any)
     .from("purchase_order_lines")
     .insert(lineRows);
   if (linesErr) return { error: { _form: [linesErr.message] } };
@@ -294,4 +299,215 @@ export async function loadPoDetailAction(id: string) {
   const detail = await getPurchaseOrderById(id);
   if (!detail) return { error: "PO tidak ditemukan" };
   return { data: detail };
+}
+
+const createPoFromPreOrderSchema = z.object({
+  pre_order_id: z.string().uuid(),
+  supplier_id: z.string().uuid("Vendor wajib dipilih"),
+  order_date: z.string().optional(),
+  expected_date: z.string().optional().nullable(),
+  notes: z.string().optional(),
+});
+
+type PreOrderLineForPo = {
+  id: string;
+  product_id: string | null;
+  sku: string;
+  product_name: string;
+  brand: string | null;
+  model: string | null;
+  color: string | null;
+  size_label: string;
+  size_value: number | null;
+  requested_qty: number;
+  reserved_qty: number;
+  purchase_qty: number;
+  estimated_cost: number;
+  status: string;
+  pre_order_procurement_links: Array<{ quantity: number | null }> | null;
+};
+
+function splitManualProductName(productName: string) {
+  const parts = productName.trim().split(/\s+/);
+  return {
+    brand: parts[0] || "Marketplace",
+    model: parts.slice(1).join(" ") || productName || "Pre Order Item",
+  };
+}
+
+export async function createPurchaseOrderFromPreOrder(input: unknown) {
+  const profile = await requireRole([...ROLES]);
+  const parsed = createPoFromPreOrderSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+
+  const orderDate = parsed.data.order_date || new Date().toISOString().slice(0, 10);
+  const lock = await assertPeriodOpen(orderDate);
+  if (lock.error) return { error: { _form: [lock.error] } };
+
+  const supabase = await createClient();
+  const { data: preOrder, error: preOrderErr } = await (supabase as any)
+    .from("pre_orders")
+    .select(`
+      id, customer_name, marketplace_order_id, channel, status, notes,
+      pre_order_lines(
+        id, product_id, sku, product_name, brand, model, color, size_label, size_value,
+        requested_qty, reserved_qty, purchase_qty, estimated_cost, status,
+        pre_order_procurement_links(quantity)
+      )
+    `)
+    .eq("id", parsed.data.pre_order_id)
+    .single();
+
+  if (preOrderErr || !preOrder) {
+    return { error: { _form: ["Pre Order tidak ditemukan"] } };
+  }
+  if (["cancelled", "packed"].includes(String(preOrder.status))) {
+    return { error: { _form: ["Pre Order ini tidak bisa dibuatkan PO Pembelian"] } };
+  }
+
+  const lines = ((preOrder.pre_order_lines ?? []) as PreOrderLineForPo[])
+    .map((line) => {
+      const linkedQty = (line.pre_order_procurement_links ?? []).reduce(
+        (sum, link) => sum + Number(link.quantity ?? 0),
+        0,
+      );
+      const basePurchaseQty =
+        Number(line.purchase_qty ?? 0) > 0
+          ? Number(line.purchase_qty)
+          : Math.max(0, Number(line.requested_qty) - Number(line.reserved_qty ?? 0));
+      const qtyToBuy = Math.max(0, basePurchaseQty - linkedQty);
+      return { ...line, qtyToBuy };
+    })
+    .filter((line) => line.qtyToBuy > 0);
+
+  if (lines.length === 0) {
+    return {
+      error: {
+        _form: [
+          "Tidak ada item yang perlu dibelikan. Semua item sudah ready atau sudah punya link PO Pembelian.",
+        ],
+      },
+    };
+  }
+
+  const subtotal = lines.reduce(
+    (sum, line) => sum + line.qtyToBuy * Number(line.estimated_cost ?? 0),
+    0,
+  );
+  const { data: poNumber, error: numErr } = await supabase.rpc("generate_po_number");
+  if (numErr || !poNumber) {
+    return { error: { _form: [numErr?.message ?? "Gagal membuat nomor PO"] } };
+  }
+
+  const { data: po, error: poErr } = await supabase
+    .from("purchase_orders")
+    .insert({
+      po_number: poNumber,
+      supplier_id: parsed.data.supplier_id,
+      order_date: orderDate,
+      expected_date: parsed.data.expected_date || null,
+      subtotal,
+      tax: 0,
+      shipping: 0,
+      total: subtotal,
+      notes:
+        parsed.data.notes ||
+        [
+          `Dibuat dari Pre Order ${preOrder.marketplace_order_id ?? preOrder.id}`,
+          `Customer: ${preOrder.customer_name}`,
+        ].join(" • "),
+      created_by: profile.id,
+      status: "draft",
+      payment_type: "credit",
+      dp_amount: 0,
+      dp_bank_account_id: null,
+    })
+    .select("id, po_number")
+    .single();
+
+  if (poErr || !po) {
+    return { error: { _form: [poErr?.message ?? "Gagal membuat PO Pembelian"] } };
+  }
+
+  const createdLinks: Array<{
+    pre_order_line_id: string;
+    purchase_order_id: string;
+    purchase_order_line_id: string;
+    quantity: number;
+    created_by: string;
+  }> = [];
+
+  for (const line of lines) {
+    const manualName = splitManualProductName(line.product_name);
+    const { data: poLine, error: lineErr } = await (supabase as any)
+      .from("purchase_order_lines")
+      .insert({
+        po_id: po.id,
+        product_id: line.product_id,
+        ordered_qty: line.qtyToBuy,
+        unit_cost: Number(line.estimated_cost ?? 0),
+        subtotal: line.qtyToBuy * Number(line.estimated_cost ?? 0),
+        notes: `Dari Pre Order ${preOrder.marketplace_order_id ?? preOrder.id}`,
+        new_brand: line.product_id ? null : line.brand ?? manualName.brand,
+        new_model: line.product_id ? null : line.model ?? manualName.model,
+        new_size: line.product_id ? null : line.size_value ?? null,
+        new_size_label: line.product_id ? null : line.size_label,
+        new_color: line.product_id ? null : line.color ?? null,
+        new_sku: line.product_id ? null : line.sku,
+      })
+      .select("id")
+      .single();
+
+    if (lineErr || !poLine) {
+      await supabase.from("purchase_orders").delete().eq("id", po.id);
+      return {
+        error: {
+          _form: [lineErr?.message ?? "Gagal membuat line PO Pembelian"],
+        },
+      };
+    }
+
+    createdLinks.push({
+      pre_order_line_id: line.id,
+      purchase_order_id: po.id,
+      purchase_order_line_id: poLine.id,
+      quantity: line.qtyToBuy,
+      created_by: profile.id,
+    });
+  }
+
+  const { error: linkErr } = await (supabase as any)
+    .from("pre_order_procurement_links")
+    .insert(createdLinks);
+  if (linkErr) {
+    await supabase.from("purchase_orders").delete().eq("id", po.id);
+    return { error: { _form: [linkErr.message] } };
+  }
+
+  await (supabase as any)
+    .from("pre_order_lines")
+    .update({ status: "purchase_created" })
+    .in("id", lines.map((line) => line.id));
+  await (supabase as any)
+    .from("pre_orders")
+    .update({ status: "purchase_created" })
+    .eq("id", preOrder.id);
+
+  await logActivity({
+    user_id: profile.id,
+    action: "create",
+    entity_type: "purchase_order",
+    entity_id: po.id,
+    new_data: {
+      source: "pre_order",
+      pre_order_id: preOrder.id,
+      po_number: po.po_number,
+      line_count: lines.length,
+      total: subtotal,
+    },
+  });
+
+  revalidatePath("/pre-order");
+  revalidatePath("/pembelian/purchase-order");
+  return { data: { id: po.id, po_number: po.po_number } };
 }

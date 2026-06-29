@@ -4,6 +4,7 @@ import type {
   Role,
   ProductCondition,
   PriceChannel,
+  PreOrderStatus,
 } from "./types";
 
 export const ROLES: Role[] = [
@@ -183,6 +184,57 @@ export const PRICE_CHANNELS: { value: PriceChannel; label: string }[] = [
   { value: "online", label: "Online (Shopee / TikTok / Marketplace)" },
   { value: "offline", label: "Offline (WA / Transfer / Website Toko)" },
 ];
+
+export const SHOE_SIZE_OPTIONS: { value: string; label: string }[] = [
+  "35",
+  "35.5",
+  "36",
+  "36.5",
+  "37",
+  "37.5",
+  "38",
+  "38.5",
+  "39",
+  "39.5",
+  "40",
+  "40.5",
+  "41",
+  "41.5",
+  "42",
+  "42.5",
+  "42 2/3",
+  "43",
+  "43.5",
+  "44",
+  "44.5",
+  "45",
+  "45.5",
+  "46",
+  "47",
+  "48",
+].map((size) => ({ value: size, label: size }));
+
+export const PRE_ORDER_STATUS_LABELS: Record<PreOrderStatus, string> = {
+  review: "Perlu Review",
+  ready_from_stock: "Siap dari Stok",
+  needs_purchase: "Perlu Pembelian",
+  purchase_created: "PO Pembelian Dibuat",
+  waiting_stock: "Menunggu Barang",
+  ready_to_pack: "Siap Packing",
+  packed: "Sudah Packing",
+  cancelled: "Dibatalkan",
+};
+
+export const PRE_ORDER_STATUS_TONES: Record<PreOrderStatus, BadgeTone> = {
+  review: "warning",
+  ready_from_stock: "info",
+  needs_purchase: "danger",
+  purchase_created: "info",
+  waiting_stock: "warning",
+  ready_to_pack: "success",
+  packed: "success",
+  cancelled: "neutral",
+};
 
 /**
  * Platform → price channel mapping. Used saat packing untuk menentukan harga

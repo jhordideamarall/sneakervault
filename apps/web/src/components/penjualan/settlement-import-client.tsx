@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Button, Card, Badge } from "@sneakervault/ui";
+import { Button, Card, Badge, Alert } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { FileUp, Wallet, CheckCircle2, AlertCircle } from "lucide-react";
 import {
@@ -46,6 +46,7 @@ export function SettlementImportClient() {
   const [diff, setDiff] = useState<SettlementReconcile | null>(null);
   const [result, setResult] = useState<SettlementResult | null>(null);
   const [parseInfo, setParseInfo] = useState<SettlementParseResult | null>(null);
+  const [fileStatus, setFileStatus] = useState<{ tone: "info" | "success" | "error"; message: string } | null>(null);
   const [banks, setBanks] = useState<BankOption[]>([]);
   const [bankId, setBankId] = useState<string>("");
   const [settledDate, setSettledDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -66,6 +67,7 @@ export function SettlementImportClient() {
     setDiff(null);
     setResult(null);
     setParseInfo(null);
+    setFileStatus(null);
     setFileName("");
     setRef("");
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -75,6 +77,7 @@ export function SettlementImportClient() {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
+    setFileStatus({ tone: "info", message: `Membaca settlement ${file.name} dan semua sheet relevan…` });
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const data = ev.target?.result;
@@ -91,24 +94,39 @@ export function SettlementImportClient() {
           return { name: sheetName, rows };
         });
         if (sheets.length === 0) {
+          setFileStatus({ tone: "error", message: "File tidak valid: tidak ada sheet yang bisa dibaca." });
           toast.push("File tidak valid", "error");
           return;
         }
         const parsed = parseSettlementWorkbook(channel, sheets);
         if (parsed.rows.length === 0) {
+          setFileStatus({
+            tone: "error",
+            message: `${settlementTemplateHint(channel)} Pastikan sheet berisi order id dan nilai net settlement per order.`,
+          });
           toast.push(settlementTemplateHint(channel), "error");
           return;
         }
         setRows(parsed.rows);
         setParseInfo(parsed);
+        setFileStatus({
+          tone: "info",
+          message: `${parsed.rows.length} baris settlement terbaca. Mencocokkan order id ke invoice ${channel.toUpperCase()}…`,
+        });
         startTransition(async () => {
           const r = await reconcileSettlement(channel, parsed.rows);
           setDiff(r);
+          setFileStatus({ tone: "success", message: "Review settlement siap. Baris tak cocok akan tetap tampil sampai invoice/order id diperbaiki." });
           setState("review");
         });
       } catch {
+        setFileStatus({ tone: "error", message: "Gagal memproses file settlement. Pastikan file tidak rusak dan berasal dari export resmi marketplace." });
         toast.push("Gagal memproses file", "error");
       }
+    };
+    reader.onerror = () => {
+      setFileStatus({ tone: "error", message: "Gagal membaca file settlement. File mungkin rusak atau tidak bisa dibuka browser." });
+      toast.push("Gagal membaca file", "error");
     };
     if (file.name.toLowerCase().endsWith(".csv")) reader.readAsText(file);
     else reader.readAsArrayBuffer(file);
@@ -116,6 +134,7 @@ export function SettlementImportClient() {
 
   function handleCommit() {
     startTransition(async () => {
+      setFileStatus({ tone: "info", message: "Menerapkan settlement: membuat penerimaan, mutasi bank, dan jurnal otomatis…" });
       const r = await commitSettlement({
         channel,
         bankAccountId: bankId,
@@ -125,11 +144,13 @@ export function SettlementImportClient() {
         fileName,
       });
       if (r.error) {
+        setFileStatus({ tone: "error", message: r.error });
         toast.push(r.error, "error");
         return;
       }
       setResult(r);
       setState("result");
+      setFileStatus({ tone: "success", message: `${r.matched} order direkonsiliasi, ${r.skipped} dilewati, ${r.unmatched.length} tak ada invoice.` });
       toast.push(`${r.matched} order direkonsiliasi`, "success");
     });
   }
@@ -145,9 +166,15 @@ export function SettlementImportClient() {
             melunasi faktur yang cocok, mencatat kas/bank, dan membukukan biaya marketplace aktual.
           </p>
           <p className="mb-6 max-w-xl rounded-lg border border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs leading-relaxed text-white/45">
-            Format harus dari template resmi marketplace. Shopee dibaca dari sheet <b className="text-white/70">Income</b>;
-            TikTok/Tokopedia dari sheet <b className="text-white/70">Detail pesanan</b>. Sheet ringkasan, penjelasan biaya, dan fee detail tidak dihitung ulang.
+            Format harus dari template resmi marketplace. Shopee memakai sheet <b className="text-white/70">Income</b> untuk net per order dan scan sheet fee detail bila ada;
+            TikTok/Tokopedia memakai sheet <b className="text-white/70">Detail pesanan</b> lalu scan sheet lain yang punya order/adjustment id. Fee actual tersimpan di invoice/report; jurnal COA 6.1 memakai estimasi invoice plus koreksi settlement bila ada selisih.
           </p>
+
+          {fileStatus && (
+            <Alert tone={fileStatus.tone} className="mb-6 max-w-xl text-left text-xs leading-relaxed">
+              {fileStatus.message}
+            </Alert>
+          )}
 
           {/* Channel selector */}
           <div className="mb-8 flex gap-2 rounded-lg border border-white/[0.06] bg-[#262626] p-1.5">
@@ -167,7 +194,7 @@ export function SettlementImportClient() {
           <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-semibold text-black transition-all hover:bg-white/90 active:scale-95">
             <FileUp size={18} />
             Upload Laporan Settlement
-            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} className="hidden" />
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} disabled={pending} className="hidden" />
           </label>
           {pending && <p className="mt-3 text-xs text-white/40">Memproses…</p>}
         </Card>
@@ -191,6 +218,12 @@ export function SettlementImportClient() {
             </div>
           </div>
 
+          {fileStatus && (
+            <Alert tone={fileStatus.tone} className="text-xs leading-relaxed">
+              {fileStatus.message}
+            </Alert>
+          )}
+
           <div className="grid grid-cols-3 gap-3">
             <Stat label="Akan diterapkan" value={diff.summary.apply} tone="text-emerald-400" />
             <Stat label="Dilewati" value={diff.summary.skip} tone="text-white/50" />
@@ -201,8 +234,11 @@ export function SettlementImportClient() {
             <div className="rounded-lg border border-white/[0.06] bg-[#262626] px-4 py-3 text-xs text-white/45">
               Terbaca sebagai <span className="font-medium text-white/70">{parseInfo.templateLabel}</span> dari sheet{" "}
               <span className="font-mono text-white/70">{parseInfo.sourceSheet}</span> baris header {parseInfo.headerRow}.
+              {parseInfo.supplementalSheets.length > 0 && (
+                <span> Sheet detail tambahan dibaca: {parseInfo.supplementalSheets.join(", ")}.</span>
+              )}
               {parseInfo.ignoredSheets.length > 0 && (
-                <span> Sheet lain diabaikan: {parseInfo.ignoredSheets.join(", ")}.</span>
+                <span> Sheet tanpa data order/fee per order: {parseInfo.ignoredSheets.join(", ")}.</span>
               )}
             </div>
           )}

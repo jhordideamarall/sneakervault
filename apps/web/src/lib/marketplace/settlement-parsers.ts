@@ -3,8 +3,9 @@
  *
  * Settlement files key on the marketplace order id and carry the actual net
  * payout + total fees. TikTok and Tokopedia share one export shape; Shopee's
- * income report differs — header aliases cover both. Rows are aggregated per
- * order id (an order can have multiple settlement lines).
+ * income report differs. The parser picks the canonical per-order sheet for
+ * net settlement, then scans other sheets for per-order fee detail without
+ * double-counting duplicate breakdown sheets.
  */
 
 import { readNumber, type MarketplaceChannel } from "./parsers";
@@ -25,6 +26,7 @@ export type SettlementParseResult = {
   templateLabel: string;
   sourceSheet: string;
   headerRow: number;
+  supplementalSheets: string[];
   ignoredSheets: string[];
 };
 
@@ -184,6 +186,94 @@ function aggregateRows(rows: SettlementRow[]): SettlementRow[] {
   return Array.from(map.values()).filter((r) => r.net !== 0 || r.fee !== 0);
 }
 
+function looksLikeOrderId(value: string): boolean {
+  const id = value.trim();
+  return /^[a-z0-9-]{8,}$/i.test(id) && !/pesanan|order|adjustment|transaksi/i.test(id);
+}
+
+function findHeaderRowByOrderAliases(rows: unknown[][], aliases: string[]): number {
+  const maxRows = Math.min(rows.length, 40);
+  for (let i = 0; i < maxRows; i++) {
+    const headers = new Set((rows[i] ?? []).map(normalizeHeader).filter(Boolean));
+    if (hasAlias(headers, aliases)) return i;
+  }
+  return -1;
+}
+
+function isIdentifierHeader(header: string): boolean {
+  const normalized = normalizeHeader(header);
+  return (
+    normalized.startsWith("__column_") ||
+    normalized.includes("no.") ||
+    normalized.includes("nomor") ||
+    normalized.includes("order") ||
+    normalized.includes("pesanan") ||
+    normalized.includes("id ") ||
+    normalized.endsWith(" id") ||
+    normalized.includes("sku") ||
+    normalized.includes("produk") ||
+    normalized.includes("nama") ||
+    normalized.includes("status") ||
+    normalized.includes("jenis") ||
+    normalized.includes("waktu") ||
+    normalized.includes("tanggal") ||
+    normalized.includes("periode") ||
+    normalized.includes("mata uang") ||
+    normalized.includes("sumber")
+  );
+}
+
+function negativeNumericTotal(row: Row): number {
+  let total = 0;
+  for (const [header, value] of Object.entries(row)) {
+    if (isIdentifierHeader(header)) continue;
+    const amount = readNumber(value);
+    if (amount < 0) total += Math.abs(amount);
+  }
+  return total;
+}
+
+function rowMarker(row: Row): string {
+  for (const value of Object.values(row)) {
+    const marker = normalizeHeader(value);
+    if (marker === "order" || marker === "sku") return marker;
+  }
+  return "";
+}
+
+function collectSupplementalFees(
+  channel: MarketplaceChannel,
+  sheets: SettlementWorkbookSheet[],
+  sourceSheet: string,
+): { fees: Map<string, number>; sheets: string[] } {
+  const aliases = channel === "shopee" ? ["No. Pesanan"] : ORDER_ALIASES;
+  const fees = new Map<string, number>();
+  const usedSheets: string[] = [];
+
+  for (const sheet of sheets) {
+    if (normalizeSheetName(sheet.name) === normalizeSheetName(sourceSheet)) continue;
+    const headerIndex = findHeaderRowByOrderAliases(sheet.rows, aliases);
+    if (headerIndex < 0) continue;
+
+    const rows = rowsFromHeader(sheet.rows, headerIndex);
+    const hasOrderRows = rows.some((row) => rowMarker(row) === "order");
+    let used = false;
+    for (const row of rows) {
+      if (hasOrderRows && rowMarker(row) === "sku") continue;
+      const orderId = String(pick(row, aliases) || "").trim();
+      if (!looksLikeOrderId(orderId)) continue;
+      const aliasFee = channel === "shopee" ? sumColumns(row, SHOPEE_INCOME_FEE_ALIASES) : sumColumns(row, FEE_ALIASES);
+      const fee = Math.max(Math.abs(aliasFee), negativeNumericTotal(row));
+      if (fee <= 0) continue;
+      fees.set(orderId, Math.max(fees.get(orderId) ?? 0, fee));
+      used = true;
+    }
+    if (used) usedSheets.push(sheet.name);
+  }
+
+  return { fees, sheets: usedSheets };
+}
+
 function parseRowsWithTemplate(rows: Row[], template: TemplateDef): SettlementRow[] {
   const parsed: SettlementRow[] = [];
   for (const row of rows) {
@@ -225,15 +315,30 @@ export function parseSettlementWorkbook(
   candidates.sort((a, b) => b.score - a.score);
   const best = candidates[0];
   if (!best) {
-    return { rows: [], templateLabel: "", sourceSheet: "", headerRow: 0, ignoredSheets: sheets.map((s) => s.name) };
+    return {
+      rows: [],
+      templateLabel: "",
+      sourceSheet: "",
+      headerRow: 0,
+      supplementalSheets: [],
+      ignoredSheets: sheets.map((s) => s.name),
+    };
   }
 
+  const supplemental = collectSupplementalFees(channel, sheets, best.sheetName);
+  const rows = best.rows.map((row) => ({
+    ...row,
+    fee: Math.max(row.fee, supplemental.fees.get(row.order_id) ?? 0),
+  }));
+  const used = new Set([best.sheetName, ...supplemental.sheets]);
+
   return {
-    rows: best.rows,
+    rows,
     templateLabel: best.template.label,
     sourceSheet: best.sheetName,
     headerRow: best.headerIndex + 1,
-    ignoredSheets: sheets.map((s) => s.name).filter((name) => name !== best.sheetName),
+    supplementalSheets: supplemental.sheets,
+    ignoredSheets: sheets.map((s) => s.name).filter((name) => !used.has(name)),
   };
 }
 

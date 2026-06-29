@@ -94,6 +94,7 @@ export function BulkImportButton() {
   const [source, setSource] = useState<Source>("internal");
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
+  const [status, setStatus] = useState<{ tone: "info" | "success" | "warning" | "error"; message: string } | null>(null);
 
   async function downloadTemplate() {
     const XLSX = await import("xlsx");
@@ -173,11 +174,13 @@ export function BulkImportButton() {
 
     setProcessing(true);
     setResult(null);
+    setStatus({ tone: "info", message: `Membaca file ${file.name}…` });
 
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const data = ev.target?.result;
       if (!data) {
+        setStatus({ tone: "error", message: "Gagal membaca file. Coba export ulang file Excel/CSV lalu upload lagi." });
         toast.push("Gagal membaca file", "error");
         setProcessing(false);
         input.value = "";
@@ -190,6 +193,7 @@ export function BulkImportButton() {
         const sheetName = wb.SheetNames[0];
         const ws = sheetName ? wb.Sheets[sheetName] : undefined;
         if (!ws) {
+          setStatus({ tone: "error", message: "Sheet tidak ditemukan. Template produk harus punya sheet pertama berisi header kolom produk." });
           toast.push("Sheet tidak ditemukan", "error");
           return;
         }
@@ -198,23 +202,36 @@ export function BulkImportButton() {
         if (source === "internal") {
           const rows = XLSX.utils.sheet_to_json(ws) as Record<string, unknown>[];
           if (rows.length === 0) {
+            setStatus({ tone: "error", message: "Tidak ada baris data. Isi minimal satu produk dengan brand, model, sku, size, quantity, hpp, dan harga jual." });
             toast.push("Tidak ada baris data", "error");
             return;
           }
           const missing = missingProductColumns(rows);
           if (missing.length > 0) {
+            setStatus({
+              tone: "error",
+              message: `Format produk tidak diterima. Kolom wajib kurang: ${missing.join(", ")}. Header minimal: brand, model, sku, size. Kolom angka boleh format Rp/1.000.000 dan size boleh 40, 40.5, atau 42 2/3.`,
+            });
             toast.push(
               `Ini bukan template produk inventory. Kolom wajib kurang: ${missing.join(", ")}`,
               "error",
             );
             return;
           }
+          setStatus({ tone: "info", message: `${rows.length} baris produk terbaca. Mengimport ke inventory…` });
           importResult = await bulkImportProducts(normalizeProductRows(rows));
         } else {
           const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" }) as unknown[][];
           const parsedTemplate = parseMarketplaceProductTemplate(source, aoa);
           const rows = parsedTemplate.rows;
           if (rows.length === 0) {
+            setStatus({
+              tone: "error",
+              message:
+                parsedTemplate.rejected.length > 0
+                  ? `Tidak ada SKU size valid. Variasi harus size numerik seperti 40, 40.5, atau 42 2/3; contoh "Size Lain? Ready" tidak diterima.`
+                  : `Template ${SOURCES.find((s) => s.id === source)?.label ?? "marketplace"} tidak dikenali. Upload template resmi marketplace untuk produk/stok, bukan order/settlement.`,
+            });
             toast.push(
               parsedTemplate.rejected.length > 0
                 ? `Tidak ada SKU size valid. Variasi seperti "Size Lain? Ready" wajib diubah menjadi size numerik.`
@@ -231,6 +248,7 @@ export function BulkImportButton() {
             }
             return;
           }
+          setStatus({ tone: "info", message: `${rows.length} variasi produk marketplace terbaca. Mengimport SKU+size ke inventory…` });
           importResult = await bulkImportMarketplaceProducts(source, rows);
           importResult = {
             ...importResult,
@@ -241,12 +259,20 @@ export function BulkImportButton() {
 
         setResult(importResult);
         const hasWarnings = importResult.errors.length > 0 || (importResult.rejected?.length ?? 0) > 0;
+        setStatus({
+          tone: hasWarnings ? "warning" : "success",
+          message: `${importResult.inserted} produk dibuat, ${importResult.skipped} dilewati. ${hasWarnings ? "Cek detail error/format di bawah sebelum lanjut import order." : "Format diterima dan data tersimpan."}`,
+        });
         toast.push(
           `${importResult.inserted} produk dibuat, ${importResult.skipped} dilewati`,
           hasWarnings ? "info" : "success",
         );
         router.refresh();
       } catch (err) {
+        setStatus({
+          tone: "error",
+          message: err instanceof Error ? err.message : "Gagal import produk. Pastikan file memakai template yang sesuai dan kolom angka/size valid.",
+        });
         toast.push(
           err instanceof Error ? err.message : "Gagal import produk",
           "error",
@@ -257,6 +283,7 @@ export function BulkImportButton() {
       }
     };
     reader.onerror = () => {
+      setStatus({ tone: "error", message: "Gagal membaca file. File mungkin rusak atau tidak bisa dibuka browser." });
       toast.push("Gagal membaca file", "error");
       setProcessing(false);
       input.value = "";
@@ -278,6 +305,7 @@ export function BulkImportButton() {
             if (e.target === e.currentTarget) {
               setOpen(false);
               setResult(null);
+              setStatus(null);
             }
           }}
         >
@@ -303,6 +331,7 @@ export function BulkImportButton() {
                   onClick={() => {
                     setSource(item.id);
                     setResult(null);
+                    setStatus(null);
                   }}
                   className={
                     "rounded-xl border px-3 py-2.5 text-left transition-colors " +
@@ -327,6 +356,13 @@ export function BulkImportButton() {
             {source !== "internal" && (
               <Alert tone="warning" className="mb-4">
                 Import marketplace ini untuk bootstrap data kosong. HPP masih 0 sampai diisi lewat Barang Masuk, Stock Opname, atau cutover Accurate.
+              </Alert>
+            )}
+
+            {(status || processing) && (
+              <Alert tone={status?.tone ?? "info"} className="mb-4 text-xs leading-relaxed">
+                {processing && status?.tone === "info" ? "Memproses file. Jangan tutup modal sampai hasil muncul. " : ""}
+                {status?.message ?? "Memproses file…"}
               </Alert>
             )}
 
@@ -397,6 +433,7 @@ export function BulkImportButton() {
                 onClick={() => {
                   setOpen(false);
                   setResult(null);
+                  setStatus(null);
                 }}
               >
                 Tutup

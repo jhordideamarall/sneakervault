@@ -157,6 +157,11 @@ export function extractShoeSize(value: unknown): number | null {
     return Number((base + add).toFixed(2));
   }
 
+  const compactHalf = raw.match(/\b(\d{2})5\b/);
+  if (compactHalf) {
+    return Number(compactHalf[1]) + 0.5;
+  }
+
   const decimal = raw.match(/(\d{2})(?:[.,](\d{1,2}))?/);
   if (!decimal) return null;
   const size = Number(`${decimal[1]}${decimal[2] ? `.${decimal[2]}` : ""}`);

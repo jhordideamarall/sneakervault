@@ -114,6 +114,21 @@ const channelTone: Record<CustomerChannel, string> = {
   mixed: "bg-white/10 text-white/70 border-white/15",
 };
 
+function marketplaceOrderMeta(notes: string | null) {
+  const raw = notes ?? "";
+  const lower = raw.toLowerCase();
+  const isPreorder =
+    /jenis\s+po marketplace|pre[-\s]?order|preorder|\bpo marketplace\b/.test(lower);
+  const status = raw.match(/Status Marketplace:\s*([^•]+)/i)?.[1]?.trim();
+  return {
+    kind: isPreorder ? "Pre Order Marketplace" : "Order Langsung",
+    tone: isPreorder
+      ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
+      : "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
+    status,
+  };
+}
+
 // Online channels use sell_price (price_online); offline use price_offline
 function priceForChannel(
   channel: CustomerChannel,
@@ -524,7 +539,7 @@ export function SalesInvoiceClient({
         tone="info"
       >
         <strong>Draft</strong> → <strong>Terbitkan</strong> (stok turun + jurnal Dr Piutang/Cr Pendapatan + Dr HPP/Cr Persediaan dibuat otomatis) → <strong>Penerimaan Kas</strong> (bayar piutang).
-        Harga otomatis terisi sesuai kanal: <em>Online (Shopee/TikTok)</em> pakai harga online, <em>Offline (WA/Toko)</em> pakai harga offline. Customer walk-in cukup isi nama tanpa pilih dari master data.
+        Harga otomatis terisi sesuai kanal: <em>Online (Shopee/TikTok)</em> pakai harga online, <em>Offline (WA/Toko)</em> pakai harga offline. Jenis pesanan marketplace dibaca dari kolom status/type export. Biaya admin final dibukukan dari settlement.
       </QuickTip>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -607,11 +622,13 @@ export function SalesInvoiceClient({
         />
       ) : (
         <div className="overflow-hidden rounded-lg border border-white/[0.06] bg-[#262626]">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="min-w-[1120px] w-full text-sm">
             <thead>
               <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wider text-white/40">
                 <th className="px-4 py-3 font-medium">No Invoice</th>
                 <th className="px-4 py-3 font-medium">Customer</th>
+                <th className="px-4 py-3 font-medium">Order Marketplace</th>
                 <th className="px-4 py-3 font-medium">Channel</th>
                 <th className="px-4 py-3 font-medium">Tanggal</th>
                 <th className="px-4 py-3 text-center font-medium">Items</th>
@@ -625,6 +642,7 @@ export function SalesInvoiceClient({
               {filtered.map((i) => {
                 const remaining = i.total - i.paid_amount;
                 const detailLoading = detailLoadingId === i.id;
+                const orderMeta = marketplaceOrderMeta(i.notes);
                 return (
                   <tr
                     key={i.id}
@@ -635,11 +653,27 @@ export function SalesInvoiceClient({
                     </td>
                     <td className="px-4 py-3 text-white/90">
                       {i.customer_name}
+                    </td>
+                    <td className="px-4 py-3">
                       {i.marketplace_order_id ? (
-                        <div className="font-mono text-[10px] text-white/40">
-                          {i.marketplace_order_id}
+                        <div className="space-y-1">
+                          <div className="font-mono text-[11px] text-white/75">
+                            {i.marketplace_order_id}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-medium ${orderMeta.tone}`}>
+                              {orderMeta.kind}
+                            </span>
+                            {orderMeta.status ? (
+                              <span className="max-w-[220px] truncate text-[10px] text-white/35" title={orderMeta.status}>
+                                {orderMeta.status}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
-                      ) : null}
+                      ) : (
+                        <span className="text-white/25">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -706,6 +740,7 @@ export function SalesInvoiceClient({
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -1149,6 +1184,11 @@ function FormModal({
                   })
                 }
               />
+              {isOnline ? (
+                <p className="mt-1 text-[11px] leading-relaxed text-white/40">
+                  Opsional di invoice. Fee aktual marketplace akan dikunci dari settlement saat dana cair.
+                </p>
+              ) : null}
             </div>
             <div>
               <FieldLabel htmlFor="tax">Pajak</FieldLabel>
@@ -1324,6 +1364,13 @@ function ViewModal({
                 label="Order Marketplace"
                 value={inv.marketplace_order_id}
                 mono
+              />
+            ) : null}
+            {inv.marketplace_order_id ? (
+              <Meta
+                icon={<FileText size={11} strokeWidth={2} />}
+                label="Jenis Pesanan"
+                value={marketplaceOrderMeta(inv.notes).kind}
               />
             ) : null}
           </div>

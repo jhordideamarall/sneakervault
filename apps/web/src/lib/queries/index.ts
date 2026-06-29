@@ -1,7 +1,12 @@
 import { createClient } from "@sneakervault/supabase/server";
 import { getCurrentUser } from "@/lib/actions/auth";
 import { measureServer } from "@/lib/server-perf";
-import type { ExpenseStatus, PaymentMethod } from "@sneakervault/shared";
+import type {
+  ExpenseStatus,
+  PaymentMethod,
+  PreOrderSource,
+  PreOrderStatus,
+} from "@sneakervault/shared";
 import {
   daysInWIBMonth,
   getWIBDay,
@@ -39,7 +44,7 @@ async function requireOwnerOrFinance() {
 
 // ─── Inventory ─────────────────────────────────────────────
 const PRODUCT_FIELDS =
-  "id, brand, model, sku, size, size_label, color, barcode, quantity, hpp, sell_price, price_offline, image_url, condition, defect_reason, is_active, created_at, first_inbound_at";
+  "id, brand, model, sku, size, size_label, color, barcode, quantity, hpp, sell_price, price_offline, price_website, price_shopee, price_tiktok, price_tokopedia, image_url, condition, defect_reason, is_active, created_at, first_inbound_at";
 
 export async function getProducts(filters?: {
   brand?: string;
@@ -599,6 +604,7 @@ export type PoLineRow = {
   new_brand?: string | null;
   new_model?: string | null;
   new_size?: number | null;
+  new_size_label?: string | null;
   new_color?: string | null;
   new_sku?: string | null;
   ordered_qty: number;
@@ -637,7 +643,7 @@ export async function getPurchaseOrderById(
   const { data } = await supabase
     .from("purchase_orders")
     .select(
-      "id, po_number, supplier_id, order_date, expected_date, status, subtotal, tax, shipping, total, notes, created_at, approved_at, payment_type, dp_amount, dp_bank_account_id, suppliers:supplier_id(name), bank:dp_bank_account_id(name), purchase_order_lines(id, product_id, ordered_qty, received_qty, unit_cost, subtotal, notes, new_brand, new_model, new_size, new_color, new_sku, products:product_id(brand, model, sku, size, color))",
+      "id, po_number, supplier_id, order_date, expected_date, status, subtotal, tax, shipping, total, notes, created_at, approved_at, payment_type, dp_amount, dp_bank_account_id, suppliers:supplier_id(name), bank:dp_bank_account_id(name), purchase_order_lines(id, product_id, ordered_qty, received_qty, unit_cost, subtotal, notes, new_brand, new_model, new_size, new_size_label, new_color, new_sku, products:product_id(brand, model, sku, size, size_label, color))",
     )
     .eq("id", id)
     .single();
@@ -672,6 +678,7 @@ export async function getPurchaseOrderById(
       new_brand: string | null;
       new_model: string | null;
       new_size: number | null;
+      new_size_label: string | null;
       new_color: string | null;
       new_sku: string | null;
       products: {
@@ -679,6 +686,7 @@ export async function getPurchaseOrderById(
         model: string;
         sku: string;
         size: number;
+        size_label: string | null;
         color: string;
       } | null;
     }>;
@@ -706,13 +714,14 @@ export async function getPurchaseOrderById(
       id: l.id,
       product_id: l.product_id,
       product_label: l.products
-        ? `${l.products.brand} ${l.products.model} ${l.products.color} • Size ${Number(l.products.size)} • ${l.products.sku}`
+        ? `${l.products.brand} ${l.products.model} ${l.products.color} • Size ${l.products.size_label ?? Number(l.products.size)} • ${l.products.sku}`
         : l.new_brand
-          ? `${l.new_brand} ${l.new_model} ${l.new_color ?? ""} • Size ${Number(l.new_size)} • ${l.new_sku} (baru)`
+          ? `${l.new_brand} ${l.new_model} ${l.new_color ?? ""} • Size ${l.new_size_label ?? Number(l.new_size)} • ${l.new_sku} (baru)`
           : "(produk dihapus)",
       new_brand: l.new_brand,
       new_model: l.new_model,
       new_size: l.new_size != null ? Number(l.new_size) : null,
+      new_size_label: l.new_size_label,
       new_color: l.new_color,
       new_sku: l.new_sku,
       ordered_qty: l.ordered_qty,
@@ -1025,6 +1034,7 @@ export type SalesProductPickerRow = {
   model: string;
   sku: string;
   size: number;
+  size_label?: string | null;
   color: string;
   barcode: string;
   hpp: number;
@@ -1040,13 +1050,318 @@ export async function getProductsForSalesPicker(): Promise<
   const { data } = await supabase
     .from("products")
     .select(
-      "id, brand, model, sku, size, color, barcode, hpp, sell_price, price_offline, quantity",
+      "id, brand, model, sku, size, size_label, color, barcode, hpp, sell_price, price_offline, quantity",
     )
     .eq("is_active", true)
     .order("brand")
     .order("model")
     .order("size");
   return (data as SalesProductPickerRow[] | null) ?? [];
+}
+
+export type PreOrderChannel =
+  | "manual"
+  | "wa"
+  | "shopee"
+  | "tiktok"
+  | "tokopedia"
+  | "offline"
+  | "website"
+  | "other";
+
+export type PreOrderLineRow = {
+  id: string;
+  product_id: string | null;
+  product_label: string;
+  sku: string;
+  product_name: string;
+  brand: string | null;
+  model: string | null;
+  color: string | null;
+  size_label: string;
+  size_value: number | null;
+  requested_qty: number;
+  reserved_qty: number;
+  purchase_qty: number;
+  ready_qty: number;
+  shortage_qty: number;
+  product_quantity: number;
+  active_reserved_qty: number;
+  other_reserved_qty: number;
+  unit_price: number;
+  estimated_cost: number;
+  status: PreOrderStatus;
+  notes: string | null;
+  procurement_po_numbers: string[];
+};
+
+export type PreOrderRow = {
+  id: string;
+  source: PreOrderSource;
+  channel: PreOrderChannel;
+  marketplace_order_id: string | null;
+  customer_id: string | null;
+  customer_name: string;
+  order_date: string;
+  deadline_date: string | null;
+  status: PreOrderStatus;
+  computed_status: PreOrderStatus;
+  marketplace_status: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  total_qty: number;
+  ready_qty: number;
+  shortage_qty: number;
+  total_amount: number;
+  line_count: number;
+  lines: PreOrderLineRow[];
+};
+
+type RawPreOrderLine = {
+  id: string;
+  product_id: string | null;
+  sku: string | null;
+  product_name: string | null;
+  brand: string | null;
+  model: string | null;
+  color: string | null;
+  size_label: string | null;
+  size_value: number | null;
+  requested_qty: number;
+  reserved_qty: number | null;
+  purchase_qty: number | null;
+  unit_price: number | null;
+  estimated_cost: number | null;
+  status: PreOrderStatus;
+  notes: string | null;
+  products: {
+    id: string;
+    brand: string;
+    model: string;
+    sku: string;
+    size: number | null;
+    size_label: string | null;
+    color: string;
+    quantity: number;
+    hpp: number;
+    sell_price: number;
+    price_offline: number | null;
+  } | null;
+  stock_reservations:
+    | Array<{ id: string; quantity: number; status: string }>
+    | null;
+  pre_order_procurement_links:
+    | Array<{
+        quantity: number;
+        purchase_orders: { po_number: string; status: string } | null;
+        purchase_order_lines:
+          | { ordered_qty: number; received_qty: number | null }
+          | null;
+      }>
+    | null;
+};
+
+type RawPreOrder = {
+  id: string;
+  source: PreOrderSource;
+  channel: PreOrderChannel | null;
+  marketplace_order_id: string | null;
+  customer_id: string | null;
+  customer_name: string | null;
+  order_date: string;
+  deadline_date: string | null;
+  status: PreOrderStatus;
+  marketplace_status: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  customers: { name: string } | null;
+  pre_order_lines: RawPreOrderLine[] | null;
+};
+
+function computeLineStatus(
+  dbStatus: PreOrderStatus,
+  productId: string | null,
+  requestedQty: number,
+  readyQty: number,
+  procurementQty: number,
+): PreOrderStatus {
+  if (dbStatus === "cancelled" || dbStatus === "packed") return dbStatus;
+  if (!productId) return "review";
+  if (requestedQty <= readyQty) return "ready_from_stock";
+  if (procurementQty > 0) return "purchase_created";
+  return "needs_purchase";
+}
+
+function summarizePreOrderStatus(
+  dbStatus: PreOrderStatus,
+  lines: PreOrderLineRow[],
+): PreOrderStatus {
+  if (dbStatus === "cancelled" || dbStatus === "packed") return dbStatus;
+  if (lines.length === 0) return "review";
+  if (lines.some((l) => l.status === "review")) return "review";
+  if (lines.some((l) => l.status === "needs_purchase")) return "needs_purchase";
+  if (lines.some((l) => l.status === "purchase_created")) return "purchase_created";
+  if (lines.every((l) => l.status === "ready_from_stock")) return "ready_from_stock";
+  return dbStatus;
+}
+
+export async function getPreOrders(): Promise<PreOrderRow[]> {
+  const supabase = await createClient();
+  const { data } = await (supabase as any)
+    .from("pre_orders")
+    .select(`
+      id, source, channel, marketplace_order_id, customer_id, customer_name,
+      order_date, deadline_date, status, marketplace_status, notes, created_at, updated_at,
+      customers:customer_id(name),
+      pre_order_lines(
+        id, product_id, sku, product_name, brand, model, color, size_label, size_value,
+        requested_qty, reserved_qty, purchase_qty, unit_price, estimated_cost, status, notes,
+        products:product_id(id, brand, model, sku, size, size_label, color, quantity, hpp, sell_price, price_offline),
+        stock_reservations(id, quantity, status),
+        pre_order_procurement_links(
+          quantity,
+          purchase_orders:purchase_order_id(po_number, status),
+          purchase_order_lines:purchase_order_line_id(ordered_qty, received_qty)
+        )
+      )
+    `)
+    .order("order_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1000);
+
+  const rows = (data as RawPreOrder[] | null) ?? [];
+  const productIds = Array.from(
+    new Set(
+      rows.flatMap((row) =>
+        (row.pre_order_lines ?? [])
+          .map((line) => line.product_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ),
+  );
+
+  const reservedByProduct = new Map<string, number>();
+  if (productIds.length > 0) {
+    const { data: reservations } = await (supabase as any)
+      .from("stock_reservations")
+      .select("product_id, quantity, status")
+      .in("product_id", productIds)
+      .eq("status", "active");
+
+    for (const r of (reservations as Array<{
+      product_id: string | null;
+      quantity: number | null;
+    }> | null) ?? []) {
+      if (!r.product_id) continue;
+      reservedByProduct.set(
+        r.product_id,
+        (reservedByProduct.get(r.product_id) ?? 0) + Number(r.quantity ?? 0),
+      );
+    }
+  }
+
+  return rows.map((row) => {
+    const lines = (row.pre_order_lines ?? []).map((line) => {
+      const product = line.products;
+      const requestedQty = Number(line.requested_qty ?? 0);
+      const activeReservedQty = (line.stock_reservations ?? [])
+        .filter((r) => r.status === "active")
+        .reduce((sum, r) => sum + Number(r.quantity ?? 0), 0);
+      const productQuantity = Number(product?.quantity ?? 0);
+      const allReservedForProduct =
+        line.product_id ? reservedByProduct.get(line.product_id) ?? 0 : 0;
+      const otherReservedQty = Math.max(0, allReservedForProduct - activeReservedQty);
+      const availableForLine =
+        line.product_id == null
+          ? 0
+          : Math.max(0, productQuantity - otherReservedQty);
+      const procurementQty = (line.pre_order_procurement_links ?? []).reduce(
+        (sum, link) => sum + Number(link.quantity ?? 0),
+        0,
+      );
+      const readyQty = Math.min(requestedQty, availableForLine);
+      const shortageQty = Math.max(0, requestedQty - readyQty);
+      const sizeLabel =
+        line.size_label ??
+        product?.size_label ??
+        (product?.size != null ? String(Number(product.size)) : "-");
+      const productLabel = product
+        ? `${product.brand} ${product.model} ${product.color} • Size ${sizeLabel} • ${product.sku}`
+        : `${line.product_name ?? "Produk manual"} • Size ${sizeLabel} • ${line.sku ?? "-"}`;
+      const status = computeLineStatus(
+        line.status,
+        line.product_id,
+        requestedQty,
+        readyQty,
+        procurementQty,
+      );
+
+      return {
+        id: line.id,
+        product_id: line.product_id,
+        product_label: productLabel,
+        sku: line.sku ?? product?.sku ?? "-",
+        product_name: line.product_name ?? productLabel,
+        brand: line.brand ?? product?.brand ?? null,
+        model: line.model ?? product?.model ?? null,
+        color: line.color ?? product?.color ?? null,
+        size_label: sizeLabel,
+        size_value: line.size_value != null ? Number(line.size_value) : null,
+        requested_qty: requestedQty,
+        reserved_qty: Number(line.reserved_qty ?? activeReservedQty),
+        purchase_qty: Number(line.purchase_qty ?? procurementQty),
+        ready_qty: readyQty,
+        shortage_qty: shortageQty,
+        product_quantity: productQuantity,
+        active_reserved_qty: activeReservedQty,
+        other_reserved_qty: otherReservedQty,
+        unit_price: Number(line.unit_price ?? 0),
+        estimated_cost: Number(line.estimated_cost ?? product?.hpp ?? 0),
+        status,
+        notes: line.notes,
+        procurement_po_numbers: Array.from(
+          new Set(
+            (line.pre_order_procurement_links ?? [])
+              .map((link) => link.purchase_orders?.po_number)
+              .filter((po): po is string => Boolean(po)),
+          ),
+        ),
+      };
+    });
+
+    const totalQty = lines.reduce((sum, line) => sum + line.requested_qty, 0);
+    const readyQty = lines.reduce((sum, line) => sum + line.ready_qty, 0);
+    const shortageQty = lines.reduce((sum, line) => sum + line.shortage_qty, 0);
+    const totalAmount = lines.reduce(
+      (sum, line) => sum + line.requested_qty * line.unit_price,
+      0,
+    );
+
+    return {
+      id: row.id,
+      source: row.source,
+      channel: row.channel ?? "manual",
+      marketplace_order_id: row.marketplace_order_id,
+      customer_id: row.customer_id,
+      customer_name: row.customer_name ?? row.customers?.name ?? "Customer",
+      order_date: row.order_date,
+      deadline_date: row.deadline_date,
+      status: row.status,
+      computed_status: summarizePreOrderStatus(row.status, lines),
+      marketplace_status: row.marketplace_status,
+      notes: row.notes,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      total_qty: totalQty,
+      ready_qty: readyQty,
+      shortage_qty: shortageQty,
+      total_amount: totalAmount,
+      line_count: lines.length,
+      lines,
+    };
+  });
 }
 
 export type OutstandingInvoiceRow = {
@@ -2964,10 +3279,28 @@ export type MarketplaceCostReportRow = {
   orders: number;
   gmv: number;
   marketplace_fee: number;
+  actual_marketplace_fee: number;
+  estimated_marketplace_fee: number;
+  fee_source: "settlement_actual" | "order_estimate" | "mixed" | "none";
   discount: number;
   shipping: number;
   net_sales: number;
 };
+
+function emptyMarketplaceCostRow(channel: string): MarketplaceCostReportRow {
+  return {
+    channel,
+    orders: 0,
+    gmv: 0,
+    marketplace_fee: 0,
+    actual_marketplace_fee: 0,
+    estimated_marketplace_fee: 0,
+    fee_source: "none",
+    discount: 0,
+    shipping: 0,
+    net_sales: 0,
+  };
+}
 
 export async function getMarketplaceCostReport(
   from?: string,
@@ -2977,7 +3310,7 @@ export async function getMarketplaceCostReport(
   const supabase = await createClient();
   let query = supabase
     .from("sales_invoices")
-    .select("channel, invoice_date, subtotal, discount, shipping, marketplace_fee, total, status")
+    .select("channel, invoice_date, subtotal, discount, shipping, marketplace_fee, settlement_fee_actual, total, status, settlement_status")
     .in("channel", ["shopee", "tiktok", "tokopedia"])
     .neq("status", "cancelled");
   if (from) query = query.gte("invoice_date", from.slice(0, 10));
@@ -2991,26 +3324,40 @@ export async function getMarketplaceCostReport(
     discount: number;
     shipping: number;
     marketplace_fee: number;
+    settlement_fee_actual: number | null;
     total: number;
+    settlement_status: string | null;
   }>) {
-    const current = map.get(row.channel) ?? {
-      channel: row.channel,
-      orders: 0,
-      gmv: 0,
-      marketplace_fee: 0,
-      discount: 0,
-      shipping: 0,
-      net_sales: 0,
-    };
+    const current = map.get(row.channel) ?? emptyMarketplaceCostRow(row.channel);
     current.orders += 1;
     current.gmv += Number(row.subtotal ?? 0);
-    current.marketplace_fee += Number(row.marketplace_fee ?? 0);
+    if (row.settlement_status !== "released") {
+      current.estimated_marketplace_fee += Number(row.marketplace_fee ?? 0);
+    } else if (row.settlement_fee_actual != null) {
+      current.actual_marketplace_fee += Number(row.settlement_fee_actual ?? 0);
+    } else {
+      current.estimated_marketplace_fee += Number(row.marketplace_fee ?? 0);
+    }
     current.discount += Number(row.discount ?? 0);
     current.shipping += Number(row.shipping ?? 0);
     current.net_sales += Number(row.total ?? 0);
     map.set(row.channel, current);
   }
-  return Array.from(map.values()).sort((a, b) => b.net_sales - a.net_sales);
+
+  return Array.from(map.values())
+    .map((row) => {
+      row.marketplace_fee = row.actual_marketplace_fee + row.estimated_marketplace_fee;
+      row.fee_source =
+        row.actual_marketplace_fee > 0 && row.estimated_marketplace_fee > 0
+          ? "mixed"
+          : row.actual_marketplace_fee > 0
+            ? "settlement_actual"
+            : row.estimated_marketplace_fee > 0
+              ? "order_estimate"
+              : "none";
+      return row;
+    })
+    .sort((a, b) => b.net_sales - a.net_sales);
 }
 
 export type ProfitByChannelRow = {
@@ -3033,7 +3380,7 @@ export async function getProfitByChannelReport(
   const supabase = await createClient();
   let query = supabase
     .from("sales_invoices")
-    .select("id, channel, invoice_date, total, discount, marketplace_fee, status, sales_invoice_lines(qty, unit_cost)")
+    .select("id, channel, invoice_date, total, discount, marketplace_fee, settlement_fee_actual, status, settlement_status, sales_invoice_lines(qty, unit_cost)")
     .neq("status", "cancelled");
   if (from) query = query.gte("invoice_date", from.slice(0, 10));
   if (to) query = query.lte("invoice_date", to.slice(0, 10));
@@ -3045,6 +3392,8 @@ export async function getProfitByChannelReport(
     total: number;
     discount: number;
     marketplace_fee: number;
+    settlement_fee_actual: number | null;
+    settlement_status: string | null;
     sales_invoice_lines: Array<{ qty: number; unit_cost: number }> | null;
   }>) {
     const current = map.get(row.channel) ?? {
@@ -3068,14 +3417,18 @@ export async function getProfitByChannelReport(
     current.units += units;
     current.revenue += Number(row.total ?? 0);
     current.cogs += cogs;
-    current.marketplace_fee += Number(row.marketplace_fee ?? 0);
+    if (row.settlement_status === "released" && row.settlement_fee_actual != null) {
+      current.marketplace_fee += Number(row.settlement_fee_actual ?? 0);
+    } else {
+      current.marketplace_fee += Number(row.marketplace_fee ?? 0);
+    }
     current.discount += Number(row.discount ?? 0);
     map.set(row.channel, current);
   }
 
   return Array.from(map.values())
     .map((row) => {
-      row.profit = row.revenue - row.cogs;
+      row.profit = row.revenue - row.cogs - row.marketplace_fee;
       row.margin = row.revenue > 0 ? (row.profit / row.revenue) * 100 : 0;
       return row;
     })

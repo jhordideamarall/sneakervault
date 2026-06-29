@@ -60,26 +60,26 @@ export function PosPaymentModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-slate-900/40 animate-in fade-in duration-200"
+        className="absolute inset-0 bg-black/60 animate-in fade-in duration-200"
         onClick={onClose}
         aria-hidden
       />
-      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-200">
+      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-white/[0.08] bg-[#262626] text-white shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-200">
         <div className="flex items-center justify-between px-6 pt-5">
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
             Pembayaran
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="grid size-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100"
+            className="grid size-8 place-items-center rounded-lg text-white/40 hover:bg-white/[0.08] hover:text-white"
           >
             <X className="size-4" />
           </button>
         </div>
 
         <div className="space-y-5 p-6">
-          <div className="rounded-2xl bg-slate-900 p-5 text-center">
+          <div className="rounded-2xl border border-white/[0.08] bg-black/25 p-5 text-center">
             <p className="text-[10px] font-black uppercase tracking-widest text-white/40">
               Total Tagihan
             </p>
@@ -89,7 +89,7 @@ export function PosPaymentModal({
           </div>
 
           <div>
-            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-white/40">
               Metode Bayar
             </p>
             <div className="grid grid-cols-3 gap-2">
@@ -101,8 +101,8 @@ export function PosPaymentModal({
                   className={cn(
                     "h-12 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all",
                     method === p.value
-                      ? "bg-slate-900 text-white shadow-lg shadow-slate-200"
-                      : "bg-slate-50 text-slate-500 hover:bg-slate-100",
+                      ? "bg-white text-black shadow-lg shadow-black/20"
+                      : "bg-white/[0.05] text-white/45 hover:bg-white/[0.08] hover:text-white",
                   )}
                 >
                   {p.label}
@@ -112,13 +112,13 @@ export function PosPaymentModal({
           </div>
 
           <div>
-            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-white/40">
               Akun Kas/Bank
             </p>
             <select
               value={account}
               onChange={(e) => setAccount(e.target.value)}
-              className="h-12 w-full rounded-xl bg-slate-50 px-3 text-sm font-bold text-slate-800 outline-none"
+              className="h-12 w-full rounded-xl border border-white/[0.08] bg-white/[0.05] px-3 text-sm font-bold text-white outline-none"
             >
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -130,7 +130,7 @@ export function PosPaymentModal({
 
           {method === "cash" ? (
             <div>
-              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-white/40">
                 Uang Diterima
               </p>
               <NumberInput
@@ -138,13 +138,13 @@ export function PosPaymentModal({
                 value={cash || ""}
                 onValueChange={(value) => setCash(Math.max(0, value))}
                 placeholder="0"
-                className="h-12 w-full rounded-xl !border-none !bg-slate-50 px-4 text-lg font-black tabular-nums !text-slate-900 outline-none focus:!ring-0"
+                className="h-12 w-full rounded-xl !border !border-white/[0.08] !bg-white/[0.05] px-4 text-lg font-black tabular-nums !text-white outline-none focus:!ring-0"
               />
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <button
                   type="button"
                   onClick={() => setCash(total)}
-                  className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-black uppercase text-slate-600 hover:bg-slate-200"
+                  className="rounded-lg bg-white/[0.06] px-2.5 py-1 text-[11px] font-black uppercase text-white/60 hover:bg-white/[0.1] hover:text-white"
                 >
                   Uang pas
                 </button>
@@ -153,13 +153,13 @@ export function PosPaymentModal({
                     key={v}
                     type="button"
                     onClick={() => setCash((c) => c + v)}
-                    className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-black tabular-nums text-slate-600 hover:bg-slate-200"
+                    className="rounded-lg bg-white/[0.06] px-2.5 py-1 text-[11px] font-black tabular-nums text-white/60 hover:bg-white/[0.1] hover:text-white"
                   >
                     +{v / 1000}rb
                   </button>
                 ))}
               </div>
-              <div className="mt-3 flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-2.5">
+              <div className="mt-3 flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5">
                 <span className="text-[11px] font-black uppercase tracking-widest text-emerald-600">
                   Kembalian
                 </span>
@@ -175,7 +175,7 @@ export function PosPaymentModal({
           <button
             type="button"
             onClick={onClose}
-            className="h-14 flex-1 rounded-xl bg-slate-50 text-[11px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100"
+            className="h-14 flex-1 rounded-xl bg-white/[0.06] text-[11px] font-black uppercase tracking-widest text-white/50 hover:bg-white/[0.1] hover:text-white"
           >
             Batal
           </button>

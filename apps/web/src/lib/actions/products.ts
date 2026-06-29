@@ -23,20 +23,41 @@ const importRowSchema = z.object({
   color: z.string().trim().optional(),
   // Barcode opsional — auto-generate dari SKU + size kalau kosong.
   barcode: z.string().trim().optional(),
-  quantity: z.coerce.number().int().nonnegative().default(0),
-  hpp: z.coerce.number().nonnegative().default(0),
-  sell_price: z.coerce.number().nonnegative().default(0),
-  price_offline: z.coerce.number().nonnegative().default(0),
+  quantity: z.preprocess(numberInputOrZero, z.coerce.number().int().nonnegative()),
+  hpp: z.preprocess(numberInputOrZero, z.coerce.number().nonnegative()),
+  sell_price: z.preprocess(numberInputOrZero, z.coerce.number().nonnegative()),
+  price_offline: z.preprocess(numberInputOrZero, z.coerce.number().nonnegative()),
   // Harga per-channel (opsional; kosong = fallback ke sell_price).
-  price_website: z.coerce.number().nonnegative().optional(),
-  price_shopee: z.coerce.number().nonnegative().optional(),
-  price_tiktok: z.coerce.number().nonnegative().optional(),
-  price_tokopedia: z.coerce.number().nonnegative().optional(),
+  price_website: z.preprocess(numberInputOrUndefined, z.coerce.number().nonnegative().optional()),
+  price_shopee: z.preprocess(numberInputOrUndefined, z.coerce.number().nonnegative().optional()),
+  price_tiktok: z.preprocess(numberInputOrUndefined, z.coerce.number().nonnegative().optional()),
+  price_tokopedia: z.preprocess(numberInputOrUndefined, z.coerce.number().nonnegative().optional()),
 });
 
 /** Barcode auto-generate: unik per SKU+size, alfanumerik, scannable (Code128). */
 function autoBarcode(sku: string, sizeLabel: string) {
   return `${sku}-${sizeLabel}`.replace(/[^A-Za-z0-9-]/g, "").toUpperCase().slice(0, 120);
+}
+
+function normalizeNumberInput(value: unknown) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  const raw = String(value ?? "").trim();
+  if (!raw || raw === "-" || /^Rp\s*-$/i.test(raw)) return undefined;
+  const cleaned = raw
+    .replace(/Rp/gi, "")
+    .replace(/\s/g, "")
+    .replace(/,/g, "");
+  if (!cleaned || cleaned === "-") return undefined;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : value;
+}
+
+function numberInputOrZero(value: unknown) {
+  return normalizeNumberInput(value) ?? 0;
+}
+
+function numberInputOrUndefined(value: unknown) {
+  return normalizeNumberInput(value);
 }
 
 export type ImportProductRow = z.infer<typeof importRowSchema>;
@@ -66,8 +87,16 @@ function chunk<T>(items: T[], size: number) {
 }
 
 function parseSeedSize(value: unknown) {
-  const raw = String(value ?? "").trim().replace(/,/g, ".");
+  const raw = String(value ?? "")
+    .trim()
+    .replace(/,/g, ".")
+    .replace(/^[^0-9]+/, "")
+    .trim();
   if (!raw) return null;
+
+  if (/^[0-9]{2}5$/.test(raw)) {
+    return Number(raw.slice(0, 2)) + 0.5;
+  }
 
   const mixedFraction = raw.match(/^([0-9]+) +([0-9]+)\/([0-9]+)$/);
   if (mixedFraction) {
@@ -100,6 +129,7 @@ function seedProductKey(sku: string, sizeNum: number) {
 }
 
 function importPayload(row: ImportProductRow) {
+  const fallbackPrice = row.price_offline || row.sell_price;
   return {
     brand: row.brand,
     model: row.model,
@@ -110,11 +140,11 @@ function importPayload(row: ImportProductRow) {
     quantity: row.quantity,
     hpp: row.hpp,
     sell_price: row.sell_price,
-    price_offline: row.price_offline || row.sell_price,
-    price_website: row.price_website ?? null,
-    price_shopee: row.price_shopee ?? null,
-    price_tiktok: row.price_tiktok ?? null,
-    price_tokopedia: row.price_tokopedia ?? null,
+    price_offline: fallbackPrice,
+    price_website: row.price_website ?? fallbackPrice,
+    price_shopee: row.price_shopee ?? fallbackPrice,
+    price_tiktok: row.price_tiktok ?? fallbackPrice,
+    price_tokopedia: row.price_tokopedia ?? fallbackPrice,
     is_active: true,
     first_inbound_at: row.quantity > 0 ? new Date().toISOString() : null,
   };
@@ -587,6 +617,10 @@ export async function updateProduct(input: unknown) {
     delete (patch as { hpp?: number }).hpp;
     delete (patch as { sell_price?: number }).sell_price;
     delete (patch as { price_offline?: number }).price_offline;
+    delete (patch as { price_website?: number | null }).price_website;
+    delete (patch as { price_shopee?: number | null }).price_shopee;
+    delete (patch as { price_tiktok?: number | null }).price_tiktok;
+    delete (patch as { price_tokopedia?: number | null }).price_tokopedia;
   }
   // Admin gudang cannot edit supplier (locked to owner/finance)
   if (!isOwner && !isFinance) {

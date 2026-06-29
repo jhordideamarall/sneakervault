@@ -58,6 +58,7 @@ type FormLine = {
   new_brand?: string;
   new_model?: string;
   new_size?: number;
+  new_size_label?: string;
   new_color?: string;
   new_sku?: string;
 };
@@ -223,6 +224,7 @@ export function PurchaseOrderClient({
         new_brand: l.new_brand ?? undefined,
         new_model: l.new_model ?? undefined,
         new_size: l.new_size ?? undefined,
+        new_size_label: l.new_size_label ?? undefined,
         new_color: l.new_color ?? undefined,
         new_sku: l.new_sku ?? undefined,
       })),
@@ -317,6 +319,7 @@ export function PurchaseOrderClient({
           new_brand: m.brand,
           new_model: m.model,
           new_size: m.size,
+          new_size_label: String(m.size),
           new_color: m.color || undefined,
           new_sku: m.sku,
         },
@@ -389,6 +392,7 @@ export function PurchaseOrderClient({
         new_brand: l.product_id ? undefined : l.new_brand,
         new_model: l.product_id ? undefined : l.new_model,
         new_size: l.product_id ? undefined : l.new_size,
+        new_size_label: l.product_id ? undefined : l.new_size_label,
         new_color: l.product_id ? undefined : l.new_color,
         new_sku: l.product_id ? undefined : l.new_sku,
       })),
