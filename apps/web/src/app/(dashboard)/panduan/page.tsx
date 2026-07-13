@@ -496,15 +496,15 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         aturan: [
           "Semua item dalam sesi harus dihitung sebelum submit review.",
           "Selisih wajib diberi catatan penyebab.",
-          "Penyesuaian final butuh approval sesuai izin.",
+          "Hasil review dikunci setelah hitung fisik selesai.",
         ],
         efek: [
-          "Sesi review menampilkan variance.",
-          "Approval membuat penyesuaian stok dan jurnal otomatis.",
+          "Sesi review menampilkan variance antara data fisik dan sistem.",
+          "Hasil opname dapat di-export PDF/Excel dan tidak otomatis mengubah stok atau jurnal.",
         ],
         koreksi: [
           "Cancel sesi jika scope salah.",
-          "Ulang hitung sebelum approval jika selisih belum jelas.",
+          "Ulang hitung sebelum hasil dikunci jika selisih belum jelas.",
         ],
       },
       {
@@ -657,17 +657,17 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         ],
         koreksi: [
           "Jika salah mapping akun, koreksi mapping/transaksi sebelum tutup buku.",
-          "Gunakan jurnal penyesuaian jika perlu reklasifikasi yang terkontrol.",
+          "Gunakan Jurnal Umum jika perlu reklasifikasi yang terkontrol.",
         ],
       },
       {
-        menu: "Jurnal Penyesuaian",
+        menu: "Jurnal Umum",
         akses: "Owner, Finance",
         fungsi: "Membuat, mengedit, dan menghapus jurnal manual untuk koreksi akuntansi.",
         aturan: [
           "Debit harus sama dengan kredit.",
           "Hanya jurnal manual yang bisa diedit langsung.",
-          "Jurnal otomatis dari transaksi dikoreksi lewat modul asal atau jurnal reversal/penyesuaian.",
+          "Jurnal otomatis dari transaksi dikoreksi lewat modul asal atau jurnal reversal/Jurnal Umum.",
         ],
         efek: [
           "Langsung memengaruhi buku besar dan laporan keuangan.",
@@ -727,7 +727,7 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         ],
         koreksi: [
           "Jika laporan tidak cocok, telusuri dari Buku Besar ke transaksi sumber.",
-          "Gunakan jurnal penyesuaian untuk koreksi akuntansi yang tidak punya modul sumber.",
+          "Gunakan Jurnal Umum untuk koreksi akuntansi yang tidak punya modul sumber.",
         ],
       },
     ],
@@ -835,7 +835,7 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         ],
         koreksi: [
           "Jika salah cutover, koreksi sebelum operasional aktif.",
-          "Setelah transaksi berjalan, gunakan jurnal penyesuaian atau koreksi modul, bukan reimport massal sembarangan.",
+          "Setelah transaksi berjalan, gunakan Jurnal Umum atau koreksi modul, bukan reimport massal sembarangan.",
         ],
       },
       {
@@ -1081,7 +1081,7 @@ export default function PanduanPage() {
           </Sub>
           <Sub icon={<ClipboardList size={15} />} title="Stock Opname">
             Hitung fisik berkala. Buat sesi → input jumlah fisik → sistem hitung <b>selisih (variance)</b> vs sistem →
-            status Review → <b>Owner approve</b> untuk menyesuaikan stok. Jurnal penyesuaian stok otomatis.
+            status Review → <b>Owner/Finance</b> mengunci hasil perbandingan. Hasil opname tidak otomatis menyesuaikan stok; export PDF/Excel dipakai sebagai dasar koreksi terpisah.
           </Sub>
           <Sub icon={<PackageMinus size={15} />} title="Packing / Outbound">
             Scan barang yang dikirim untuk pesanan → stok turun → masuk halaman <b>Terjual</b>. Status: Packing → Dikirim → Selesai.
@@ -1204,8 +1204,8 @@ export default function PanduanPage() {
           steps={[
             { title: "Jurnal otomatis", desc: "Setiap penjualan, pembelian, pembayaran, settlement, opname, beban — langsung membentuk jurnal balanced." },
             { title: "Chart of Accounts (CoA)", desc: "37 akun standar sudah ter-seed (Kas, Bank, Piutang, Persediaan, Saldo Marketplace, Penjualan per channel, HPP, beban, dll)." },
-            { title: "Jurnal Penyesuaian (manual)", desc: "Buku Besar → Jurnal. Owner/Finance bisa buat, edit, dan hapus jurnal manual selama periode belum dikunci dan jurnal tetap balance." },
-            { title: "Jurnal otomatis tidak diedit langsung", desc: "Jurnal dari POS, invoice, settlement, pembelian, pembayaran, dan stok harus dikoreksi lewat modul asalnya, atau dibuat jurnal penyesuaian/reversal. Ini menjaga stok, piutang, hutang, bank, dan buku besar tetap sinkron." },
+            { title: "Jurnal Umum (manual)", desc: "Buku Besar → Jurnal Umum. Owner/Finance bisa buat, edit, dan hapus jurnal manual selama periode belum dikunci dan jurnal tetap balance." },
+            { title: "Jurnal otomatis tidak diedit langsung", desc: "Jurnal dari POS, invoice, settlement, pembelian, pembayaran, dan stok harus dikoreksi lewat modul asalnya, atau dibuat Jurnal Umum/reversal. Ini menjaga stok, piutang, hutang, bank, dan buku besar tetap sinkron." },
             { title: "Tutup Buku (Periode)", desc: "Kunci periode (fiscal lock) agar transaksi periode lama tidak berubah." },
           ]}
         />

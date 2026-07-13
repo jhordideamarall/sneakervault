@@ -7,7 +7,12 @@ import type { Role } from "@sneakervault/shared";
 
 export const dynamic = "force-dynamic";
 
-export default async function PenerimaanPage() {
+export default async function PenerimaanPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ po?: string }>;
+}) {
+  const sp = await searchParams;
   const profile = await getCurrentUser();
   if (!profile) redirect("/login");
 
@@ -22,6 +27,7 @@ export default async function PenerimaanPage() {
     <PenerimaanClient
       receivablePos={receivablePos}
       detailById={{}}
+      initialPoId={sp.po}
       roles={roles as string[]}
     />
   );

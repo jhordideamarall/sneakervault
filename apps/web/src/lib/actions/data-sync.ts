@@ -360,6 +360,8 @@ async function importProducts(
     .select("id, sku, barcode, quantity");
   const bySku = new Map((productRows ?? []).map((row) => [key(row.sku), row]));
   const byBarcode = new Map((productRows ?? []).map((row) => [key(row.barcode), row]));
+  let inventoryDebit = 0;
+  let inventoryCredit = 0;
 
   for (let i = 0; i < rows.length; i++) {
     const parsed = productRowSchema.safeParse(rows[i]);
@@ -408,7 +410,11 @@ async function importProducts(
     const productId = existing ? existing.id : ("data" in response ? response.data?.id : null);
     const previousQty = existing ? Number(existing.quantity ?? 0) : 0;
     const delta = row.quantity - previousQty;
-    if (productId && row.quantity > 0 && Math.abs(delta) > 0) {
+    if (productId && Math.abs(delta) > 0) {
+      const deltaValue = Math.abs(delta) * row.hpp;
+      if (delta > 0) inventoryDebit += deltaValue;
+      else inventoryCredit += deltaValue;
+
       const movement = await createStockMovement(supabase, {
         product_id: productId,
         type: existing ? "adjustment" : "inbound",
@@ -430,6 +436,53 @@ async function importProducts(
         byBarcode.set(key(row.barcode), response.data);
       }
     }
+  }
+
+  if (inventoryDebit > 0 || inventoryCredit > 0) {
+    const lines: Array<{
+      account_code: string;
+      debit?: number;
+      credit?: number;
+      description: string;
+    }> = [];
+    if (inventoryDebit > 0) {
+      lines.push(
+        {
+          account_code: "1.1.05",
+          debit: inventoryDebit,
+          description: "Saldo awal stok dari Accurate",
+        },
+        {
+          account_code: "3.1",
+          credit: inventoryDebit,
+          description: "Modal awal atas persediaan",
+        },
+      );
+    }
+    if (inventoryCredit > 0) {
+      lines.push(
+        {
+          account_code: "3.1",
+          debit: inventoryCredit,
+          description: "Koreksi modal awal atas persediaan",
+        },
+        {
+          account_code: "1.1.05",
+          credit: inventoryCredit,
+          description: "Koreksi saldo awal stok dari Accurate",
+        },
+      );
+    }
+
+    const journal = await createJournalEntry({
+      entry_date: cutoffDate,
+      description: `Saldo awal stok cutover Accurate ${cutoffDate}`,
+      source_type: "opening_balance",
+      user_id: profileId,
+      lines,
+    });
+    if (journal.error) result.errors.push({ row: 1, reason: `Jurnal stok awal: ${journal.error}` });
+    else result.journal_id = journal.id;
   }
 
   await logActivity({ user_id: profileId, action: "data_sync_import", entity_type: "products", new_data: result });
@@ -513,6 +566,7 @@ async function importOpeningBalance(
     .select("id")
     .eq("source_type", "opening_balance")
     .eq("entry_date", cutoffDate)
+    .eq("description", `Saldo awal cutover Accurate ${cutoffDate}`)
     .maybeSingle();
   if (existing?.id) {
     return {

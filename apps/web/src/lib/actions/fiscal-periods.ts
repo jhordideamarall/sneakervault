@@ -5,6 +5,7 @@ import { createClient } from "@sneakervault/supabase/server";
 import { fiscalPeriodSchema } from "@sneakervault/shared";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
+import { runFixedAssetDepreciation } from "./fixed-assets";
 
 function revalidatePeriods() {
   revalidatePath("/buku-besar/periode");
@@ -19,6 +20,13 @@ export async function closePeriod(input: unknown) {
 
   const supabase = await createClient();
   const { year, month, reason } = parsed.data;
+  const depreciation = await runFixedAssetDepreciation({
+    year,
+    month,
+    user_id: profile.id,
+  });
+  if (depreciation.error) return { error: depreciation.error };
+
   const { data: existing } = await supabase
     .from("fiscal_periods")
     .select("id, status")
@@ -60,7 +68,12 @@ export async function closePeriod(input: unknown) {
     action: "close_period",
     entity_type: "fiscal_period",
     entity_id: periodId ?? undefined,
-    new_data: { year, month, reason },
+    new_data: {
+      year,
+      month,
+      reason,
+      depreciation_amount: depreciation.amount ?? 0,
+    },
   });
 
   revalidatePeriods();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -12,6 +12,7 @@ import {
   Alert,
 } from "@sneakervault/ui";
 import { QuickTip } from "@/components/ui/quick-tip";
+import { exportToExcel, exportToPDF } from "@/lib/export";
 import {
   PURCHASE_INVOICE_STATUS_LABELS,
   PURCHASE_INVOICE_STATUS_TONES,
@@ -28,6 +29,7 @@ import {
 import type {
   PurchaseInvoiceRow,
   InvoicablePoRow,
+  ProductPickerRow,
 } from "@/lib/queries";
 import {
   Plus,
@@ -43,9 +45,25 @@ import {
   AlertTriangle,
   ExternalLink,
   Paperclip,
+  Download,
+  FileSpreadsheet,
 } from "lucide-react";
 
 type SupplierOpt = { id: string; name: string };
+
+type InvoiceLineForm = {
+  product_id: string | null;
+  product_label: string;
+  qty: number;
+  unit_cost: number;
+  notes: string;
+  new_brand?: string;
+  new_model?: string;
+  new_size?: number;
+  new_size_label?: string;
+  new_color?: string;
+  new_sku?: string;
+};
 
 type FormState = {
   source: "manual" | "po";
@@ -58,6 +76,7 @@ type FormState = {
   total: number;
   notes: string;
   attachment_url: string;
+  lines: InvoiceLineForm[];
 };
 
 function todayIso(): string {
@@ -81,6 +100,7 @@ const emptyForm = (): FormState => ({
   total: 0,
   notes: "",
   attachment_url: "",
+  lines: [],
 });
 
 function fmtDate(iso: string | null): string {
@@ -99,11 +119,15 @@ export function FakturPembelianClient({
   invoices,
   invoicablePos,
   suppliers,
+  products,
+  initialPoId,
   roles,
 }: {
   invoices: PurchaseInvoiceRow[];
   invoicablePos: InvoicablePoRow[];
   suppliers: SupplierOpt[];
+  products: ProductPickerRow[];
+  initialPoId?: string;
   roles: string[];
 }) {
   const router = useRouter();
@@ -125,6 +149,12 @@ export function FakturPembelianClient({
 
   const canManage = roles.includes("owner") || roles.includes("finance");
   const canDelete = roles.includes("owner");
+
+  useEffect(() => {
+    if (!initialPoId || editing) return;
+    setEditing({ mode: "new" });
+    pickPo(initialPoId);
+  }, [initialPoId, editing]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -184,6 +214,7 @@ export function FakturPembelianClient({
       total: inv.total,
       notes: inv.notes ?? "",
       attachment_url: inv.attachment_url ?? "",
+      lines: [],
     });
     setFormError(null);
     setFieldErrors({});
@@ -219,10 +250,62 @@ export function FakturPembelianClient({
         ...form,
         source,
         po_id: "",
+        subtotal: 0,
+        total: form.tax,
+        lines: [],
       });
     } else {
       setForm({ ...form, source });
     }
+  }
+
+  function addExistingLine(product: ProductPickerRow) {
+    setForm((current) => {
+      const existing = current.lines.find((line) => line.product_id === product.id);
+      if (existing) {
+        return {
+          ...current,
+          lines: current.lines.map((line) =>
+            line.product_id === product.id
+              ? { ...line, qty: line.qty + 1 }
+              : line,
+          ),
+        };
+      }
+      return {
+        ...current,
+        lines: [
+          ...current.lines,
+          {
+            product_id: product.id,
+            product_label: `${product.brand} ${product.model} ${product.color} • Size ${product.size} • ${product.sku}`,
+            qty: 1,
+            unit_cost: product.hpp || 0,
+            notes: "",
+          },
+        ],
+      };
+    });
+  }
+
+  function addManualLine(line: InvoiceLineForm) {
+    setForm((current) => ({ ...current, lines: [...current.lines, line] }));
+  }
+
+  function updateLine(index: number, patch: Partial<InvoiceLineForm>) {
+    setForm((current) => ({
+      ...current,
+      lines: current.lines.map((line, i) =>
+        i === index ? { ...line, ...patch } : line,
+      ),
+    }));
+  }
+
+  function removeLine(index: number) {
+    setForm((current) => ({
+      ...current,
+      lines: current.lines.filter((_, i) => i !== index),
+    }));
   }
 
   function handleSubtotalChange(val: number) {
@@ -245,7 +328,17 @@ export function FakturPembelianClient({
       setFormError("Pilih vendor");
       return;
     }
-    if (form.total <= 0) {
+    const manualSubtotal = form.lines.reduce(
+      (sum, line) => sum + line.qty * line.unit_cost,
+      0,
+    );
+    const subtotal = form.source === "manual" ? manualSubtotal : form.subtotal;
+    const total = form.source === "manual" ? subtotal + form.tax : form.total;
+    if (form.source === "manual" && form.lines.length === 0) {
+      setFormError("Tambahkan minimal 1 item untuk faktur manual");
+      return;
+    }
+    if (total <= 0) {
       setFormError("Total faktur harus lebih dari 0");
       return;
     }
@@ -254,11 +347,27 @@ export function FakturPembelianClient({
       po_id: form.source === "po" ? form.po_id || null : null,
       invoice_date: form.invoice_date,
       due_date: form.due_date || null,
-      subtotal: form.subtotal,
+      subtotal,
       tax: form.tax,
-      total: form.total,
+      total,
       notes: form.notes || undefined,
       attachment_url: form.attachment_url || null,
+      lines:
+        form.source === "manual"
+          ? form.lines.map((line) => ({
+              product_id: line.product_id ?? undefined,
+              product_label: line.product_label,
+              qty: line.qty,
+              unit_cost: line.unit_cost,
+              notes: line.notes || undefined,
+              new_brand: line.product_id ? undefined : line.new_brand,
+              new_model: line.product_id ? undefined : line.new_model,
+              new_size: line.product_id ? undefined : line.new_size,
+              new_size_label: line.product_id ? undefined : line.new_size_label,
+              new_color: line.product_id ? undefined : line.new_color,
+              new_sku: line.product_id ? undefined : line.new_sku,
+            }))
+          : undefined,
     };
     setFormError(null);
     setFieldErrors({});
@@ -317,6 +426,44 @@ export function FakturPembelianClient({
       close();
       router.refresh();
     });
+  }
+
+  async function exportInvoices(format: "pdf" | "excel") {
+    const rows = filtered.map((invoice) => [
+      invoice.invoice_number,
+      invoice.supplier_name,
+      invoice.po_number ?? "Manual",
+      fmtDate(invoice.invoice_date),
+      fmtDate(invoice.due_date),
+      invoice.total,
+      invoice.total - invoice.paid_amount,
+      PURCHASE_INVOICE_STATUS_LABELS[invoice.status],
+    ]);
+    const params = {
+      title: "Daftar Faktur Pembelian",
+      sheetName: "Faktur Pembelian",
+      filename:
+        format === "pdf"
+          ? "faktur-pembelian.pdf"
+          : "faktur-pembelian.xlsx",
+      columns: [
+        "No Faktur",
+        "Vendor",
+        "Ref PO",
+        "Tanggal",
+        "Jatuh Tempo",
+        "Total",
+        "Sisa",
+        "Status",
+      ],
+      rows,
+      summary: [
+        { label: "Total Faktur", value: String(filtered.length) },
+        { label: "Outstanding", value: fmtRupiah(stats.outstanding) },
+      ],
+    };
+    if (format === "pdf") await exportToPDF(params);
+    else await exportToExcel(params);
   }
 
   return (
@@ -404,6 +551,14 @@ export function FakturPembelianClient({
             ),
           )}
         </Select>
+        <Button type="button" variant="secondary" onClick={() => exportInvoices("pdf")}>
+          <Download size={14} />
+          PDF
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => exportInvoices("excel")}>
+          <FileSpreadsheet size={14} />
+          Excel
+        </Button>
       </div>
 
       {filtered.length === 0 ? (
@@ -540,6 +695,7 @@ export function FakturPembelianClient({
           form={form}
           setForm={setForm}
           suppliers={suppliers}
+          products={products}
           invoicablePos={invoicablePos}
           formError={formError}
           fieldErrors={fieldErrors}
@@ -548,6 +704,10 @@ export function FakturPembelianClient({
           onSave={handleSave}
           onPickPo={pickPo}
           onSourceChange={handleSourceChange}
+          onAddExistingLine={addExistingLine}
+          onAddManualLine={addManualLine}
+          onUpdateLine={updateLine}
+          onRemoveLine={removeLine}
           onSubtotalChange={handleSubtotalChange}
           onTaxChange={handleTaxChange}
           onTotalChange={handleTotalChange}
@@ -575,6 +735,7 @@ function FormModal({
   form,
   setForm,
   suppliers,
+  products,
   invoicablePos,
   formError,
   fieldErrors,
@@ -583,6 +744,10 @@ function FormModal({
   onSave,
   onPickPo,
   onSourceChange,
+  onAddExistingLine,
+  onAddManualLine,
+  onUpdateLine,
+  onRemoveLine,
   onSubtotalChange,
   onTaxChange,
   onTotalChange,
@@ -591,6 +756,7 @@ function FormModal({
   form: FormState;
   setForm: (f: FormState) => void;
   suppliers: SupplierOpt[];
+  products: ProductPickerRow[];
   invoicablePos: InvoicablePoRow[];
   formError: string | null;
   fieldErrors: Record<string, string>;
@@ -599,6 +765,10 @@ function FormModal({
   onSave: () => void;
   onPickPo: (id: string) => void;
   onSourceChange: (s: "manual" | "po") => void;
+  onAddExistingLine: (product: ProductPickerRow) => void;
+  onAddManualLine: (line: InvoiceLineForm) => void;
+  onUpdateLine: (index: number, patch: Partial<InvoiceLineForm>) => void;
+  onRemoveLine: (index: number) => void;
   onSubtotalChange: (v: number) => void;
   onTaxChange: (v: number) => void;
   onTotalChange: (v: number) => void;
@@ -607,6 +777,66 @@ function FormModal({
     if (!form.supplier_id) return invoicablePos;
     return invoicablePos.filter((p) => p.supplier_id === form.supplier_id);
   }, [invoicablePos, form.supplier_id]);
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [manualLine, setManualLine] = useState({
+    brand: "",
+    model: "",
+    size: "",
+    color: "",
+    sku: "",
+    qty: "1",
+    unit_cost: "",
+  });
+  const manualSubtotal = form.lines.reduce(
+    (sum, line) => sum + line.qty * line.unit_cost,
+    0,
+  );
+  const effectiveSubtotal =
+    form.source === "manual" ? manualSubtotal : form.subtotal;
+  const effectiveTotal =
+    form.source === "manual" ? effectiveSubtotal + form.tax : form.total;
+
+  function submitExistingProduct() {
+    const product = products.find((item) => item.id === selectedProductId);
+    if (!product) return;
+    onAddExistingLine(product);
+    setSelectedProductId("");
+  }
+
+  function submitManualLine() {
+    const qty = Math.max(1, Number(manualLine.qty) || 1);
+    const size = Number(manualLine.size);
+    if (
+      !manualLine.brand.trim() ||
+      !manualLine.model.trim() ||
+      !manualLine.sku.trim() ||
+      !manualLine.size
+    ) {
+      return;
+    }
+    onAddManualLine({
+      product_id: null,
+      product_label: `${manualLine.brand.trim()} ${manualLine.model.trim()} ${manualLine.color.trim()} • Size ${manualLine.size} • ${manualLine.sku.trim()} (baru)`,
+      qty,
+      unit_cost: Number(manualLine.unit_cost) || 0,
+      notes: "",
+      new_brand: manualLine.brand.trim(),
+      new_model: manualLine.model.trim(),
+      new_size: Number.isFinite(size) ? size : undefined,
+      new_size_label: manualLine.size.trim(),
+      new_color: manualLine.color.trim() || undefined,
+      new_sku: manualLine.sku.trim(),
+    });
+    setManualLine({
+      brand: "",
+      model: "",
+      size: "",
+      color: "",
+      sku: "",
+      qty: "1",
+      unit_cost: "",
+    });
+  }
 
   return (
     <div
@@ -700,6 +930,188 @@ function FormModal({
             </div>
           ) : null}
 
+          {form.source === "manual" ? (
+            <div className="rounded-xl border border-white/[0.06] bg-[#1f1f1f] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">
+                    Item Faktur Manual
+                  </h3>
+                  <p className="text-xs text-white/45">
+                    Item yang disimpan akan langsung masuk stok dan HPP.
+                  </p>
+                </div>
+                <div className="text-right text-xs text-white/45">
+                  Subtotal item
+                  <div className="text-sm font-semibold text-white">
+                    {fmtRupiah(manualSubtotal)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto]">
+                <Select
+                  value={selectedProductId}
+                  onChange={(event) => setSelectedProductId(event.target.value)}
+                >
+                  <option value="">— Pilih produk existing —</option>
+                  {products.map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.brand} {product.model} · {product.color} · Size{" "}
+                      {product.size} · {product.sku}
+                    </option>
+                  ))}
+                </Select>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={submitExistingProduct}
+                  disabled={!selectedProductId}
+                >
+                  Tambah Produk
+                </Button>
+              </div>
+
+              <div className="mt-3 grid gap-2 md:grid-cols-4">
+                <Input
+                  placeholder="Brand baru *"
+                  value={manualLine.brand}
+                  onChange={(event) =>
+                    setManualLine({ ...manualLine, brand: event.target.value })
+                  }
+                />
+                <Input
+                  placeholder="Model baru *"
+                  value={manualLine.model}
+                  onChange={(event) =>
+                    setManualLine({ ...manualLine, model: event.target.value })
+                  }
+                />
+                <Input
+                  placeholder="Size *"
+                  value={manualLine.size}
+                  onChange={(event) =>
+                    setManualLine({ ...manualLine, size: event.target.value })
+                  }
+                />
+                <Input
+                  placeholder="SKU *"
+                  value={manualLine.sku}
+                  onChange={(event) =>
+                    setManualLine({ ...manualLine, sku: event.target.value })
+                  }
+                />
+                <Input
+                  placeholder="Warna"
+                  value={manualLine.color}
+                  onChange={(event) =>
+                    setManualLine({ ...manualLine, color: event.target.value })
+                  }
+                />
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder="Qty"
+                  value={manualLine.qty}
+                  onChange={(event) =>
+                    setManualLine({ ...manualLine, qty: event.target.value })
+                  }
+                />
+                <NumberInput
+                  align="left"
+                  placeholder="Harga/unit"
+                  value={manualLine.unit_cost}
+                  onValueChange={(value) =>
+                    setManualLine({
+                      ...manualLine,
+                      unit_cost: String(value),
+                    })
+                  }
+                />
+                <Button
+                  type="button"
+                  onClick={submitManualLine}
+                  disabled={
+                    !manualLine.brand.trim() ||
+                    !manualLine.model.trim() ||
+                    !manualLine.sku.trim() ||
+                    !manualLine.size
+                  }
+                >
+                  Tambah Baru
+                </Button>
+              </div>
+
+              {form.lines.length > 0 ? (
+                <div className="mt-4 overflow-hidden rounded-lg border border-white/[0.06]">
+                  <table className="w-full text-sm">
+                    <thead className="bg-[#262626] text-[11px] uppercase tracking-wider text-white/35">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium">Item</th>
+                        <th className="px-3 py-2 text-right font-medium">Qty</th>
+                        <th className="px-3 py-2 text-right font-medium">
+                          Harga/unit
+                        </th>
+                        <th className="px-3 py-2 text-right font-medium">
+                          Subtotal
+                        </th>
+                        <th className="px-3 py-2 text-right font-medium">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.04]">
+                      {form.lines.map((line, index) => (
+                        <tr key={`${line.product_id ?? line.new_sku}-${index}`}>
+                          <td className="px-3 py-2 text-white/80">
+                            {line.product_label}
+                          </td>
+                          <td className="px-3 py-2">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={line.qty}
+                              onChange={(event) =>
+                                onUpdateLine(index, {
+                                  qty: Math.max(1, Number(event.target.value) || 1),
+                                })
+                              }
+                              className="ml-auto w-20 text-right"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <NumberInput
+                              value={line.unit_cost}
+                              onValueChange={(value) =>
+                                onUpdateLine(index, { unit_cost: value })
+                              }
+                              className="ml-auto w-32"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-white">
+                            {fmtRupiah(line.qty * line.unit_cost)}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => onRemoveLine(index)}
+                            >
+                              Hapus
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-amber-300/80">
+                  Tambahkan minimal satu item untuk faktur manual.
+                </p>
+              )}
+            </div>
+          ) : null}
+
           <div>
             <FieldLabel htmlFor="supplier_id">Vendor *</FieldLabel>
             <Select
@@ -754,8 +1166,9 @@ function FormModal({
               <NumberInput
                 id="subtotal"
                 min={0}
-                value={form.subtotal}
+                value={effectiveSubtotal}
                 onValueChange={onSubtotalChange}
+                disabled={form.source === "manual"}
               />
             </div>
             <div>
@@ -772,11 +1185,14 @@ function FormModal({
               <NumberInput
                 id="total"
                 min={0}
-                value={form.total}
+                value={effectiveTotal}
                 onValueChange={onTotalChange}
+                disabled={form.source === "manual"}
               />
               <p className="mt-1 text-[11px] text-white/40">
-                Bisa di-override (cth: pembulatan)
+                {form.source === "manual"
+                  ? "Total manual dihitung dari item + pajak"
+                  : "Bisa di-override (cth: pembulatan)"}
               </p>
             </div>
           </div>
@@ -811,7 +1227,7 @@ function FormModal({
           </Button>
           <Button
             onClick={onSave}
-            disabled={pending || form.total <= 0 || !form.supplier_id}
+            disabled={pending || effectiveTotal <= 0 || !form.supplier_id}
           >
             {pending
               ? "Menyimpan…"

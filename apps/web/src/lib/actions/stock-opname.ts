@@ -8,11 +8,9 @@ import {
 } from "@sneakervault/shared";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
-import { journalForStockAdjustment } from "../journal-engine";
 import { assertPeriodOpen } from "@/lib/fiscal-periods";
-import { createStockMovement } from "./stock-movements";
 
-const WAREHOUSE_ROLES = ["owner", "admin_gudang"] as const;
+const WAREHOUSE_ROLES = ["owner", "admin_gudang", "finance"] as const;
 
 function revalidateOpname() {
   revalidatePath("/inventory/opname");
@@ -203,9 +201,6 @@ export async function approveStockOpname(sessionId: string) {
     return { error: "Hanya sesi Review yang bisa di-approve" };
   }
 
-  const lock = await assertPeriodOpen(session.opname_date);
-  if (lock.error) return { error: lock.error };
-
   const { data: lines } = await supabase
     .from("stock_opname_lines")
     .select("id, product_id, system_qty, physical_qty, variance, unit_cost, reason")
@@ -217,59 +212,17 @@ export async function approveStockOpname(sessionId: string) {
 
   let increaseAmount = 0;
   let decreaseAmount = 0;
-  let adjustedLines = 0;
+  let varianceLines = 0;
 
   for (const line of lines) {
     const variance = Number(line.variance ?? 0);
-    const physicalQty = Number(line.physical_qty ?? line.system_qty);
     if (variance === 0) continue;
 
     const unitCost = Number(line.unit_cost ?? 0);
     const amount = Math.abs(variance) * unitCost;
     if (variance > 0) increaseAmount += amount;
     else decreaseAmount += amount;
-    adjustedLines++;
-
-    const { error: productError } = await supabase
-      .from("products")
-      .update({ quantity: physicalQty })
-      .eq("id", line.product_id);
-    if (productError) return { error: productError.message };
-
-    const movement = await createStockMovement(supabase, {
-      product_id: line.product_id,
-      type: "adjustment",
-      quantity: Math.abs(variance),
-      unit_cost: unitCost,
-      reference_type: "stock_opname_line",
-      reference_id: line.id,
-      notes: `${variance > 0 ? "Selisih lebih" : "Selisih kurang"} ${variance}. ${line.reason ?? ""}`.trim(),
-    });
-    if (movement.error) return { error: movement.error };
-  }
-
-  if (increaseAmount > 0) {
-    const journal = await journalForStockAdjustment({
-      session_id: session.id,
-      opname_number: session.opname_number,
-      adjustment_date: session.opname_date,
-      amount: increaseAmount,
-      direction: "increase",
-      user_id: profile.id,
-    });
-    if (journal.error) return { error: journal.error };
-  }
-
-  if (decreaseAmount > 0) {
-    const journal = await journalForStockAdjustment({
-      session_id: session.id,
-      opname_number: session.opname_number,
-      adjustment_date: session.opname_date,
-      amount: decreaseAmount,
-      direction: "decrease",
-      user_id: profile.id,
-    });
-    if (journal.error) return { error: journal.error };
+    varianceLines++;
   }
 
   const { error } = await supabase
@@ -289,7 +242,8 @@ export async function approveStockOpname(sessionId: string) {
     entity_id: session.id,
     new_data: {
       opname_number: session.opname_number,
-      adjusted_lines: adjustedLines,
+      compare_only: true,
+      variance_lines: varianceLines,
       increase_amount: increaseAmount,
       decrease_amount: decreaseAmount,
     },

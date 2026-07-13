@@ -39,10 +39,12 @@ type ReceiveLineForm = {
 export function PenerimaanClient({
   receivablePos,
   detailById,
+  initialPoId,
   roles,
 }: {
   receivablePos: ReceivablePoRow[];
   detailById: Record<string, PoDetail>;
+  initialPoId?: string;
   roles: string[];
 }) {
   const router = useRouter();
@@ -60,6 +62,11 @@ export function PenerimaanClient({
   useEffect(() => {
     setDetailCache(detailById);
   }, [detailById]);
+
+  useEffect(() => {
+    if (!initialPoId || receiving) return;
+    void startReceiveById(initialPoId);
+  }, [initialPoId, receiving]);
 
   const canReceive =
     roles.includes("owner") ||

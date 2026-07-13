@@ -10,7 +10,7 @@ export function Select({
     <select
       {...rest}
       className={cn(
-        "block w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm text-white/90 focus:border-white/20 focus:outline-none focus:ring-2 focus:ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200",
+        "block w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm text-white/90 focus:border-white/20 focus:outline-none focus:ring-2 focus:ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 [&>option]:bg-[#1f1f1f] [&>option]:text-white",
         className
       )}
     >

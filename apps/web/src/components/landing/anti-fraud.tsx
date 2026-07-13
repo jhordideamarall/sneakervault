@@ -18,7 +18,7 @@ const PILLARS = [
   {
     icon: Lock,
     title: "Tutup buku terkunci",
-    desc: "Periode yang sudah ditutup tak bisa diubah diam-diam. Koreksi hanya lewat jurnal penyesuaian.",
+    desc: "Periode yang sudah ditutup tak bisa diubah diam-diam. Koreksi hanya lewat Jurnal Umum.",
   },
 ];
 

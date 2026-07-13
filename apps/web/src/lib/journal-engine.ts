@@ -22,7 +22,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertPeriodOpen } from "@/lib/fiscal-periods";
 
 type JournalLineInput = {
-  account_code: string;
+  account_code?: string;
+  account_id?: string;
   debit?: number;
   credit?: number;
   description?: string;
@@ -63,21 +64,24 @@ async function coaIdByCode(
   return (data as { id: string } | null)?.id ?? null;
 }
 
-async function bankCodeByAccountId(
+type AccountRef = { account_code: string } | { account_id: string };
+
+async function bankAccountRefByAccountId(
   supabase: SupabaseClient,
   bankAccountId: string | null,
-): Promise<string> {
-  if (!bankAccountId) return "1.1.01";
+): Promise<AccountRef> {
+  if (!bankAccountId) return { account_code: "1.1.01" };
 
   const { data: ba } = await supabase
     .from("bank_accounts")
-    .select("type")
+    .select("type, coa_account_id")
     .eq("id", bankAccountId)
     .single();
-  const type = (ba as { type: string } | null)?.type;
-  if (type === "cash") return "1.1.01";
-  if (type === "marketplace_balance") return "1.1.03";
-  return "1.1.02";
+  const bank = ba as { type: string; coa_account_id?: string | null } | null;
+  if (bank?.coa_account_id) return { account_id: bank.coa_account_id };
+  if (bank?.type === "cash") return { account_code: "1.1.01" };
+  if (bank?.type === "marketplace_balance") return { account_code: "1.1.03" };
+  return { account_code: "1.1.02" };
 }
 
 export async function createJournalEntry(args: {
@@ -108,6 +112,8 @@ export async function createJournalEntry(args: {
   // Resolve account ids
   const codeToId = new Map<string, string>();
   for (const l of args.lines) {
+    if (l.account_id) continue;
+    if (!l.account_code) return { error: "Journal line missing account" };
     if (codeToId.has(l.account_code)) continue;
     const id = await coaIdByCode(supabase, l.account_code);
     if (!id) return { error: `CoA code ${l.account_code} not found` };
@@ -135,7 +141,7 @@ export async function createJournalEntry(args: {
 
   const lineRows = args.lines.map((l, idx) => ({
     entry_id: entry.id,
-    account_id: codeToId.get(l.account_code)!,
+    account_id: l.account_id ?? codeToId.get(l.account_code!)!,
     debit: l.debit ?? 0,
     credit: l.credit ?? 0,
     description: l.description ?? null,
@@ -201,7 +207,7 @@ export async function journalForVendorPayment(args: {
 }): Promise<{ id?: string; error?: string }> {
   // Determine bank/cash code: try lookup from bank_accounts.type
   const supabase = await createClient();
-  const bankCode = await bankCodeByAccountId(supabase, args.bank_account_id);
+  const bankRef = await bankAccountRefByAccountId(supabase, args.bank_account_id);
 
   return createJournalEntry({
     entry_date: args.payment_date,
@@ -216,7 +222,7 @@ export async function journalForVendorPayment(args: {
         description: "Pelunasan hutang vendor",
       },
       {
-        account_code: bankCode,
+        ...bankRef,
         credit: args.amount,
         description: "Kas/Bank keluar",
       },
@@ -323,7 +329,7 @@ export async function journalForCustomerPayment(args: {
   user_id?: string | null;
 }): Promise<{ id?: string; error?: string }> {
   const supabase = await createClient();
-  const bankCode = await bankCodeByAccountId(supabase, args.bank_account_id);
+  const bankRef = await bankAccountRefByAccountId(supabase, args.bank_account_id);
 
   return createJournalEntry({
     entry_date: args.payment_date,
@@ -333,7 +339,7 @@ export async function journalForCustomerPayment(args: {
     user_id: args.user_id,
     lines: [
       {
-        account_code: bankCode,
+        ...bankRef,
         debit: args.amount,
         description: "Kas/Bank masuk",
       },
@@ -357,7 +363,7 @@ export async function journalForExpense(args: {
   user_id?: string | null;
 }): Promise<{ id?: string; error?: string }> {
   const supabase = await createClient();
-  const bankCode = await bankCodeByAccountId(supabase, args.bank_account_id);
+  const bankRef = await bankAccountRefByAccountId(supabase, args.bank_account_id);
 
   return createJournalEntry({
     entry_date: args.expense_date,
@@ -372,11 +378,62 @@ export async function journalForExpense(args: {
         description: args.category_name,
       },
       {
-        account_code: bankCode,
+        ...bankRef,
         credit: args.amount,
         description: "Kas/Bank keluar",
       },
     ],
+  });
+}
+
+export async function journalForManualBankTransaction(args: {
+  transaction_id: string;
+  transaction_date: string;
+  type: "debit" | "credit";
+  amount: number;
+  bank_account_id: string;
+  counterpart_account_id: string;
+  description: string;
+  reference_no?: string | null;
+  user_id?: string | null;
+}): Promise<{ id?: string; error?: string }> {
+  const supabase = await createClient();
+  const bankRef = await bankAccountRefByAccountId(supabase, args.bank_account_id);
+  const refText = args.reference_no ? ` (${args.reference_no})` : "";
+  const description = `${args.description}${refText}`;
+
+  return createJournalEntry({
+    entry_date: args.transaction_date,
+    description: `Mutasi kas/bank manual - ${description}`,
+    source_type: "other",
+    source_id: args.transaction_id,
+    user_id: args.user_id,
+    lines:
+      args.type === "credit"
+        ? [
+            {
+              ...bankRef,
+              debit: args.amount,
+              description: "Kas/Bank masuk",
+            },
+            {
+              account_id: args.counterpart_account_id,
+              credit: args.amount,
+              description: "Akun lawan penerimaan",
+            },
+          ]
+        : [
+            {
+              account_id: args.counterpart_account_id,
+              debit: args.amount,
+              description: "Akun lawan pengeluaran",
+            },
+            {
+              ...bankRef,
+              credit: args.amount,
+              description: "Kas/Bank keluar",
+            },
+          ],
   });
 }
 

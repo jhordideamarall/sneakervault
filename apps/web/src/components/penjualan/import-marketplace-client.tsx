@@ -246,6 +246,30 @@ export function ImportMarketplaceClient() {
     });
   }
 
+  async function handleLineOverride(
+    orderId: string,
+    lineIndex: number,
+    productId: string,
+  ) {
+    const nextOrders = orders.map((order) => {
+      if (order.order_id !== orderId) return order;
+      return {
+        ...order,
+        lines: order.lines.map((line, index) =>
+          index === lineIndex
+            ? { ...line, override_product_id: productId }
+            : line,
+        ),
+      };
+    });
+
+    setOrders(nextOrders);
+    saveDraft(channel, fileName, nextOrders);
+    startTransition(async () => {
+      await runReconcile(channel, nextOrders);
+    });
+  }
+
   return (
     <div className="space-y-6">
       {state === "upload" && (
@@ -313,6 +337,7 @@ export function ImportMarketplaceClient() {
           onCancel={reset}
           onCommit={handleCommit}
           onMapped={handleMapped}
+          onOverride={handleLineOverride}
         />
       )}
 
@@ -372,6 +397,7 @@ function ReviewDiff({
   onCancel,
   onCommit,
   onMapped,
+  onOverride,
 }: {
   diff: ReconcileResult;
   channel: MarketplaceChannel;
@@ -382,6 +408,7 @@ function ReviewDiff({
   onCancel: () => void;
   onCommit: () => void;
   onMapped: () => void;
+  onOverride: (orderId: string, lineIndex: number, productId: string) => void;
 }) {
   const { summary } = diff;
   const actionable =
@@ -418,7 +445,7 @@ function ReviewDiff({
       </div>
 
       <div className="rounded-lg border border-sky-500/20 bg-sky-500/[0.06] px-4 py-3 text-xs leading-relaxed text-sky-100/75">
-        Import order marketplace hanya membuat invoice, jurnal piutang/pendapatan, dan label order. Stok fisik, stock movement, serta HPP-persediaan keluar baru diposting saat tim gudang memproses barang di <b>Packing / Outbound</b>.
+        Import order marketplace hanya membuat invoice, jurnal piutang/pendapatan, dan label order. Jika barang yang dikirim berbeda dari data marketplace, gunakan <b>Ubah Barang</b> pada baris item sebelum konfirmasi. Stok fisik, stock movement, serta HPP-persediaan keluar baru diposting saat tim gudang memproses barang di <b>Packing / Outbound</b>.
       </div>
 
       {summary.unmapped_skus.length > 0 && (
@@ -444,7 +471,13 @@ function ReviewDiff({
 
       <div className="space-y-3">
         {diff.orders.map((order) => (
-          <OrderRow key={order.order_id} order={order} channel={channel} onMapped={onMapped} />
+          <OrderRow
+            key={order.order_id}
+            order={order}
+            channel={channel}
+            onMapped={onMapped}
+            onOverride={onOverride}
+          />
         ))}
       </div>
     </div>
@@ -460,7 +493,17 @@ function SummaryStat({ label, value, tone }: { label: string; value: number; ton
   );
 }
 
-function OrderRow({ order, channel, onMapped }: { order: OrderDiff; channel: MarketplaceChannel; onMapped: () => void }) {
+function OrderRow({
+  order,
+  channel,
+  onMapped,
+  onOverride,
+}: {
+  order: OrderDiff;
+  channel: MarketplaceChannel;
+  onMapped: () => void;
+  onOverride: (orderId: string, lineIndex: number, productId: string) => void;
+}) {
   const dim = order.status === "duplicate" || order.status === "preorder_duplicate" || order.status === "cancel_duplicate";
   const isPreOrder = order.order_kind === "preorder" && order.status_kind === "normal";
   return (
@@ -485,7 +528,15 @@ function OrderRow({ order, channel, onMapped }: { order: OrderDiff; channel: Mar
       ) : null}
       <div className="space-y-2">
         {order.lines.map((line, i) => (
-          <LineRow key={i} line={line} channel={channel} disabled={dim} isPreOrder={isPreOrder} onMapped={onMapped} />
+          <LineRow
+            key={i}
+            line={line}
+            channel={channel}
+            disabled={dim}
+            isPreOrder={isPreOrder}
+            onMapped={onMapped}
+            onOverride={(productId) => onOverride(order.order_id, i, productId)}
+          />
         ))}
         {order.lines.length === 0 && order.cancel_reason ? (
           <div className="rounded-lg bg-black/15 p-3 text-[11px] leading-relaxed text-white/55">
@@ -503,14 +554,16 @@ function LineRow({
   disabled,
   isPreOrder,
   onMapped,
+  onOverride,
 }: {
   line: OrderDiff["lines"][number];
   channel: MarketplaceChannel;
   disabled: boolean;
   isPreOrder: boolean;
   onMapped: () => void;
+  onOverride: (productId: string) => void;
 }) {
-  const [mapping, setMapping] = useState(false);
+  const [pickerMode, setPickerMode] = useState<"map" | "override" | null>(null);
   return (
     <div className="rounded-lg bg-black/15 p-2.5">
       <div className="flex items-start justify-between gap-3">
@@ -534,6 +587,7 @@ function LineRow({
               <Link2 size={11} />
               <span className="truncate">{line.product.label}</span>
               {line.via === "map" && <span className="text-white/30">(dipetakan)</span>}
+              {line.via === "override" && <span className="text-amber-200/70">(diubah untuk import ini)</span>}
               {line.cost_issue === "missing_hpp" && <span className="text-sky-300/80">(HPP 0)</span>}
             </div>
           )}
@@ -568,20 +622,33 @@ function LineRow({
           ) : null}
           {line.issue === "unmapped" && !disabled && (
             <div className="flex flex-wrap justify-end gap-2">
-              <Button size="sm" variant="secondary" onClick={() => setMapping((v) => !v)}>
+              <Button size="sm" variant="secondary" onClick={() => setPickerMode((v) => (v === "map" ? null : "map"))}>
                 <Search size={13} className="mr-1" /> Petakan SKU
+              </Button>
+            </div>
+          )}
+          {!disabled && (
+            <div className="mt-2 flex flex-wrap justify-end gap-2">
+              <Button size="sm" variant="ghost" onClick={() => setPickerMode((v) => (v === "override" ? null : "override"))}>
+                <Search size={13} className="mr-1" /> Ubah Barang
               </Button>
             </div>
           )}
         </div>
       </div>
-      {mapping && (
+      {pickerMode && (
         <SkuMapper
           channel={channel}
           marketplaceSku={line.mapping_sku}
-          onClose={() => setMapping(false)}
+          mode={pickerMode}
+          currentProductLabel={line.product?.label ?? null}
+          onClose={() => setPickerMode(null)}
+          onOverride={(productId) => {
+            setPickerMode(null);
+            onOverride(productId);
+          }}
           onMapped={() => {
-            setMapping(false);
+            setPickerMode(null);
             onMapped();
           }}
         />
@@ -593,12 +660,18 @@ function LineRow({
 function SkuMapper({
   channel,
   marketplaceSku,
+  mode,
+  currentProductLabel,
   onClose,
+  onOverride,
   onMapped,
 }: {
   channel: MarketplaceChannel;
   marketplaceSku: string;
+  mode: "map" | "override";
+  currentProductLabel: string | null;
   onClose: () => void;
+  onOverride: (productId: string) => void;
   onMapped: () => void;
 }) {
   const toast = useToast();
@@ -616,6 +689,12 @@ function SkuMapper({
   }
 
   function choose(productId: string) {
+    if (mode === "override") {
+      onOverride(productId);
+      toast.push("Barang diganti untuk import ini", "success");
+      return;
+    }
+
     startTransition(async () => {
       const r = await mapMarketplaceSku(channel, marketplaceSku, productId);
       if (r.error) toast.push(r.error, "error");
@@ -629,9 +708,17 @@ function SkuMapper({
   return (
     <div className="mt-2 rounded-lg border border-white/10 bg-black/30 p-2.5">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-[11px] text-white/40">Cari produk sistem untuk SKU <span className="font-mono text-white/60">{marketplaceSku}</span></span>
+        <span className="text-[11px] text-white/40">
+          {mode === "override" ? "Pilih barang pengganti untuk import ini" : "Cari produk sistem untuk SKU "}
+          {mode === "map" ? <span className="font-mono text-white/60">{marketplaceSku}</span> : null}
+        </span>
         <button onClick={onClose} className="text-white/30 hover:text-white/60"><X size={13} /></button>
       </div>
+      {mode === "override" && currentProductLabel ? (
+        <div className="mb-2 rounded-md bg-white/[0.04] px-2 py-1.5 text-[11px] text-white/45">
+          Saat ini: <span className="text-white/65">{currentProductLabel}</span>
+        </div>
+      ) : null}
       <input
         autoFocus
         value={q}

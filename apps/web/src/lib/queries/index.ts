@@ -466,6 +466,9 @@ export type BankAccountRow = {
   is_default: boolean;
   is_active: boolean;
   notes: string | null;
+  coa_account_id: string | null;
+  coa_account_code: string | null;
+  coa_account_name: string | null;
   created_at: string;
 };
 
@@ -476,14 +479,24 @@ export async function getBankAccounts(opts?: {
   let query = supabase
     .from("bank_accounts")
     .select(
-      "id, name, type, bank_name, account_number, account_holder, opening_balance, current_balance, currency, is_default, is_active, notes, created_at",
+      "id, name, type, bank_name, account_number, account_holder, opening_balance, current_balance, currency, is_default, is_active, notes, coa_account_id, created_at, coa:coa_account_id(code, name)",
     )
     .order("is_default", { ascending: false })
     .order("type")
     .order("name");
   if (!opts?.includeInactive) query = query.eq("is_active", true);
   const { data } = await query;
-  return (data as BankAccountRow[] | null) ?? [];
+  type RawBankAccount = Omit<
+    BankAccountRow,
+    "coa_account_code" | "coa_account_name"
+  > & {
+    coa?: { code: string; name: string } | null;
+  };
+  return ((data as RawBankAccount[] | null) ?? []).map((row) => ({
+    ...row,
+    coa_account_code: row.coa?.code ?? null,
+    coa_account_name: row.coa?.name ?? null,
+  }));
 }
 
 // ─── Chart of Accounts (Phase 4) ───────────────────────────
@@ -498,6 +511,172 @@ export type CoaRow = {
   is_system: boolean;
   description: string | null;
 };
+
+export type CoaAccountOption = Pick<
+  CoaRow,
+  "id" | "code" | "name" | "type" | "normal_balance"
+>;
+
+export async function getCoaAccountOptions(opts?: {
+  types?: CoaRow["type"][];
+}): Promise<CoaAccountOption[]> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("chart_of_accounts")
+    .select("id, code, name, type, normal_balance")
+    .eq("is_active", true)
+    .order("code", { ascending: true });
+  if (opts?.types?.length) q = q.in("type", opts.types);
+  const { data } = await q;
+  return (data as CoaAccountOption[] | null) ?? [];
+}
+
+// ─── Employees, Payroll, Fixed Assets ──────────────────────
+export type EmployeeRow = {
+  id: string;
+  employee_code: string | null;
+  full_name: string;
+  job_title: string | null;
+  department: string | null;
+  base_salary: number;
+  bank_account_name: string | null;
+  bank_account_number: string | null;
+  tax_id: string | null;
+  hire_date: string | null;
+  is_active: boolean;
+  created_at: string;
+};
+
+export async function getEmployees(opts?: {
+  includeInactive?: boolean;
+}): Promise<EmployeeRow[]> {
+  await requireOwnerOrFinance();
+  const supabase = await createClient();
+  let query = (supabase as any)
+    .from("employees")
+    .select("id, employee_code, full_name, job_title, department, base_salary, bank_account_name, bank_account_number, tax_id, hire_date, is_active, created_at")
+    .order("full_name");
+  if (!opts?.includeInactive) query = query.eq("is_active", true);
+  const { data } = await query;
+  return ((data as EmployeeRow[] | null) ?? []).map((row) => ({
+    ...row,
+    base_salary: Number(row.base_salary ?? 0),
+  }));
+}
+
+export type FixedAssetRow = {
+  id: string;
+  asset_code: string | null;
+  name: string;
+  acquisition_date: string;
+  acquisition_cost: number;
+  salvage_value: number;
+  useful_life_months: number;
+  method: "straight_line" | "double_declining";
+  accumulated_depreciation: number;
+  book_value: number;
+  location: string | null;
+  department: string | null;
+  status: "active" | "disposed";
+  notes: string | null;
+  created_at: string;
+};
+
+export async function getFixedAssets(): Promise<FixedAssetRow[]> {
+  await requireOwnerOrFinance();
+  const supabase = await createClient();
+  const { data } = await (supabase as any)
+    .from("fixed_assets")
+    .select("id, asset_code, name, acquisition_date, acquisition_cost, salvage_value, useful_life_months, method, accumulated_depreciation, location, department, status, notes, created_at")
+    .order("acquisition_date", { ascending: false });
+  return ((data as FixedAssetRow[] | null) ?? []).map((row) => {
+    const cost = Number(row.acquisition_cost ?? 0);
+    const depreciation = Number(row.accumulated_depreciation ?? 0);
+    return {
+      ...row,
+      acquisition_cost: cost,
+      salvage_value: Number(row.salvage_value ?? 0),
+      useful_life_months: Number(row.useful_life_months ?? 0),
+      accumulated_depreciation: depreciation,
+      book_value: Math.max(0, cost - depreciation),
+    };
+  });
+}
+
+export type PayrollRunRow = {
+  id: string;
+  period_month: string;
+  payment_date: string;
+  gross_amount: number;
+  deductions: number;
+  net_amount: number;
+  status: string;
+  notes: string | null;
+  bank_account_name: string | null;
+  created_at: string;
+  lines: Array<{
+    id: string;
+    employee_id: string;
+    employee_name: string;
+    base_salary: number;
+    allowances: number;
+    deductions: number;
+    net_salary: number;
+    notes: string | null;
+  }>;
+};
+
+export async function getPayrollRuns(): Promise<PayrollRunRow[]> {
+  await requireOwnerOrFinance();
+  const supabase = await createClient();
+  const { data } = await (supabase as any)
+    .from("payroll_runs")
+    .select("id, period_month, payment_date, gross_amount, deductions, net_amount, status, notes, created_at, bank_accounts:bank_account_id(name), payroll_lines(id, employee_id, base_salary, allowances, deductions, net_salary, notes, employees:employee_id(full_name))")
+    .order("period_month", { ascending: false });
+  return ((data as Array<{
+    id: string;
+    period_month: string;
+    payment_date: string;
+    gross_amount: number;
+    deductions: number;
+    net_amount: number;
+    status: string;
+    notes: string | null;
+    created_at: string;
+    bank_accounts: { name: string } | null;
+    payroll_lines: Array<{
+      id: string;
+      employee_id: string;
+      base_salary: number;
+      allowances: number;
+      deductions: number;
+      net_salary: number;
+      notes: string | null;
+      employees: { full_name: string } | null;
+    }> | null;
+  }> | null) ?? []).map((run) => ({
+    id: run.id,
+    period_month: run.period_month,
+    payment_date: run.payment_date,
+    gross_amount: Number(run.gross_amount ?? 0),
+    deductions: Number(run.deductions ?? 0),
+    net_amount: Number(run.net_amount ?? 0),
+    status: run.status,
+    notes: run.notes,
+    bank_account_name: run.bank_accounts?.name ?? null,
+    created_at: run.created_at,
+    lines: (run.payroll_lines ?? []).map((line) => ({
+      id: line.id,
+      employee_id: line.employee_id,
+      employee_name: line.employees?.full_name ?? "—",
+      base_salary: Number(line.base_salary ?? 0),
+      allowances: Number(line.allowances ?? 0),
+      deductions: Number(line.deductions ?? 0),
+      net_salary: Number(line.net_salary ?? 0),
+      notes: line.notes,
+    })),
+  }));
+}
 
 // ─── Purchase Orders (Phase 2) ─────────────────────────────
 export type PoListRow = {
@@ -1494,6 +1673,9 @@ export type BankTransactionRow = {
   id: string;
   bank_account_id: string;
   bank_account_name: string;
+  counterpart_account_id: string | null;
+  counterpart_account_code: string | null;
+  counterpart_account_name: string | null;
   transaction_date: string;
   type: "debit" | "credit";
   amount: number;
@@ -1514,7 +1696,7 @@ export async function getBankTransactions(opts?: {
   let q = supabase
     .from("bank_transactions")
     .select(
-      "id, bank_account_id, transaction_date, type, amount, balance_after, reference_no, description, related_entity_type, related_entity_id, is_reconciled, created_at, bank_accounts:bank_account_id(name)",
+      "id, bank_account_id, counterpart_account_id, transaction_date, type, amount, balance_after, reference_no, description, related_entity_type, related_entity_id, is_reconciled, created_at, bank_accounts:bank_account_id(name), counterpart:counterpart_account_id(code, name)",
     )
     .order("transaction_date", { ascending: false })
     .order("created_at", { ascending: false });
@@ -1525,6 +1707,7 @@ export async function getBankTransactions(opts?: {
     (data as unknown as Array<{
       id: string;
       bank_account_id: string;
+      counterpart_account_id: string | null;
       transaction_date: string;
       type: "debit" | "credit";
       amount: number;
@@ -1536,11 +1719,15 @@ export async function getBankTransactions(opts?: {
       is_reconciled: boolean;
       created_at: string;
       bank_accounts: { name: string } | null;
+      counterpart: { code: string; name: string } | null;
     }> | null) ?? []
   ).map((r) => ({
     id: r.id,
     bank_account_id: r.bank_account_id,
     bank_account_name: r.bank_accounts?.name ?? "—",
+    counterpart_account_id: r.counterpart_account_id,
+    counterpart_account_code: r.counterpart?.code ?? null,
+    counterpart_account_name: r.counterpart?.name ?? null,
     transaction_date: r.transaction_date,
     type: r.type,
     amount: Number(r.amount),

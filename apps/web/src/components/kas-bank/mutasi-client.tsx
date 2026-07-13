@@ -15,7 +15,11 @@ import {
   createBankTransaction,
   toggleReconciled,
 } from "@/lib/actions/bank-transactions";
-import type { BankTransactionRow, BankAccountRow } from "@/lib/queries";
+import type {
+  BankTransactionRow,
+  BankAccountRow,
+  CoaAccountOption,
+} from "@/lib/queries";
 import {
   Plus,
   Search,
@@ -46,6 +50,7 @@ const sourceLabel: Record<string, string> = {
 export function MutasiBankClient({
   transactions,
   bankAccounts,
+  accountOptions,
   roles,
   defaultTypeFilter = "all",
   title,
@@ -53,6 +58,7 @@ export function MutasiBankClient({
 }: {
   transactions: BankTransactionRow[];
   bankAccounts: BankAccountRow[];
+  accountOptions: CoaAccountOption[];
   roles: string[];
   defaultTypeFilter?: "all" | "debit" | "credit";
   title?: string;
@@ -71,10 +77,27 @@ export function MutasiBankClient({
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const defaultBank = bankAccounts.find((b) => b.is_default && b.is_active);
+  const defaultCounterpart = (type: "credit" | "debit") => {
+    const preferredCode = type === "credit" ? "4.2" : "6.11";
+    return (
+      accountOptions.find((account) => account.code === preferredCode)?.id ??
+      accountOptions.find((account) =>
+        type === "credit"
+          ? account.type === "revenue" || account.type === "equity"
+          : account.type === "expense" || account.type === "asset",
+      )?.id ??
+      ""
+    );
+  };
   const [form, setForm] = useState({
     bank_account_id: defaultBank?.id ?? "",
+    counterpart_account_id: defaultCounterpart(
+      defaultTypeFilter === "debit" ? "debit" : "credit",
+    ),
     transaction_date: todayIso(),
-    type: "credit" as "debit" | "credit",
+    type: (defaultTypeFilter === "debit" ? "debit" : "credit") as
+      | "debit"
+      | "credit",
     amount: 0,
     reference_no: "",
     description: "",
@@ -123,7 +146,12 @@ export function MutasiBankClient({
   }, [transactions]);
 
   function handleSave() {
-    if (!form.bank_account_id || form.amount <= 0 || !form.description) {
+    if (
+      !form.bank_account_id ||
+      !form.counterpart_account_id ||
+      form.amount <= 0 ||
+      !form.description
+    ) {
       setFormError("Lengkapi semua field");
       return;
     }
@@ -141,8 +169,11 @@ export function MutasiBankClient({
       setCreating(false);
       setForm({
         bank_account_id: defaultBank?.id ?? "",
+        counterpart_account_id: defaultCounterpart(
+          defaultTypeFilter === "debit" ? "debit" : "credit",
+        ),
         transaction_date: todayIso(),
-        type: "credit",
+        type: defaultTypeFilter === "debit" ? "debit" : "credit",
         amount: 0,
         reference_no: "",
         description: "",
@@ -281,6 +312,7 @@ export function MutasiBankClient({
                 <th className="px-4 py-3 font-medium">Tanggal</th>
                 <th className="px-4 py-3 font-medium">Deskripsi</th>
                 <th className="px-4 py-3 font-medium">Akun</th>
+                <th className="px-4 py-3 font-medium">Akun Lawan</th>
                 <th className="px-4 py-3 font-medium">Sumber</th>
                 <th className="px-4 py-3 text-right font-medium">Uang Keluar</th>
                 <th className="px-4 py-3 text-right font-medium">Uang Masuk</th>
@@ -327,6 +359,16 @@ export function MutasiBankClient({
                   </td>
                   <td className="px-4 py-3 text-xs text-white/60">
                     {t.bank_account_name}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-white/60">
+                    {t.counterpart_account_code ? (
+                      <>
+                        <span className="font-mono">{t.counterpart_account_code}</span>{" "}
+                        {t.counterpart_account_name}
+                      </>
+                    ) : (
+                      <span className="text-white/30">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-xs">
                     {t.related_entity_type ? (
@@ -429,7 +471,13 @@ export function MutasiBankClient({
 
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => setForm({ ...form, type: "credit" })}
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      type: "credit",
+                      counterpart_account_id: defaultCounterpart("credit"),
+                    })
+                  }
                   className={`rounded-lg border p-3 text-left transition-colors ${
                     form.type === "credit"
                       ? "border-emerald-500/40 bg-emerald-500/[0.08]"
@@ -445,7 +493,13 @@ export function MutasiBankClient({
                   </p>
                 </button>
                 <button
-                  onClick={() => setForm({ ...form, type: "debit" })}
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      type: "debit",
+                      counterpart_account_id: defaultCounterpart("debit"),
+                    })
+                  }
                   className={`rounded-lg border p-3 text-left transition-colors ${
                     form.type === "debit"
                       ? "border-amber-500/40 bg-amber-500/[0.08]"
@@ -481,6 +535,44 @@ export function MutasiBankClient({
                       </option>
                     ))}
                 </Select>
+              </div>
+
+              <div>
+                <FieldLabel htmlFor="counterpart_account_id">
+                  Akun Lawan Transaksi *
+                </FieldLabel>
+                <Select
+                  id="counterpart_account_id"
+                  value={form.counterpart_account_id}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      counterpart_account_id: e.target.value,
+                    })
+                  }
+                >
+                  <option value="">— Pilih COA lawan —</option>
+                  {accountOptions
+                    .filter((account) =>
+                      form.type === "credit"
+                        ? ["revenue", "liability", "equity"].includes(
+                            account.type,
+                          )
+                        : ["expense", "asset", "liability"].includes(
+                            account.type,
+                          ),
+                    )
+                    .map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.code} · {account.name}
+                      </option>
+                    ))}
+                </Select>
+                <p className="mt-1 text-[11px] text-white/40">
+                  {form.type === "credit"
+                    ? "Contoh: Pendapatan Lain untuk fee/komisi masuk."
+                    : "Contoh: Beban Admin Bank untuk biaya keluar."}
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

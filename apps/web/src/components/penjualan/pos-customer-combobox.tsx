@@ -134,7 +134,7 @@ export function PosCustomerCombobox({
                 ))}
                 {filtered.length === 0 ? (
                   <p className="px-3 py-3 text-center text-[12px] text-white/35">
-                    Tidak ada customer
+                    Tidak ada pelanggan
                   </p>
                 ) : null}
               </div>
@@ -146,14 +146,14 @@ export function PosCustomerCombobox({
                 }}
                 className="flex w-full items-center gap-2 border-t border-white/[0.06] px-3 py-2.5 text-[12px] font-black uppercase tracking-wide text-rose-300 hover:bg-white/[0.06]"
               >
-                <Plus className="size-3.5" /> Tambah customer baru
+                <Plus className="size-3.5" /> Tambah pelanggan baru
               </button>
             </>
           ) : (
             <div className="space-y-2 p-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-widest text-white/35">
-                  Customer Baru
+                  Pelanggan Baru
                 </span>
                 <button type="button" onClick={() => setAdding(false)}>
                   <X className="size-3.5 text-white/35" />
@@ -163,7 +163,7 @@ export function PosCustomerCombobox({
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Nama customer *"
+                placeholder="Nama pelanggan *"
                 className="h-9 w-full rounded-lg bg-white/[0.05] px-3 text-[13px] text-white outline-none placeholder:text-white/30"
               />
               <input

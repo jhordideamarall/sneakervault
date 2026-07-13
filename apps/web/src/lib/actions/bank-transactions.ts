@@ -6,6 +6,7 @@ import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
 import { assertPeriodOpen } from "@/lib/fiscal-periods";
+import { journalForManualBankTransaction } from "@/lib/journal-engine";
 
 const ROLES = ["owner", "finance"] as const;
 
@@ -51,6 +52,7 @@ export async function createBankTransaction(input: unknown) {
     .from("bank_transactions")
     .insert({
       bank_account_id: parsed.data.bank_account_id,
+      counterpart_account_id: parsed.data.counterpart_account_id,
       transaction_date: parsed.data.transaction_date,
       type: parsed.data.type,
       amount: parsed.data.amount,
@@ -71,6 +73,26 @@ export async function createBankTransaction(input: unknown) {
     return { error: { _form: [error.message] } };
   }
 
+  const journal = await journalForManualBankTransaction({
+    transaction_id: data.id,
+    transaction_date: parsed.data.transaction_date,
+    type: parsed.data.type,
+    amount: parsed.data.amount,
+    bank_account_id: parsed.data.bank_account_id,
+    counterpart_account_id: parsed.data.counterpart_account_id,
+    description: parsed.data.description,
+    reference_no: parsed.data.reference_no || null,
+    user_id: profile.id,
+  });
+  if (journal.error) {
+    await supabase.from("bank_transactions").delete().eq("id", data.id);
+    await supabase
+      .from("bank_accounts")
+      .update({ current_balance: currentBalance })
+      .eq("id", ba.id);
+    return { error: { _form: [journal.error] } };
+  }
+
   await logActivity({
     user_id: profile.id,
     action: "create",
@@ -81,11 +103,14 @@ export async function createBankTransaction(input: unknown) {
       type: parsed.data.type,
       amount: parsed.data.amount,
       description: parsed.data.description,
+      counterpart_account_id: parsed.data.counterpart_account_id,
     },
   });
 
   revalidatePath("/kas-bank/mutasi");
   revalidatePath("/kas-bank/akun");
+  revalidatePath("/buku-besar/journal");
+  revalidatePath("/laporan-keuangan");
   return { data };
 }
 

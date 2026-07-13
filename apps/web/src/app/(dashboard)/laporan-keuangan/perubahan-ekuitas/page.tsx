@@ -104,7 +104,7 @@ export default async function PerubahanEkuitasPage({
             </tr>
             <tr className="border-b border-white/[0.04]">
               <td className="px-6 py-4 pl-10 text-white/70">
-                (±) Setoran / Penarikan Owner
+                (±) Prive
               </td>
               <td
                 className={`px-6 py-4 text-right tabular-nums ${ownerTransactions >= 0 ? "text-emerald-300" : "text-amber-300"}`}
@@ -125,9 +125,9 @@ export default async function PerubahanEkuitasPage({
       </div>
 
       <div className="rounded-lg border border-sky-500/15 bg-sky-500/[0.04] p-3 text-xs text-sky-200/80">
-        Setoran/penarikan owner dihitung otomatis sebagai selisih antara
-        perubahan ekuitas total dengan laba/rugi periode. Untuk audit detail,
-        cek jurnal akun <strong>3.1 Modal Pemilik</strong> di Buku Besar.
+        Prive dihitung otomatis sebagai rekonsiliasi mutasi owner/ekuitas di luar
+        laba rugi periode. Untuk audit detail, cek jurnal akun{" "}
+        <strong>3.1 Modal Pemilik</strong> dan <strong>3.4 Prive</strong> di Buku Besar.
       </div>
     </div>
   );

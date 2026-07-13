@@ -337,6 +337,16 @@ export function BankAccountsClient({
                     a/n {a.account_holder}
                   </div>
                 ) : null}
+                <div className="mt-3 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wider text-white/35">
+                    COA Neraca
+                  </div>
+                  <div className="mt-0.5 text-xs font-medium text-white/75">
+                    {a.coa_account_code && a.coa_account_name
+                      ? `${a.coa_account_code} · ${a.coa_account_name}`
+                      : "Akan dibuat otomatis saat disimpan"}
+                  </div>
+                </div>
               </div>
 
               <div className="mt-5 border-t border-white/[0.04] pt-4">
@@ -411,6 +421,15 @@ export function BankAccountsClient({
             </div>
             <div className="space-y-4 px-6 py-5">
               {formError ? <Alert tone="error">{formError}</Alert> : null}
+              <Alert tone="info">
+                {editing === "new"
+                  ? "Sistem otomatis membuat akun COA aset sesuai nama akun bank/kas ini, lalu memakai akun itu untuk jurnal dan neraca."
+                  : `Terhubung ke COA: ${
+                      editing.coa_account_code && editing.coa_account_name
+                        ? `${editing.coa_account_code} · ${editing.coa_account_name}`
+                        : "belum ada, akan dibuat otomatis saat disimpan"
+                    }`}
+              </Alert>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

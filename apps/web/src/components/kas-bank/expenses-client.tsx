@@ -22,6 +22,7 @@ import { formatRupiah, formatDate } from "@/lib/format";
 import type {
   BankAccountRow,
   BankTransactionRow,
+  CoaAccountOption,
   ExpenseAccountOption,
   ExpenseCategoryRow,
   ExpenseRow,
@@ -141,6 +142,7 @@ export function ExpensesClient({
   expenses,
   categories,
   accountOptions,
+  coaAccountOptions,
   bankAccounts,
   bankTransactions,
   roles,
@@ -149,6 +151,7 @@ export function ExpensesClient({
   expenses: ExpenseRow[];
   categories: ExpenseCategoryRow[];
   accountOptions: ExpenseAccountOption[];
+  coaAccountOptions: CoaAccountOption[];
   bankAccounts: BankAccountRow[];
   bankTransactions: BankTransactionRow[];
   roles: string[];
@@ -905,6 +908,7 @@ export function ExpensesClient({
         <MutasiBankClient
           transactions={bankTransactions}
           bankAccounts={bankAccounts}
+          accountOptions={coaAccountOptions}
           roles={roles}
           defaultTypeFilter="debit"
           title="Mutasi Keluar"
