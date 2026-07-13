@@ -15,6 +15,7 @@ import { ViewAsBanner } from "@/components/dashboard/view-as-banner";
 import { FeedbackFab } from "@/components/feedback/feedback-fab";
 import { DateFilterProvider } from "@/lib/use-date-filter";
 import { RightPanelProvider } from "@/lib/use-right-panel";
+import { FeatureTourGate } from "@/components/dashboard/feature-tour-gate";
 
 export default async function DashboardLayout({
   children,
@@ -45,6 +46,7 @@ export default async function DashboardLayout({
       <MailGlobalHost userId={profile.id} />
       <FeedbackFab userId={profile.id} />
       <RealtimeProvider />
+      <FeatureTourGate roles={roles} />
       <ResizablePanelGroup direction="horizontal" className="flex-1">
         {/* Left Sidebar — resizable */}
         <ResizablePanel 
