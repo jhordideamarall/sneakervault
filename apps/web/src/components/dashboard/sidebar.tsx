@@ -140,7 +140,9 @@ const navGroups: NavGroup[] = [
     icon: i(BookOpen),
     items: [
       { href: "/buku-besar/coa", label: "Chart of Accounts", icon: i(BookOpen) },
-      { href: "/buku-besar/journal", label: "Jurnal Penyesuaian", icon: i(ScrollText) },
+      { href: "/buku-besar/journal", label: "Jurnal Umum", icon: i(ScrollText) },
+      { href: "/buku-besar/payroll", label: "Penggajian", icon: i(Receipt) },
+      { href: "/aset", label: "Aset Tetap", icon: i(Building2) },
       { href: "/buku-besar/periode", label: "Tutup Buku", icon: i(CalendarClock) },
     ],
   },
@@ -162,7 +164,8 @@ const navGroups: NavGroup[] = [
     icon: i(Building2),
     items: [
       { href: "/suppliers", label: "Supplier", icon: i(Truck) },
-      { href: "/customers", label: "Customer", icon: i(Users) },
+      { href: "/customers", label: "Pelanggan", icon: i(Users) },
+      { href: "/employees", label: "Karyawan", icon: i(Users) },
     ],
   },
   {

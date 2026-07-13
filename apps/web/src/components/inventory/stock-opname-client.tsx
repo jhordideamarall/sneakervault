@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge, Button, Card, FieldLabel, Input, Textarea } from "@sneakervault/ui";
+import { exportToExcel, exportToPDF } from "@/lib/export";
 import {
   approveStockOpname,
   cancelStockOpname,
@@ -16,7 +17,16 @@ import type {
   StockOpnameDetail,
   StockOpnameSessionRow,
 } from "@/lib/queries";
-import { Check, ClipboardCheck, Play, Save, X } from "lucide-react";
+import {
+  Check,
+  ClipboardCheck,
+  Download,
+  FileSpreadsheet,
+  Play,
+  Save,
+  ScanLine,
+  X,
+} from "lucide-react";
 import {
   STOCK_OPNAME_STATUS_LABELS,
   STOCK_OPNAME_STATUS_TONES,
@@ -52,13 +62,14 @@ export function StockOpnameClient({
   const [pending, startTransition] = useTransition();
   const [opnameDate, setOpnameDate] = useState(today());
   const [notes, setNotes] = useState("");
+  const [scanCode, setScanCode] = useState("");
   const [counts, setCounts] = useState<Record<string, { qty: string; reason: string }>>(
     () =>
       Object.fromEntries(
         (detail?.lines ?? []).map((line) => [
           line.id,
           {
-            qty: line.physical_qty === null ? String(line.system_qty) : String(line.physical_qty),
+            qty: line.physical_qty === null ? "" : String(line.physical_qty),
             reason: line.reason ?? "",
           },
         ]),
@@ -102,14 +113,24 @@ export function StockOpnameClient({
 
   function saveCounts() {
     if (!detail) return;
+    const lines = detail.lines
+      .filter((line) => {
+        const value = counts[line.id]?.qty;
+        return value !== undefined && value !== "";
+      })
+      .map((line) => ({
+        line_id: line.id,
+        physical_qty: Number(counts[line.id]?.qty ?? 0),
+        reason: counts[line.id]?.reason ?? "",
+      }));
+    if (lines.length === 0) {
+      toast.push("Belum ada hitungan fisik untuk disimpan", "error");
+      return;
+    }
     startTransition(async () => {
       const result = await saveStockOpnameCounts({
         session_id: detail.id,
-        lines: detail.lines.map((line) => ({
-          line_id: line.id,
-          physical_qty: Number(counts[line.id]?.qty ?? line.system_qty),
-          reason: counts[line.id]?.reason ?? "",
-        })),
+        lines,
       });
       const message = actionError(result);
       if (message) {
@@ -123,7 +144,24 @@ export function StockOpnameClient({
 
   function submitReview() {
     if (!detail) return;
+    if (summary.counted !== summary.total) {
+      toast.push("Semua item harus dihitung sebelum dikirim review", "error");
+      return;
+    }
     startTransition(async () => {
+      const saveResult = await saveStockOpnameCounts({
+        session_id: detail.id,
+        lines: detail.lines.map((line) => ({
+          line_id: line.id,
+          physical_qty: Number(counts[line.id]?.qty ?? 0),
+          reason: counts[line.id]?.reason ?? "",
+        })),
+      });
+      const saveMessage = actionError(saveResult);
+      if (saveMessage) {
+        toast.push(saveMessage || "Gagal simpan hitungan", "error");
+        return;
+      }
       const result = await submitStockOpnameForReview(detail.id);
       if (result.error) {
         toast.push(result.error, "error");
@@ -142,7 +180,7 @@ export function StockOpnameClient({
         toast.push(result.error, "error");
         return;
       }
-      toast.push("Stock opname approved dan stok disesuaikan", "success");
+      toast.push("Hasil stock opname dikunci tanpa adjustment stok", "success");
       router.refresh();
     });
   }
@@ -161,6 +199,96 @@ export function StockOpnameClient({
     });
   }
 
+  function handleScanSubmit() {
+    if (!detail) return;
+    const rawCode = scanCode.trim();
+    const code = rawCode.toLowerCase();
+    if (!code) return;
+
+    const line = detail.lines.find(
+      (item) =>
+        item.barcode.toLowerCase() === code || item.sku.toLowerCase() === code,
+    );
+    if (!line) {
+      toast.push(`Barcode/SKU ${rawCode} tidak ada di sesi ini`, "error");
+      setScanCode("");
+      return;
+    }
+
+    setCounts((current) => {
+      const currentQty = Number(current[line.id]?.qty || 0);
+      return {
+        ...current,
+        [line.id]: {
+          qty: String(currentQty + 1),
+          reason: current[line.id]?.reason ?? "",
+        },
+      };
+    });
+    toast.push(`${line.product_label} dihitung +1`, "success");
+    setScanCode("");
+  }
+
+  function currentPhysicalQty(lineId: string, fallback: number | null) {
+    const raw = counts[lineId]?.qty;
+    if (raw === undefined || raw === "") return fallback;
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? fallback : parsed;
+  }
+
+  async function exportOpname(format: "pdf" | "excel") {
+    if (!detail) return;
+    const rows = detail.lines.map((line) => {
+      const physical = currentPhysicalQty(line.id, line.physical_qty);
+      const variance = physical === null ? "" : physical - line.system_qty;
+      const amount =
+        physical === null ? "" : (physical - line.system_qty) * line.unit_cost;
+      return [
+        line.product_label,
+        line.sku,
+        line.barcode,
+        line.system_qty,
+        physical ?? "",
+        variance,
+        amount,
+        counts[line.id]?.reason ?? line.reason ?? "",
+      ];
+    });
+    const params = {
+      title: `Stock Opname ${detail.opname_number}`,
+      sheetName: "Stock Opname",
+      period: detail.opname_date,
+      filename:
+        format === "pdf"
+          ? `stock-opname-${detail.opname_number}.pdf`
+          : `stock-opname-${detail.opname_number}.xlsx`,
+      sections: [
+        {
+          title: "Hasil Hitung Fisik vs Sistem",
+          columns: [
+            "Produk",
+            "SKU",
+            "Barcode",
+            "Qty Sistem",
+            "Qty Fisik",
+            "Selisih",
+            "Nilai Selisih",
+            "Alasan",
+          ],
+          rows,
+          summary: [
+            { label: "Total SKU", value: String(summary.total) },
+            { label: "Selesai Hitung", value: String(summary.counted) },
+            { label: "Nilai Selisih", value: formatRp(summary.varianceAmount) },
+            { label: "Mode", value: "Compare-only, tidak adjust stok" },
+          ],
+        },
+      ],
+    };
+    if (format === "pdf") await exportToPDF(params);
+    else await exportToExcel(params);
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
       <aside className="space-y-4">
@@ -168,7 +296,7 @@ export function StockOpnameClient({
           <div>
             <h2 className="text-lg font-semibold text-white">Mulai Sesi</h2>
             <p className="text-xs text-white/40">
-              Snapshot stok aktif untuk cycle count.
+              Snapshot stok aktif untuk pembanding. Approval tidak mengubah stok.
             </p>
           </div>
           <div>
@@ -248,9 +376,18 @@ export function StockOpnameClient({
                   </div>
                   <p className="mt-1 text-sm text-white/40">
                     {detail.opname_date} · {summary.counted}/{summary.total} item dihitung
+                    <span className="ml-2 text-emerald-300/80">Compare-only</span>
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="secondary" onClick={() => exportOpname("pdf")} disabled={pending}>
+                    <Download size={16} />
+                    PDF
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={() => exportOpname("excel")} disabled={pending}>
+                    <FileSpreadsheet size={16} />
+                    Excel
+                  </Button>
                   {["open", "counting"].includes(detail.status) ? (
                     <>
                       <Button type="button" variant="secondary" onClick={saveCounts} disabled={pending}>
@@ -266,7 +403,7 @@ export function StockOpnameClient({
                   {detail.status === "review" && canApprove ? (
                     <Button type="button" variant="success" onClick={approve} disabled={pending}>
                       <Check size={16} />
-                      Approve
+                      Kunci Hasil
                     </Button>
                   ) : null}
                   {!["approved", "cancelled"].includes(detail.status) ? (
@@ -277,6 +414,32 @@ export function StockOpnameClient({
                   ) : null}
                 </div>
               </div>
+              {["open", "counting"].includes(detail.status) ? (
+                <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+                  <FieldLabel>Scan Barcode/SKU Fisik</FieldLabel>
+                  <div className="mt-2 flex gap-2">
+                    <Input
+                      value={scanCode}
+                      onChange={(event) => setScanCode(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          handleScanSubmit();
+                        }
+                      }}
+                      placeholder="Scan barcode, setiap scan menambah qty fisik +1"
+                      autoFocus
+                    />
+                    <Button type="button" onClick={handleScanSubmit} disabled={pending}>
+                      <ScanLine size={16} />
+                      Hitung
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-xs text-white/40">
+                    Input manual tetap tersedia di tabel untuk koreksi hitungan.
+                  </p>
+                </div>
+              ) : null}
               <div className="mt-5 grid gap-3 md:grid-cols-3">
                 <div className="rounded-xl bg-white/[0.03] p-4">
                   <p className="text-xs text-white/35">Total SKU</p>
@@ -310,8 +473,8 @@ export function StockOpnameClient({
                   <tbody className="divide-y divide-white/[0.04]">
                     {detail.lines.map((line) => {
                       const raw = counts[line.id]?.qty ?? "";
-                      const physical = raw === "" ? line.system_qty : Number(raw);
-                      const variance = physical - line.system_qty;
+                      const physical = raw === "" ? line.physical_qty : Number(raw);
+                      const variance = physical === null ? null : physical - line.system_qty;
                       return (
                         <tr key={line.id}>
                           <td className="px-4 py-3">
@@ -341,19 +504,22 @@ export function StockOpnameClient({
                                 }))
                               }
                               className="ml-auto w-24 text-right"
+                              placeholder="0"
                             />
                           </td>
                           <td className="px-4 py-3 text-right">
                             <span
                               className={
-                                variance < 0
+                                variance === null
+                                  ? "text-white/25"
+                                  : variance < 0
                                   ? "text-red-300"
                                   : variance > 0
                                     ? "text-emerald-300"
                                     : "text-white/35"
                               }
                             >
-                              {variance}
+                              {variance === null ? "Belum" : variance}
                             </span>
                           </td>
                           <td className="px-4 py-3">
@@ -364,12 +530,12 @@ export function StockOpnameClient({
                                 setCounts((current) => ({
                                   ...current,
                                   [line.id]: {
-                                    qty: current[line.id]?.qty ?? String(line.system_qty),
+                                    qty: current[line.id]?.qty ?? "",
                                     reason: event.target.value,
                                   },
                                 }))
                               }
-                              placeholder={variance !== 0 ? "Wajib jelaskan selisih" : "Opsional"}
+                              placeholder={variance !== null && variance !== 0 ? "Wajib jelaskan selisih" : "Opsional"}
                             />
                           </td>
                         </tr>

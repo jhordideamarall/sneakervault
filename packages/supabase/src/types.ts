@@ -95,6 +95,7 @@ export type Database = {
           account_holder: string | null
           account_number: string | null
           bank_name: string | null
+          coa_account_id: string | null
           created_at: string
           currency: string
           current_balance: number
@@ -111,6 +112,7 @@ export type Database = {
           account_holder?: string | null
           account_number?: string | null
           bank_name?: string | null
+          coa_account_id?: string | null
           created_at?: string
           currency?: string
           current_balance?: number
@@ -127,6 +129,7 @@ export type Database = {
           account_holder?: string | null
           account_number?: string | null
           bank_name?: string | null
+          coa_account_id?: string | null
           created_at?: string
           currency?: string
           current_balance?: number
@@ -139,13 +142,22 @@ export type Database = {
           type?: Database["public"]["Enums"]["bank_account_type"]
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "bank_accounts_coa_account_id_fkey"
+            columns: ["coa_account_id"]
+            isOneToOne: false
+            referencedRelation: "chart_of_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       bank_transactions: {
         Row: {
           amount: number
           balance_after: number | null
           bank_account_id: string
+          counterpart_account_id: string | null
           created_at: string
           created_by: string | null
           description: string
@@ -163,6 +175,7 @@ export type Database = {
           amount: number
           balance_after?: number | null
           bank_account_id: string
+          counterpart_account_id?: string | null
           created_at?: string
           created_by?: string | null
           description: string
@@ -180,6 +193,7 @@ export type Database = {
           amount?: number
           balance_after?: number | null
           bank_account_id?: string
+          counterpart_account_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string
@@ -199,6 +213,13 @@ export type Database = {
             columns: ["bank_account_id"]
             isOneToOne: false
             referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_counterpart_account_id_fkey"
+            columns: ["counterpart_account_id"]
+            isOneToOne: false
+            referencedRelation: "chart_of_accounts"
             referencedColumns: ["id"]
           },
           {
@@ -475,6 +496,65 @@ export type Database = {
           },
         ]
       }
+      employees: {
+        Row: {
+          bank_account_name: string | null
+          bank_account_number: string | null
+          base_salary: number
+          created_at: string
+          created_by: string | null
+          department: string | null
+          employee_code: string | null
+          full_name: string
+          hire_date: string | null
+          id: string
+          is_active: boolean
+          job_title: string | null
+          tax_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          bank_account_name?: string | null
+          bank_account_number?: string | null
+          base_salary?: number
+          created_at?: string
+          created_by?: string | null
+          department?: string | null
+          employee_code?: string | null
+          full_name: string
+          hire_date?: string | null
+          id?: string
+          is_active?: boolean
+          job_title?: string | null
+          tax_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bank_account_name?: string | null
+          bank_account_number?: string | null
+          base_salary?: number
+          created_at?: string
+          created_by?: string | null
+          department?: string | null
+          employee_code?: string | null
+          full_name?: string
+          hire_date?: string | null
+          id?: string
+          is_active?: boolean
+          job_title?: string | null
+          tax_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employees_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expense_categories: {
         Row: {
           account_code: string
@@ -657,6 +737,140 @@ export type Database = {
           },
         ]
       }
+      feedback_attachments: {
+        Row: {
+          comment_id: string | null
+          created_at: string
+          created_by: string
+          file_name: string
+          file_path: string
+          id: string
+          report_id: string
+        }
+        Insert: {
+          comment_id?: string | null
+          created_at?: string
+          created_by: string
+          file_name: string
+          file_path: string
+          id?: string
+          report_id: string
+        }
+        Update: {
+          comment_id?: string | null
+          created_at?: string
+          created_by?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          report_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_attachments_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "feedback_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_attachments_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "feedback_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feedback_comments: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          id: string
+          report_id: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          id?: string
+          report_id: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          report_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_comments_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "feedback_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feedback_reports: {
+        Row: {
+          app_version: string | null
+          created_at: string
+          created_by: string
+          description: string
+          id: string
+          page_path: string | null
+          report_no: string
+          reporter_role: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: Database["public"]["Enums"]["feedback_severity"]
+          status: Database["public"]["Enums"]["feedback_status"]
+          title: string
+          updated_at: string
+          user_agent: string | null
+          viewport: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          created_at?: string
+          created_by: string
+          description: string
+          id?: string
+          page_path?: string | null
+          report_no: string
+          reporter_role?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: Database["public"]["Enums"]["feedback_severity"]
+          status?: Database["public"]["Enums"]["feedback_status"]
+          title: string
+          updated_at?: string
+          user_agent?: string | null
+          viewport?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string
+          id?: string
+          page_path?: string | null
+          report_no?: string
+          reporter_role?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: Database["public"]["Enums"]["feedback_severity"]
+          status?: Database["public"]["Enums"]["feedback_status"]
+          title?: string
+          updated_at?: string
+          user_agent?: string | null
+          viewport?: string | null
+        }
+        Relationships: []
+      }
       fiscal_periods: {
         Row: {
           closed_at: string | null
@@ -692,6 +906,152 @@ export type Database = {
           {
             foreignKeyName: "fiscal_periods_closed_by_fkey"
             columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fixed_asset_depreciation_lines: {
+        Row: {
+          amount: number
+          asset_id: string
+          created_at: string
+          id: string
+          run_id: string
+        }
+        Insert: {
+          amount?: number
+          asset_id: string
+          created_at?: string
+          id?: string
+          run_id: string
+        }
+        Update: {
+          amount?: number
+          asset_id?: string
+          created_at?: string
+          id?: string
+          run_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_asset_depreciation_lines_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "fixed_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_asset_depreciation_lines_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "fixed_asset_depreciation_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fixed_asset_depreciation_runs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          journal_entry_id: string | null
+          period_month: string
+          total_amount: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          journal_entry_id?: string | null
+          period_month: string
+          total_amount?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          journal_entry_id?: string | null
+          period_month?: string
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_asset_depreciation_runs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_asset_depreciation_runs_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fixed_assets: {
+        Row: {
+          accumulated_depreciation: number
+          acquisition_cost: number
+          acquisition_date: string
+          asset_code: string | null
+          created_at: string
+          created_by: string | null
+          department: string | null
+          id: string
+          location: string | null
+          method: string
+          name: string
+          notes: string | null
+          salvage_value: number
+          status: string
+          updated_at: string
+          useful_life_months: number
+        }
+        Insert: {
+          accumulated_depreciation?: number
+          acquisition_cost: number
+          acquisition_date: string
+          asset_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          department?: string | null
+          id?: string
+          location?: string | null
+          method?: string
+          name: string
+          notes?: string | null
+          salvage_value?: number
+          status?: string
+          updated_at?: string
+          useful_life_months?: number
+        }
+        Update: {
+          accumulated_depreciation?: number
+          acquisition_cost?: number
+          acquisition_date?: string
+          asset_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          department?: string | null
+          id?: string
+          location?: string | null
+          method?: string
+          name?: string
+          notes?: string | null
+          salvage_value?: number
+          status?: string
+          updated_at?: string
+          useful_life_months?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_assets_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1038,6 +1398,7 @@ export type Database = {
           packing_session_id: string
           product_id: string
           sell_price: number
+          stock_reservation_id: string | null
           unit_hpp: number
         }
         Insert: {
@@ -1047,6 +1408,7 @@ export type Database = {
           packing_session_id: string
           product_id: string
           sell_price?: number
+          stock_reservation_id?: string | null
           unit_hpp?: number
         }
         Update: {
@@ -1056,6 +1418,7 @@ export type Database = {
           packing_session_id?: string
           product_id?: string
           sell_price?: number
+          stock_reservation_id?: string | null
           unit_hpp?: number
         }
         Relationships: [
@@ -1071,6 +1434,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "packing_items_stock_reservation_id_fkey"
+            columns: ["stock_reservation_id"]
+            isOneToOne: false
+            referencedRelation: "stock_reservations"
             referencedColumns: ["id"]
           },
         ]
@@ -1147,6 +1517,330 @@ export type Database = {
             columns: ["status_updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_lines: {
+        Row: {
+          allowances: number
+          base_salary: number
+          created_at: string
+          deductions: number
+          employee_id: string
+          id: string
+          net_salary: number
+          notes: string | null
+          payroll_run_id: string
+        }
+        Insert: {
+          allowances?: number
+          base_salary?: number
+          created_at?: string
+          deductions?: number
+          employee_id: string
+          id?: string
+          net_salary?: number
+          notes?: string | null
+          payroll_run_id: string
+        }
+        Update: {
+          allowances?: number
+          base_salary?: number
+          created_at?: string
+          deductions?: number
+          employee_id?: string
+          id?: string
+          net_salary?: number
+          notes?: string | null
+          payroll_run_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_lines_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_lines_payroll_run_id_fkey"
+            columns: ["payroll_run_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_runs: {
+        Row: {
+          bank_account_id: string | null
+          created_at: string
+          created_by: string | null
+          deductions: number
+          gross_amount: number
+          id: string
+          journal_entry_id: string | null
+          net_amount: number
+          notes: string | null
+          payment_date: string
+          period_month: string
+          status: string
+        }
+        Insert: {
+          bank_account_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deductions?: number
+          gross_amount?: number
+          id?: string
+          journal_entry_id?: string | null
+          net_amount?: number
+          notes?: string | null
+          payment_date: string
+          period_month: string
+          status?: string
+        }
+        Update: {
+          bank_account_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deductions?: number
+          gross_amount?: number
+          id?: string
+          journal_entry_id?: string | null
+          net_amount?: number
+          notes?: string | null
+          payment_date?: string
+          period_month?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_runs_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_runs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_runs_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pre_order_lines: {
+        Row: {
+          brand: string | null
+          color: string | null
+          created_at: string
+          estimated_cost: number
+          id: string
+          model: string | null
+          notes: string | null
+          pre_order_id: string
+          product_id: string | null
+          product_name: string
+          purchase_qty: number
+          requested_qty: number
+          reserved_qty: number
+          size_label: string
+          size_value: number | null
+          sku: string
+          status: Database["public"]["Enums"]["pre_order_status"]
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          brand?: string | null
+          color?: string | null
+          created_at?: string
+          estimated_cost?: number
+          id?: string
+          model?: string | null
+          notes?: string | null
+          pre_order_id: string
+          product_id?: string | null
+          product_name: string
+          purchase_qty?: number
+          requested_qty: number
+          reserved_qty?: number
+          size_label: string
+          size_value?: number | null
+          sku: string
+          status?: Database["public"]["Enums"]["pre_order_status"]
+          unit_price?: number
+          updated_at?: string
+        }
+        Update: {
+          brand?: string | null
+          color?: string | null
+          created_at?: string
+          estimated_cost?: number
+          id?: string
+          model?: string | null
+          notes?: string | null
+          pre_order_id?: string
+          product_id?: string | null
+          product_name?: string
+          purchase_qty?: number
+          requested_qty?: number
+          reserved_qty?: number
+          size_label?: string
+          size_value?: number | null
+          sku?: string
+          status?: Database["public"]["Enums"]["pre_order_status"]
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pre_order_lines_pre_order_id_fkey"
+            columns: ["pre_order_id"]
+            isOneToOne: false
+            referencedRelation: "pre_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pre_order_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pre_order_procurement_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          pre_order_line_id: string
+          purchase_order_id: string
+          purchase_order_line_id: string | null
+          quantity: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          pre_order_line_id: string
+          purchase_order_id: string
+          purchase_order_line_id?: string | null
+          quantity: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          pre_order_line_id?: string
+          purchase_order_id?: string
+          purchase_order_line_id?: string | null
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pre_order_procurement_links_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pre_order_procurement_links_pre_order_line_id_fkey"
+            columns: ["pre_order_line_id"]
+            isOneToOne: false
+            referencedRelation: "pre_order_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pre_order_procurement_links_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pre_order_procurement_links_purchase_order_line_id_fkey"
+            columns: ["purchase_order_line_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pre_orders: {
+        Row: {
+          channel: string
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          customer_name: string
+          deadline_date: string | null
+          id: string
+          marketplace_order_id: string | null
+          marketplace_status: string | null
+          notes: string | null
+          order_date: string
+          source: Database["public"]["Enums"]["pre_order_source"]
+          status: Database["public"]["Enums"]["pre_order_status"]
+          updated_at: string
+        }
+        Insert: {
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          customer_name: string
+          deadline_date?: string | null
+          id?: string
+          marketplace_order_id?: string | null
+          marketplace_status?: string | null
+          notes?: string | null
+          order_date?: string
+          source?: Database["public"]["Enums"]["pre_order_source"]
+          status?: Database["public"]["Enums"]["pre_order_status"]
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          customer_name?: string
+          deadline_date?: string | null
+          id?: string
+          marketplace_order_id?: string | null
+          marketplace_status?: string | null
+          notes?: string | null
+          order_date?: string
+          source?: Database["public"]["Enums"]["pre_order_source"]
+          status?: Database["public"]["Enums"]["pre_order_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pre_orders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pre_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
         ]
@@ -1254,8 +1948,8 @@ export type Database = {
           price_website?: number | null
           quantity?: number
           sell_price?: number
-          size?: number
-          size_label?: string
+          size: number
+          size_label: string
           sku: string
           updated_at?: string
         }
@@ -1416,6 +2110,57 @@ export type Database = {
           },
         ]
       }
+      purchase_invoice_lines: {
+        Row: {
+          created_at: string
+          id: string
+          invoice_id: string
+          notes: string | null
+          product_id: string | null
+          product_label: string
+          qty: number
+          subtotal: number
+          unit_cost: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invoice_id: string
+          notes?: string | null
+          product_id?: string | null
+          product_label: string
+          qty: number
+          subtotal?: number
+          unit_cost?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          notes?: string | null
+          product_id?: string | null
+          product_label?: string
+          qty?: number
+          subtotal?: number
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_invoice_lines_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_invoice_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_invoices: {
         Row: {
           attachment_url: string | null
@@ -1503,6 +2248,7 @@ export type Database = {
           new_color: string | null
           new_model: string | null
           new_size: number | null
+          new_size_label: string | null
           new_sku: string | null
           notes: string | null
           ordered_qty: number
@@ -1519,6 +2265,7 @@ export type Database = {
           new_color?: string | null
           new_model?: string | null
           new_size?: number | null
+          new_size_label?: string | null
           new_sku?: string | null
           notes?: string | null
           ordered_qty: number
@@ -1535,6 +2282,7 @@ export type Database = {
           new_color?: string | null
           new_model?: string | null
           new_size?: number | null
+          new_size_label?: string | null
           new_sku?: string | null
           notes?: string | null
           ordered_qty?: number
@@ -2103,6 +2851,64 @@ export type Database = {
           },
         ]
       }
+      stock_reservations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          pre_order_line_id: string
+          product_id: string
+          quantity: number
+          released_at: string | null
+          status: Database["public"]["Enums"]["stock_reservation_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          pre_order_line_id: string
+          product_id: string
+          quantity: number
+          released_at?: string | null
+          status?: Database["public"]["Enums"]["stock_reservation_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          pre_order_line_id?: string
+          product_id?: string
+          quantity?: number
+          released_at?: string | null
+          status?: Database["public"]["Enums"]["stock_reservation_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_reservations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_reservations_pre_order_line_id_fkey"
+            columns: ["pre_order_line_id"]
+            isOneToOne: false
+            referencedRelation: "pre_order_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_reservations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           address: string | null
@@ -2250,6 +3056,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_fixed_asset_depreciation: {
+        Args: { p_amount: number; p_asset_id: string }
+        Returns: undefined
+      }
       app_post_journal: {
         Args: {
           p_description: string
@@ -2261,6 +3071,11 @@ export type Database = {
         }
         Returns: string
       }
+      app_post_packing_cogs: {
+        Args: { p_hpp: number; p_invoice_number: string; p_item_id: string }
+        Returns: string
+      }
+      app_reverse_packing_cogs: { Args: { p_item_id: string }; Returns: number }
       bootstrap_employee_role: {
         Args: {
           p_email: string
@@ -2269,6 +3084,14 @@ export type Database = {
         Returns: undefined
       }
       bootstrap_first_owner: { Args: { p_email: string }; Returns: undefined }
+      cancel_marketplace_order_atomic: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
+      cancel_packing_session_atomic: {
+        Args: { p_session_id: string }
+        Returns: Json
+      }
       cleanup_old_chat_attachments: { Args: never; Returns: undefined }
       create_stock_movement: {
         Args: {
@@ -2299,73 +3122,111 @@ export type Database = {
       }
       generate_customer_payment_number: { Args: never; Returns: string }
       generate_expense_number: { Args: never; Returns: string }
+      generate_feedback_number: { Args: never; Returns: string }
       generate_journal_entry_number: { Args: never; Returns: string }
       generate_opname_number: { Args: never; Returns: string }
       generate_po_number: { Args: never; Returns: string }
       generate_purchase_invoice_number: { Args: never; Returns: string }
       generate_sales_invoice_number: { Args: never; Returns: string }
       generate_vendor_payment_number: { Args: never; Returns: string }
-      get_my_roles: {
-        Args: never
-        Returns: Database["public"]["Enums"]["user_role"][]
-      }
       get_account_balances: {
-        Args: { p_from?: string | null; p_to?: string | null }
+        Args: { p_from?: string; p_to?: string }
         Returns: {
           account_id: string
           balance: number
           code: string
           name: string
           normal_balance: string
-          parent_id: string | null
+          parent_id: string
           total_credit: number
           total_debit: number
           type: string
         }[]
       }
       get_account_ledger: {
-        Args: {
-          p_account_id: string
-          p_from?: string | null
-          p_to?: string | null
-        }
+        Args: { p_account_id: string; p_from?: string; p_to?: string }
         Returns: {
           account_code: string
-          account_description: string | null
+          account_description: string
           account_id: string
           account_is_active: boolean
           account_is_system: boolean
           account_name: string
           account_normal_balance: string
-          account_parent_id: string | null
+          account_parent_id: string
           account_type: string
           closing_balance: number
-          credit: number | null
-          debit: number | null
-          description: string | null
-          entry_date: string | null
-          entry_id: string | null
-          entry_number: string | null
-          line_description: string | null
-          line_id: string | null
+          credit: number
+          debit: number
+          description: string
+          entry_date: string
+          entry_id: string
+          entry_number: string
+          line_description: string
+          line_id: string
           opening_balance: number
-          running_balance: number | null
-          source_id: string | null
-          source_type: string | null
-          status: string | null
+          running_balance: number
+          source_id: string
+          source_type: string
+          status: string
           total_credit: number
           total_debit: number
         }[]
       }
+      get_inventory_page: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: {
+          barcode: string
+          brand: string
+          color: string
+          condition: Database["public"]["Enums"]["product_condition"]
+          created_at: string
+          defect_qty: number
+          defect_reason: string
+          dormant_qty: number
+          first_inbound_at: string
+          hpp: number
+          id: string
+          image_url: string
+          is_active: boolean
+          model: string
+          normal_qty: number
+          price_offline: number
+          price_shopee: number
+          price_tiktok: number
+          price_tokopedia: number
+          price_website: number
+          quantity: number
+          sell_price: number
+          size: number
+          size_label: string
+          sku: string
+          supplier_name: string
+          total_models: number
+          total_qty: number
+          total_sku: number
+        }[]
+      }
+      get_inventory_summary: {
+        Args: { p_search?: string }
+        Returns: {
+          defect_qty: number
+          dormant_qty: number
+          normal_qty: number
+          total_models: number
+          total_qty: number
+          total_sku: number
+        }[]
+      }
+      get_my_roles: {
+        Args: never
+        Returns: Database["public"]["Enums"]["user_role"][]
+      }
       get_purchase_order_list: {
-        Args: {
-          p_limit?: number
-          p_status?: string | null
-          p_supplier_id?: string | null
-        }
+        Args: { p_limit?: number; p_status?: string; p_supplier_id?: string }
         Returns: {
           created_at: string
-          expected_date: string | null
+          expected_date: string
           id: string
           line_count: number
           order_date: string
@@ -2379,7 +3240,7 @@ export type Database = {
       get_receivable_purchase_orders: {
         Args: never
         Returns: {
-          expected_date: string | null
+          expected_date: string
           id: string
           order_date: string
           po_number: string
@@ -2396,63 +3257,23 @@ export type Database = {
         Returns: {
           channel: string
           created_at: string
-          customer_id: string | null
+          customer_id: string
           customer_name: string
           discount: number
-          due_date: string | null
+          due_date: string
           id: string
           invoice_date: string
           invoice_number: string
           line_count: number
           marketplace_fee: number
-          marketplace_order_id: string | null
-          notes: string | null
+          marketplace_order_id: string
+          notes: string
           paid_amount: number
           shipping: number
           status: string
           subtotal: number
           tax: number
           total: number
-        }[]
-      }
-      get_inventory_page: {
-        Args: { p_limit?: number; p_offset?: number; p_search?: string | null }
-        Returns: {
-          barcode: string
-          brand: string
-          color: string | null
-          condition: Database["public"]["Enums"]["product_condition"]
-          created_at: string
-          defect_reason: string | null
-          dormant_qty: number
-          first_inbound_at: string | null
-          hpp: number
-          id: string
-          image_url: string | null
-          is_active: boolean
-          model: string
-          normal_qty: number
-          price_offline: number
-          quantity: number
-          sell_price: number
-          size: number
-          size_label: string
-          sku: string
-          supplier_name: string | null
-          total_models: number
-          total_qty: number
-          total_sku: number
-        }[]
-      }
-      get_inventory_summary: {
-        Args: { p_search?: string | null }
-        Returns: {
-          defect_qty: number
-          dormant_qty: number
-          normal_qty: number
-          total_models: number
-          total_qty: number
-          total_sku: number
         }[]
       }
       has_any_role: {
@@ -2471,6 +3292,7 @@ export type Database = {
         Args: { p_id: string; qty: number }
         Returns: undefined
       }
+      parse_size_to_numeric: { Args: { p_label: string }; Returns: number }
       pos_checkout: { Args: { p_payload: Json }; Returns: Json }
       recalculate_hpp_by_model:
         | { Args: { p_brand: string; p_model: string }; Returns: undefined }
@@ -2490,6 +3312,15 @@ export type Database = {
           p_product_id: string
         }
         Returns: undefined
+      }
+      refresh_pre_order_status_from_lines: {
+        Args: { p_pre_order_id: string }
+        Returns: undefined
+      }
+      remove_packing_item_atomic: { Args: { p_item_id: string }; Returns: Json }
+      scan_packing_item_atomic: {
+        Args: { p_barcode: string; p_session_id: string }
+        Returns: Json
       }
       search_products_fuzzy: {
         Args: { p_limit?: number; p_query: string; p_threshold?: number }
@@ -2548,6 +3379,8 @@ export type Database = {
         | "purchase_batch"
       delete_request_status: "pending" | "approved" | "rejected"
       expense_status: "draft" | "approved" | "paid" | "rejected" | "voided"
+      feedback_severity: "blocker" | "mengganggu" | "minor"
+      feedback_status: "baru" | "diproses" | "selesai" | "ditolak"
       fiscal_period_status: "open" | "closed"
       journal_source:
         | "manual"
@@ -2569,6 +3402,16 @@ export type Database = {
       marketplace_type: "shopee" | "tiktok" | "tokopedia" | "lazada" | "other"
       payment_method: "cash" | "bank_transfer" | "marketplace" | "other"
       po_status: "draft" | "approved" | "receiving" | "completed" | "cancelled"
+      pre_order_source: "manual" | "marketplace"
+      pre_order_status:
+        | "review"
+        | "ready_from_stock"
+        | "needs_purchase"
+        | "purchase_created"
+        | "waiting_stock"
+        | "ready_to_pack"
+        | "packed"
+        | "cancelled"
       product_condition: "normal" | "defect" | "dormant"
       purchase_invoice_status: "unpaid" | "partial" | "paid" | "cancelled"
       return_status: "pending" | "verified" | "processed" | "cancelled"
@@ -2597,6 +3440,7 @@ export type Database = {
         | "review"
         | "approved"
         | "cancelled"
+      stock_reservation_status: "active" | "released" | "consumed" | "cancelled"
       user_role:
         | "owner"
         | "admin_gudang"
@@ -2751,6 +3595,8 @@ export const Constants = {
       ],
       delete_request_status: ["pending", "approved", "rejected"],
       expense_status: ["draft", "approved", "paid", "rejected", "voided"],
+      feedback_severity: ["blocker", "mengganggu", "minor"],
+      feedback_status: ["baru", "diproses", "selesai", "ditolak"],
       fiscal_period_status: ["open", "closed"],
       journal_source: [
         "manual",
@@ -2774,6 +3620,17 @@ export const Constants = {
       marketplace_type: ["shopee", "tiktok", "tokopedia", "lazada", "other"],
       payment_method: ["cash", "bank_transfer", "marketplace", "other"],
       po_status: ["draft", "approved", "receiving", "completed", "cancelled"],
+      pre_order_source: ["manual", "marketplace"],
+      pre_order_status: [
+        "review",
+        "ready_from_stock",
+        "needs_purchase",
+        "purchase_created",
+        "waiting_stock",
+        "ready_to_pack",
+        "packed",
+        "cancelled",
+      ],
       product_condition: ["normal", "defect", "dormant"],
       purchase_invoice_status: ["unpaid", "partial", "paid", "cancelled"],
       return_status: ["pending", "verified", "processed", "cancelled"],
@@ -2800,6 +3657,7 @@ export const Constants = {
         "approved",
         "cancelled",
       ],
+      stock_reservation_status: ["active", "released", "consumed", "cancelled"],
       user_role: [
         "owner",
         "admin_gudang",

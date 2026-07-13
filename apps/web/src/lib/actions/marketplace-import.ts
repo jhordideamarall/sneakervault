@@ -58,7 +58,7 @@ export type LineDiff = {
   product_name: string;
   variation_name?: string;
   product: ResolvedProduct | null;
-  via: "sku" | "map" | null;
+  via: "sku" | "map" | "override" | null;
   issue: "ok" | "low_stock" | "unmapped";
   reason?: string;
   cost_issue: "ok" | "missing_hpp";
@@ -262,9 +262,37 @@ async function resolveOrders(
   const allMapKeys = Array.from(
     new Set(orders.flatMap((o) => o.lines.flatMap((l) => mapKeysForLine(l))).filter(Boolean)),
   );
+  const overrideProductIds = Array.from(
+    new Set(
+      orders
+        .flatMap((o) => o.lines.map((l) => l.override_product_id))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
   const orderIds = orders.map((o) => o.order_id).filter(Boolean);
 
-  // 1. Exact SKU + size matches. SKU is the colorway anchor; size is the variant.
+  // 1. One-off review overrides. Used when marketplace row says A, but the item
+  // actually shipped is B because the customer requested a different model/size.
+  const byOverrideId = new Map<string, ResolvedProduct>();
+  if (overrideProductIds.length > 0) {
+    const { data } = await supabase
+      .from("products")
+      .select("id, sku, brand, model, color, size, size_label, quantity, sell_price, hpp")
+      .in("id", overrideProductIds);
+    for (const p of data ?? []) {
+      byOverrideId.set(p.id, {
+        id: p.id,
+        label: labelOf(p),
+        sku: p.sku,
+        size: Number(p.size),
+        quantity: Number(p.quantity),
+        sell_price: Number(p.sell_price),
+        hpp: Number(p.hpp),
+      });
+    }
+  }
+
+  // 2. Exact SKU + size matches. SKU is the colorway anchor; size is the variant.
   const bySkuSize = new Map<string, ResolvedProduct>();
   if (allSkus.length > 0) {
     const { data } = await supabase
@@ -284,7 +312,7 @@ async function resolveOrders(
     }
   }
 
-  // 2. Learned marketplace SKU map, ideally keyed by variation-specific SKU.
+  // 3. Learned marketplace SKU map, ideally keyed by variation-specific SKU.
   const byMap = new Map<string, ResolvedProduct>();
   if (allMapKeys.length > 0) {
     const { data: maps } = await supabase
@@ -319,7 +347,7 @@ async function resolveOrders(
     }
   }
 
-  // 3. Existing invoice guard/reconcile by marketplace order id.
+  // 4. Existing invoice guard/reconcile by marketplace order id.
   const existingByOrderId = new Map<string, ExistingMarketplaceInvoice>();
   const existingPreOrderByOrderId = new Map<string, ExistingPreOrder>();
   if (orderIds.length > 0) {
@@ -362,6 +390,9 @@ async function resolveOrders(
       const size = lineSizeValue(l);
       const candidates = skuCandidatesForLine(l);
       const mappingKeys = mapKeysForLine(l);
+      const override = l.override_product_id
+        ? byOverrideId.get(l.override_product_id) ?? null
+        : null;
       const exact =
         size == null
           ? null
@@ -378,17 +409,20 @@ async function resolveOrders(
                 return size == null || sizeKey(p.size) === sizeKey(size);
               },
             ) ?? null;
-      const product = exact ?? mapped ?? null;
-      const via: LineDiff["via"] = exact ? "sku" : mapped ? "map" : null;
+      const product = override ?? exact ?? mapped ?? null;
+      const via: LineDiff["via"] = override ? "override" : exact ? "sku" : mapped ? "map" : null;
       let issue: LineDiff["issue"] = "ok";
       let reason: string | undefined;
-      if (size == null) {
+      if (l.override_product_id && !override) {
+        issue = "unmapped";
+        reason = "Produk pengganti tidak ditemukan. Pilih ulang barang sistem.";
+      } else if (!override && size == null) {
         issue = "unmapped";
         reason = "Size/variasi tidak terbaca. Format size harus jelas, misalnya 40, 40.5, atau 42 2/3.";
-      } else if (!product) {
+      } else if (!override && !product) {
         issue = "unmapped";
         reason = `Produk tidak cocok untuk SKU ${candidates.join(" / ")} size ${lineSizeLabel(l) ?? size}. Pastikan master produk punya SKU colorway dan size yang sama.`;
-      } else if (product.quantity < l.qty) issue = "low_stock";
+      } else if (product && product.quantity < l.qty) issue = "low_stock";
       return {
         sku: l.sku,
         sku_candidates: candidates,
@@ -837,16 +871,21 @@ function preOrderInputFromDiff(order: OrderDiff, fileName?: string) {
       .filter(Boolean)
       .join(" • "),
     lines: order.lines.map((line) => {
-      const parsedName = splitBrandModel(line.product_name || line.product?.label || "");
+      const displayName =
+        line.via === "override" && line.product
+          ? line.product.label
+          : line.product_name || line.product?.label || "";
+      const parsedName = splitBrandModel(displayName);
       return {
         product_id: line.product?.id ?? null,
         sku:
+          (line.via === "override" ? line.product?.sku : null) ||
           line.sku ||
           line.sku_candidates?.[0] ||
           line.mapping_sku ||
           `MP-${order.channel}-${order.order_id}`,
         product_name:
-          line.product_name ||
+          displayName ||
           line.product?.label ||
           `Produk Marketplace ${order.order_id}`,
         brand: parsedName.brand,

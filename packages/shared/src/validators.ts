@@ -181,6 +181,17 @@ export const bankAccountTypeEnum = z.enum([
   "marketplace_balance",
 ]);
 
+export const coaTypeEnum = z.enum([
+  "asset",
+  "liability",
+  "equity",
+  "revenue",
+  "expense",
+  "cogs",
+]);
+
+export const coaNormalBalanceEnum = z.enum(["debit", "credit"]);
+
 export const bankAccountInputSchema = z.object({
   name: z.string().min(1, "Nama wajib diisi"),
   type: bankAccountTypeEnum,
@@ -194,6 +205,19 @@ export const bankAccountInputSchema = z.object({
 });
 
 export type BankAccountInput = z.infer<typeof bankAccountInputSchema>;
+
+// ─── Chart of Accounts ───────────────────────────────────
+export const coaInputSchema = z.object({
+  code: z.string().trim().min(1, "Kode akun wajib diisi"),
+  name: z.string().trim().min(1, "Nama akun wajib diisi"),
+  type: coaTypeEnum,
+  normal_balance: coaNormalBalanceEnum,
+  parent_id: z.string().uuid().nullable().optional(),
+  is_active: z.boolean().default(true),
+  description: z.string().trim().optional().nullable(),
+});
+
+export type CoaInput = z.infer<typeof coaInputSchema>;
 
 // ─── Purchase Order (Phase 2) ──────────────────────────────
 export const poLineInputSchema = z
@@ -279,19 +303,52 @@ export type ReceivePurchaseOrderInput = z.infer<
 >;
 
 // ─── Purchase Invoice (Phase 2 — Faktur Pembelian) ─────────
-export const purchaseInvoiceInputSchema = z.object({
-  supplier_id: z.string().uuid("Vendor wajib dipilih"),
-  po_id: z.string().uuid().optional().nullable(),
-  invoice_date: z.string().min(1),
-  due_date: z.string().optional().nullable(),
-  subtotal: z.coerce.number().nonnegative(),
-  tax: z.coerce.number().nonnegative().default(0),
-  total: z.coerce.number().nonnegative(),
-  notes: z.string().optional(),
-  attachment_url: z.string().url().optional().or(z.literal("")).nullable(),
-});
+export const purchaseInvoiceLineInputSchema = z
+  .object({
+    product_id: z.string().uuid().optional().nullable(),
+    product_label: z.string().trim().optional(),
+    qty: z.coerce.number().int().positive(),
+    unit_cost: z.coerce.number().nonnegative(),
+    notes: z.string().optional(),
+    new_brand: z.string().trim().optional(),
+    new_model: z.string().trim().optional(),
+    new_size: z.coerce.number().optional(),
+    new_size_label: z.string().trim().optional(),
+    new_color: z.string().trim().optional(),
+    new_sku: z.string().trim().optional(),
+  })
+  .refine(
+    (line) =>
+      !!line.product_id ||
+      (!!line.new_brand &&
+        !!line.new_model &&
+        (line.new_size != null || !!line.new_size_label) &&
+        !!line.new_sku),
+    { message: "Item manual wajib isi brand, model, size, dan SKU" },
+  );
+
+export const purchaseInvoiceInputSchema = z
+  .object({
+    supplier_id: z.string().uuid("Vendor wajib dipilih"),
+    po_id: z.string().uuid().optional().nullable(),
+    invoice_date: z.string().min(1),
+    due_date: z.string().optional().nullable(),
+    subtotal: z.coerce.number().nonnegative(),
+    tax: z.coerce.number().nonnegative().default(0),
+    total: z.coerce.number().nonnegative(),
+    notes: z.string().optional(),
+    attachment_url: z.string().url().optional().or(z.literal("")).nullable(),
+    lines: z.array(purchaseInvoiceLineInputSchema).optional(),
+  })
+  .refine((data) => !!data.po_id || (data.lines?.length ?? 0) > 0, {
+    message: "Faktur manual wajib punya minimal 1 item",
+    path: ["lines"],
+  });
 
 export type PurchaseInvoiceInput = z.infer<typeof purchaseInvoiceInputSchema>;
+export type PurchaseInvoiceLineInput = z.infer<
+  typeof purchaseInvoiceLineInputSchema
+>;
 export type PurchaseInvoiceStatus =
   | "unpaid"
   | "partial"
@@ -452,6 +509,7 @@ export const bankTransactionTypeEnum = z.enum(["debit", "credit"]);
 
 export const bankTransactionInputSchema = z.object({
   bank_account_id: z.string().uuid("Pilih akun"),
+  counterpart_account_id: z.string().uuid("Pilih akun lawan transaksi"),
   transaction_date: z.string().min(1),
   type: bankTransactionTypeEnum,
   amount: z.coerce.number().positive("Jumlah harus > 0"),
@@ -547,6 +605,61 @@ export const fiscalPeriodSchema = z.object({
 });
 
 export type FiscalPeriodInput = z.infer<typeof fiscalPeriodSchema>;
+
+// ─── Employees & Payroll ──────────────────────────────────
+export const employeeInputSchema = z.object({
+  employee_code: z.string().trim().optional(),
+  full_name: z.string().trim().min(1, "Nama karyawan wajib diisi"),
+  job_title: z.string().trim().optional(),
+  department: z.string().trim().optional(),
+  base_salary: z.coerce.number().nonnegative().default(0),
+  bank_account_name: z.string().trim().optional(),
+  bank_account_number: z.string().trim().optional(),
+  tax_id: z.string().trim().optional(),
+  hire_date: z.string().optional().nullable(),
+  is_active: z.boolean().default(true),
+});
+
+export type EmployeeInput = z.infer<typeof employeeInputSchema>;
+
+export const payrollLineInputSchema = z.object({
+  employee_id: z.string().uuid(),
+  base_salary: z.coerce.number().nonnegative(),
+  allowances: z.coerce.number().nonnegative().default(0),
+  deductions: z.coerce.number().nonnegative().default(0),
+  notes: z.string().trim().optional(),
+});
+
+export const payrollRunInputSchema = z.object({
+  period_month: z.string().regex(/^\d{4}-\d{2}$/, "Periode harus YYYY-MM"),
+  payment_date: z.string().min(1, "Tanggal bayar wajib diisi"),
+  bank_account_id: z.string().uuid().nullable().optional(),
+  notes: z.string().trim().optional(),
+  lines: z.array(payrollLineInputSchema).min(1, "Minimal 1 karyawan"),
+});
+
+export type PayrollRunInput = z.infer<typeof payrollRunInputSchema>;
+export type PayrollLineInput = z.infer<typeof payrollLineInputSchema>;
+
+// ─── Fixed Assets ─────────────────────────────────────────
+export const fixedAssetMethodEnum = z.enum(["straight_line", "double_declining"]);
+
+export const fixedAssetInputSchema = z.object({
+  asset_code: z.string().trim().optional(),
+  name: z.string().trim().min(1, "Nama aset wajib diisi"),
+  acquisition_date: z.string().min(1, "Tanggal perolehan wajib diisi"),
+  acquisition_cost: z.coerce.number().positive("Nilai perolehan wajib > 0"),
+  salvage_value: z.coerce.number().nonnegative().default(0),
+  useful_life_months: z.coerce.number().int().positive().default(48),
+  method: fixedAssetMethodEnum.default("straight_line"),
+  location: z.string().trim().optional(),
+  department: z.string().trim().optional(),
+  bank_account_id: z.string().uuid().nullable().optional(),
+  notes: z.string().trim().optional(),
+  status: z.enum(["active", "disposed"]).default("active"),
+});
+
+export type FixedAssetInput = z.infer<typeof fixedAssetInputSchema>;
 
 // ─── Auth ──────────────────────────────────────────────────
 export const loginSchema = z.object({

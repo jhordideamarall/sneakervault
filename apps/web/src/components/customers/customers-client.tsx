@@ -177,7 +177,7 @@ export function CustomersClient({
         return;
       }
       toast.push(
-        editing === "new" ? "Customer berhasil dibuat" : "Customer diperbarui",
+        editing === "new" ? "Pelanggan berhasil dibuat" : "Pelanggan diperbarui",
       );
       closeModal();
       router.refresh();
@@ -185,7 +185,7 @@ export function CustomersClient({
   }
 
   function handleDeactivate(id: string, name: string) {
-    if (!confirm(`Nonaktifkan customer "${name}"? Data tetap tersimpan.`))
+    if (!confirm(`Nonaktifkan pelanggan "${name}"? Data tetap tersimpan.`))
       return;
     startTransition(async () => {
       const result = await deactivateCustomer(id);
@@ -193,7 +193,7 @@ export function CustomersClient({
         toast.push(typeof result.error === "string" ? result.error : "Gagal", "error");
         return;
       }
-      toast.push("Customer dinonaktifkan");
+      toast.push("Pelanggan dinonaktifkan");
       router.refresh();
     });
   }
@@ -205,7 +205,7 @@ export function CustomersClient({
         toast.push(typeof result.error === "string" ? result.error : "Gagal", "error");
         return;
       }
-      toast.push("Customer diaktifkan kembali");
+      toast.push("Pelanggan diaktifkan kembali");
       router.refresh();
     });
   }
@@ -221,7 +221,7 @@ export function CustomersClient({
             </div>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-white">
-                Master Customer
+                Master Pelanggan
               </h1>
               <p className="text-sm text-white/50">
                 Database pelanggan untuk invoice & laporan piutang
@@ -232,14 +232,14 @@ export function CustomersClient({
         {canManage ? (
           <Button onClick={startNew} className="gap-2">
             <Plus size={16} strokeWidth={2} />
-            Customer Baru
+            Pelanggan Baru
           </Button>
         ) : null}
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile label="Total Customer" value={stats.total.toString()} />
+        <StatTile label="Total Pelanggan" value={stats.total.toString()} />
         <StatTile
           label="Aktif"
           value={stats.active.toString()}
@@ -426,7 +426,7 @@ export function CustomersClient({
           >
             <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-4">
               <h2 className="text-base font-semibold text-white">
-                {editing === "new" ? "Customer Baru" : "Edit Customer"}
+                {editing === "new" ? "Pelanggan Baru" : "Edit Pelanggan"}
               </h2>
               <button
                 onClick={closeModal}
@@ -438,7 +438,7 @@ export function CustomersClient({
             <div className="space-y-4 px-6 py-5">
               {formError ? <Alert tone="error">{formError}</Alert> : null}
               <div>
-                <FieldLabel htmlFor="name">Nama Customer *</FieldLabel>
+                <FieldLabel htmlFor="name">Nama Pelanggan *</FieldLabel>
                 <Input
                   id="name"
                   value={form.name}
@@ -528,7 +528,7 @@ export function CustomersClient({
                   id="npwp"
                   value={form.npwp}
                   onChange={(e) => setForm({ ...form, npwp: e.target.value })}
-                  placeholder="untuk customer korporat"
+                  placeholder="untuk pelanggan korporat"
                 />
               </div>
               <div>
@@ -549,7 +549,7 @@ export function CustomersClient({
                 {pending
                   ? "Menyimpan…"
                   : editing === "new"
-                    ? "Buat Customer"
+                    ? "Buat Pelanggan"
                     : "Simpan Perubahan"}
               </Button>
             </div>
@@ -602,17 +602,17 @@ function EmptyState({
         className="mx-auto mb-4 text-white/30"
       />
       <h3 className="text-base font-medium text-white">
-        {hasFilter ? "Tidak ada customer cocok" : "Belum ada customer"}
+        {hasFilter ? "Tidak ada pelanggan cocok" : "Belum ada pelanggan"}
       </h3>
       <p className="mx-auto mt-1 max-w-sm text-sm text-white/50">
         {hasFilter
           ? "Coba ubah kata kunci pencarian atau reset filter."
-          : "Mulai dengan menambahkan customer pertama. Data customer akan dipakai untuk invoice penjualan dan tracking piutang."}
+          : "Mulai dengan menambahkan pelanggan pertama. Data pelanggan akan dipakai untuk invoice penjualan dan tracking piutang."}
       </p>
       {!hasFilter && onCreate ? (
         <Button onClick={onCreate} className="mt-5 gap-2">
           <Plus size={16} strokeWidth={2} />
-          Customer Pertama
+          Pelanggan Pertama
         </Button>
       ) : null}
     </div>

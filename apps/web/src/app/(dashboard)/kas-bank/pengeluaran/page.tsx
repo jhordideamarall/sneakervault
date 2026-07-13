@@ -1,6 +1,7 @@
 import {
   getBankTransactions,
   getBankAccounts,
+  getCoaAccountOptions,
   getExpenseAccountOptions,
   getExpenseCategories,
   getExpenses,
@@ -26,12 +27,14 @@ export default async function KasBankPengeluaranPage() {
     expenses,
     categories,
     accountOptions,
+    coaAccountOptions,
     bankAccounts,
     transactions,
   ] = await Promise.all([
     getExpenses({ limit: 500 }),
     getExpenseCategories({ includeInactive: true }),
     getExpenseAccountOptions(),
+    getCoaAccountOptions(),
     getBankAccounts({ includeInactive: true }),
     getBankTransactions({ limit: 500 }),
   ]);
@@ -41,6 +44,7 @@ export default async function KasBankPengeluaranPage() {
       expenses={expenses}
       categories={categories}
       accountOptions={accountOptions}
+      coaAccountOptions={coaAccountOptions}
       bankAccounts={bankAccounts}
       bankTransactions={transactions}
       roles={roles as string[]}

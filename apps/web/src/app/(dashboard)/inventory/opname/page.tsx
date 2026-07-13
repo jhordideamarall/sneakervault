@@ -28,7 +28,7 @@ export default async function StockOpnamePage({
       <div>
         <h1 className="text-2xl font-semibold text-white">Stock Opname</h1>
         <p className="mt-1 text-sm text-white/45">
-          Cycle count stok fisik, hitung selisih, lalu approve untuk adjustment stok dan jurnal.
+          Cycle count stok fisik, bandingkan dengan sistem, lalu download hasil selisih tanpa adjustment otomatis.
         </p>
       </div>
       <StockOpnameClient

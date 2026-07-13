@@ -18,6 +18,8 @@ export type MarketplaceOrderLine = {
   sku_candidates?: string[];
   /** Marketplace-specific variation key if available, used for manual mapping. */
   marketplace_sku?: string;
+  /** One-off review override when the shipped item differs from the marketplace row. */
+  override_product_id?: string;
   size_label?: string;
   size_value?: number | null;
   qty: number;

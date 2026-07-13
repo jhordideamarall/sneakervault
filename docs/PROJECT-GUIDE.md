@@ -91,7 +91,7 @@ PO → Penerimaan Barang → Faktur Pembelian → Bayar Vendor.
 Akun Bank, Penerimaan, Pengeluaran, Mutasi, Rekonsiliasi.
 
 ### F. Buku Besar (owner, finance)
-Chart of Accounts (37 akun seed), Jurnal Penyesuaian, Tutup Buku. Jurnal otomatis dari transaksi via `journal-engine.ts` (TS) atau `app_post_journal` (SQL, internal).
+Chart of Accounts (37 akun seed), Jurnal Umum, Tutup Buku. Jurnal otomatis dari transaksi via `journal-engine.ts` (TS) atau `app_post_journal` (SQL, internal).
 
 ### G. Laporan (owner, finance)
 Laporan Operasional, Neraca, Laba Rugi, Perubahan Ekuitas, Arus Kas.

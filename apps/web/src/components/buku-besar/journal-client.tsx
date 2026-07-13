@@ -232,7 +232,7 @@ export function JournalClient({
           setFormError(r.error._form?.[0] ?? "Gagal menyimpan jurnal");
           return;
         }
-        toast.push("Jurnal penyesuaian berhasil dicatat", "success");
+        toast.push("Jurnal umum berhasil dicatat", "success");
       }
       setCreating(false);
       resetForm();
@@ -268,7 +268,7 @@ export function JournalClient({
           </div>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-white">
-              Jurnal Penyesuaian
+              Jurnal Umum
             </h1>
             <p className="text-sm text-white/50">
               Catatan double-entry — otomatis dari transaksi & manual penyesuaian accounting
@@ -328,7 +328,7 @@ export function JournalClient({
                     ? isEditingSystemJournal
                       ? "Koreksi Jurnal Sistem"
                       : "Edit Jurnal Manual"
-                    : "Jurnal Penyesuaian Manual"}
+                    : "Jurnal Umum Manual"}
                 </h2>
                 <p className="text-xs text-white/40 mt-0.5">
                   {editingId && isEditingSystemJournal
@@ -512,7 +512,7 @@ export function JournalClient({
 
       <QuickTip
         id="buku-besar-journal-intro"
-        title="Cara pakai Jurnal Penyesuaian"
+        title="Cara pakai Jurnal Umum"
         tone="warn"
       >
         Jurnal dari <strong>pembelian, penjualan, dan kas bank</strong> dicatat <em>otomatis</em> oleh sistem

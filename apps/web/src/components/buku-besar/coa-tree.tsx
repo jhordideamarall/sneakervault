@@ -1,12 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { Input } from "@sneakervault/ui";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  FieldLabel,
+  Input,
+  Select,
+  Textarea,
+} from "@sneakervault/ui";
 import { COA_TYPE_LABELS, COA_TYPE_TONES } from "@sneakervault/shared";
 import type { CoaType } from "@sneakervault/shared";
 import type { CoaRow } from "@/lib/queries";
+import {
+  createChartOfAccount,
+  deactivateChartOfAccount,
+  updateChartOfAccount,
+} from "@/lib/actions/coa";
 import { QuickTip } from "@/components/ui/quick-tip";
+import { useToast } from "@/components/toast";
 import {
   ChevronRight,
   Search,
@@ -18,9 +35,22 @@ import {
   Building,
   Lock,
   ExternalLink,
+  Pencil,
+  Plus,
 } from "lucide-react";
 
 type TreeNode = CoaRow & { children: TreeNode[] };
+type CoaFormState = {
+  id?: string;
+  code: string;
+  name: string;
+  type: CoaType;
+  normal_balance: "debit" | "credit";
+  parent_id: string;
+  is_active: boolean;
+  is_system?: boolean;
+  description: string;
+};
 
 const typeIcon: Record<CoaType, React.ReactNode> = {
   asset: <Wallet size={14} strokeWidth={1.7} />,
@@ -30,6 +60,33 @@ const typeIcon: Record<CoaType, React.ReactNode> = {
   cogs: <TrendingDown size={14} strokeWidth={1.7} />,
   expense: <TrendingDown size={14} strokeWidth={1.7} />,
 };
+
+const emptyForm: CoaFormState = {
+  code: "",
+  name: "",
+  type: "asset",
+  normal_balance: "debit",
+  parent_id: "",
+  is_active: true,
+  is_system: false,
+  description: "",
+};
+
+function defaultNormalBalance(type: CoaType): "debit" | "credit" {
+  return ["asset", "expense", "cogs"].includes(type) ? "debit" : "credit";
+}
+
+function firstError(error: unknown) {
+  if (!error) return "Terjadi kesalahan";
+  if (typeof error === "string") return error;
+  if (typeof error !== "object") return "Terjadi kesalahan";
+  const err = error as Record<string, unknown>;
+  if (Array.isArray(err._form) && err._form[0]) return String(err._form[0]);
+  for (const value of Object.values(err)) {
+    if (Array.isArray(value) && value[0]) return String(value[0]);
+  }
+  return "Terjadi kesalahan";
+}
 
 function buildTree(rows: CoaRow[]): TreeNode[] {
   const map = new Map<string, TreeNode>();
@@ -53,11 +110,22 @@ function buildTree(rows: CoaRow[]): TreeNode[] {
 }
 
 export function CoaTree({ accounts }: { accounts: CoaRow[] }) {
+  const toast = useToast();
+  const [pending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [typeFilter, setTypeFilter] = useState<CoaType | "all">("all");
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState<CoaFormState>(emptyForm);
 
   const tree = useMemo(() => buildTree(accounts), [accounts]);
+  const parentOptions = useMemo(
+    () =>
+      accounts
+        .filter((account) => account.is_active && account.id !== form.id)
+        .sort((a, b) => a.code.localeCompare(b.code)),
+    [accounts, form.id],
+  );
 
   const counts = useMemo(() => {
     const c: Record<CoaType, number> = {
@@ -87,6 +155,63 @@ export function CoaTree({ accounts }: { accounts: CoaRow[] }) {
 
   function collapseAll() {
     setExpanded(new Set());
+  }
+
+  function openCreate() {
+    setForm(emptyForm);
+    setFormOpen(true);
+  }
+
+  function openEdit(account: CoaRow) {
+    setForm({
+      id: account.id,
+      code: account.code,
+      name: account.name,
+      type: account.type,
+      normal_balance: account.normal_balance,
+      parent_id: account.parent_id ?? "",
+      is_active: account.is_active,
+      is_system: account.is_system,
+      description: account.description ?? "",
+    });
+    setFormOpen(true);
+  }
+
+  function submitForm(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const payload = {
+      code: form.code,
+      name: form.name,
+      type: form.type,
+      normal_balance: form.normal_balance,
+      parent_id: form.parent_id || null,
+      is_active: form.is_active,
+      description: form.description || null,
+    };
+
+    startTransition(async () => {
+      const result = form.id
+        ? await updateChartOfAccount(form.id, payload)
+        : await createChartOfAccount(payload);
+      if (result?.error) {
+        toast.push(firstError(result.error), "error");
+        return;
+      }
+      toast.push(form.id ? "Akun COA diperbarui" : "Akun COA ditambahkan", "success");
+      setFormOpen(false);
+      setForm(emptyForm);
+    });
+  }
+
+  function deactivateAccount(account: CoaRow) {
+    startTransition(async () => {
+      const result = await deactivateChartOfAccount(account.id);
+      if (result?.error) {
+        toast.push(firstError(result.error), "error");
+        return;
+      }
+      toast.push("Akun COA dinonaktifkan", "success");
+    });
   }
 
   const q = search.trim().toLowerCase();
@@ -128,6 +253,10 @@ export function CoaTree({ accounts }: { accounts: CoaRow[] }) {
             </p>
           </div>
         </div>
+        <Button type="button" onClick={openCreate}>
+          <Plus size={15} />
+          Tambah Akun
+        </Button>
       </div>
 
       <QuickTip
@@ -210,18 +339,30 @@ export function CoaTree({ accounts }: { accounts: CoaRow[] }) {
               >
                 Saldo Normal
               </th>
+              <th className="px-4 py-3 text-right font-medium" style={{ width: "16%" }}>
+                Aksi
+              </th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-12 text-center text-white/40">
+                <td colSpan={5} className="px-4 py-12 text-center text-white/40">
                   Tidak ada akun yang cocok dengan filter.
                 </td>
               </tr>
             ) : (
               filtered.map((node) =>
-                renderNode(node, 0, expanded, toggle, q.length > 0),
+                renderNode(
+                  node,
+                  0,
+                  expanded,
+                  toggle,
+                  q.length > 0,
+                  openEdit,
+                  deactivateAccount,
+                  pending,
+                ),
               )
             )}
           </tbody>
@@ -237,6 +378,142 @@ export function CoaTree({ accounts }: { accounts: CoaRow[] }) {
         />{" "}
         adalah akun standar SAK EMKM dan tidak dapat dihapus.
       </div>
+
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {form.id ? "Edit Akun COA" : "Tambah Akun COA"}
+            </DialogTitle>
+            <DialogDescription>
+              Akun baru langsung bisa dipakai untuk jurnal, kas/bank, dan laporan keuangan.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={submitForm} className="grid gap-4">
+            {form.is_system ? (
+              <div className="rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                Akun sistem: kode, tipe, parent, dan saldo normal dikunci agar laporan tetap stabil.
+              </div>
+            ) : null}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <FieldLabel htmlFor="coa-code">Kode Akun *</FieldLabel>
+                <Input
+                  id="coa-code"
+                  value={form.code}
+                  disabled={Boolean(form.is_system)}
+                  onChange={(e) => setForm({ ...form, code: e.target.value })}
+                  placeholder="Contoh: 1.1.04"
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="coa-name">Nama Akun *</FieldLabel>
+                <Input
+                  id="coa-name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="Contoh: BCA Dewinst"
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="coa-type">Tipe *</FieldLabel>
+                <Select
+                  id="coa-type"
+                  value={form.type}
+                  disabled={Boolean(form.is_system)}
+                  onChange={(e) => {
+                    const type = e.target.value as CoaType;
+                    setForm({
+                      ...form,
+                      type,
+                      normal_balance: defaultNormalBalance(type),
+                    });
+                  }}
+                >
+                  {(Object.keys(COA_TYPE_LABELS) as CoaType[]).map((type) => (
+                    <option key={type} value={type}>
+                      {COA_TYPE_LABELS[type]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <FieldLabel htmlFor="coa-normal">Saldo Normal *</FieldLabel>
+                <Select
+                  id="coa-normal"
+                  value={form.normal_balance}
+                  disabled={Boolean(form.is_system)}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      normal_balance: e.target.value as "debit" | "credit",
+                    })
+                  }
+                >
+                  <option value="debit">Debit</option>
+                  <option value="credit">Kredit</option>
+                </Select>
+              </div>
+              <div className="md:col-span-2">
+                <FieldLabel htmlFor="coa-parent">Parent Akun</FieldLabel>
+                <Select
+                  id="coa-parent"
+                  value={form.parent_id}
+                  disabled={Boolean(form.is_system)}
+                  onChange={(e) => setForm({ ...form, parent_id: e.target.value })}
+                >
+                  <option value="">— Tidak ada parent —</option>
+                  {parentOptions.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.code} · {account.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="md:col-span-2">
+                <FieldLabel htmlFor="coa-description">Catatan</FieldLabel>
+                <Textarea
+                  id="coa-description"
+                  value={form.description}
+                  onChange={(e) =>
+                    setForm({ ...form, description: e.target.value })
+                  }
+                  placeholder="Opsional"
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            <label className="inline-flex items-center gap-2 text-sm text-white/70">
+              <input
+                type="checkbox"
+                checked={form.is_active}
+                onChange={(e) =>
+                  setForm({ ...form, is_active: e.target.checked })
+                }
+                className="h-4 w-4 rounded border-white/20 bg-white/[0.04]"
+              />
+              Akun aktif
+            </label>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setFormOpen(false)}
+                disabled={pending}
+              >
+                Batal
+              </Button>
+              <Button type="submit" disabled={pending}>
+                {pending ? "Menyimpan..." : "Simpan"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -247,6 +524,9 @@ function renderNode(
   expanded: Set<string>,
   toggle: (id: string) => void,
   forceExpand: boolean,
+  onEdit: (account: CoaRow) => void,
+  onDeactivate: (account: CoaRow) => void,
+  pending: boolean,
 ): React.ReactNode[] {
   const rows: React.ReactNode[] = [];
   const hasChildren = node.children.length > 0;
@@ -318,12 +598,47 @@ function renderNode(
           {node.normal_balance === "debit" ? "Dr" : "Cr"}
         </span>
       </td>
+      <td className="px-4 py-2.5">
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => onEdit(node)}
+          >
+            <Pencil size={12} />
+            Edit
+          </Button>
+          {!node.is_system && node.is_active ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={pending}
+              onClick={() => onDeactivate(node)}
+            >
+              Nonaktif
+            </Button>
+          ) : null}
+        </div>
+      </td>
     </tr>,
   );
 
   if (isOpen && hasChildren) {
     for (const child of node.children) {
-      rows.push(...renderNode(child, depth + 1, expanded, toggle, forceExpand));
+      rows.push(
+        ...renderNode(
+          child,
+          depth + 1,
+          expanded,
+          toggle,
+          forceExpand,
+          onEdit,
+          onDeactivate,
+          pending,
+        ),
+      );
     }
   }
 

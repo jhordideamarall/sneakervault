@@ -55,6 +55,8 @@ export const routePermissions: Record<string, Role[]> = {
   "/buku-besar/coa": ["owner", "finance"],
   "/buku-besar/journal": ["owner", "finance"],
   "/buku-besar/periode": ["owner", "finance"],
+  "/buku-besar/payroll": ["owner", "finance"],
+  "/aset": ["owner", "finance"],
 
   // Laporan
   "/reports": ["owner", "finance"],
@@ -67,6 +69,7 @@ export const routePermissions: Record<string, Role[]> = {
   // Master Data
   "/suppliers": ["owner", "admin_gudang", "finance"],
   "/customers": ["owner", "finance", "admin_online"],
+  "/employees": ["owner", "finance"],
 
   // Pengaturan & audit
   "/panduan": ["owner", "admin_gudang", "admin_online", "shopkeeper", "finance"],

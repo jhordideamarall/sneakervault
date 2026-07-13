@@ -1,4 +1,8 @@
-import { getBankTransactions, getBankAccounts } from "@/lib/queries";
+import {
+  getBankTransactions,
+  getBankAccounts,
+  getCoaAccountOptions,
+} from "@/lib/queries";
 import { getCurrentUser } from "@/lib/actions/auth";
 import { MutasiBankClient } from "@/components/kas-bank/mutasi-client";
 import { redirect } from "next/navigation";
@@ -14,15 +18,17 @@ export default async function MutasiBankPage() {
   const roles = (profile.roles ?? []) as Role[];
   if (!canSeeFinancialDashboard(roles)) redirect("/workspace");
 
-  const [transactions, bankAccounts] = await Promise.all([
+  const [transactions, bankAccounts, accountOptions] = await Promise.all([
     getBankTransactions({ limit: 500 }),
     getBankAccounts({ includeInactive: true }),
+    getCoaAccountOptions(),
   ]);
 
   return (
     <MutasiBankClient
       transactions={transactions}
       bankAccounts={bankAccounts}
+      accountOptions={accountOptions}
       roles={roles as string[]}
     />
   );

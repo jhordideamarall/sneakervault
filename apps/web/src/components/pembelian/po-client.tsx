@@ -12,6 +12,7 @@ import {
   Alert,
 } from "@sneakervault/ui";
 import { QuickTip } from "@/components/ui/quick-tip";
+import { exportToExcel, exportToPDF } from "@/lib/export";
 import { PO_STATUS_LABELS, PO_STATUS_TONES } from "@sneakervault/shared";
 import type { PoStatus } from "@sneakervault/shared";
 import { useToast } from "@/components/toast";
@@ -44,6 +45,9 @@ import {
   ClipboardList,
   Calendar,
   Package,
+  Receipt,
+  FileSpreadsheet,
+  Download,
 } from "lucide-react";
 
 type SupplierOpt = { id: string; name: string };
@@ -468,7 +472,12 @@ export function PurchaseOrderClient({
   }
 
   function handleDelete(id: string, poNumber: string) {
-    if (!confirm(`Hapus permanen ${poNumber}? Tidak bisa di-undo.`)) return;
+    if (
+      !confirm(
+        `Hapus ${poNumber}? Sistem akan auto-reverse pembayaran/faktur yang hanya terkait PO ini. Jika sudah ada penerimaan stok atau pembayaran gabungan, hapus akan ditahan.`,
+      )
+    )
+      return;
     startTransition(async () => {
       const r = await deletePurchaseOrder(id);
       if ("error" in r && r.error) {
@@ -479,6 +488,42 @@ export function PurchaseOrderClient({
       close();
       router.refresh();
     });
+  }
+
+  async function exportOrders(format: "pdf" | "excel") {
+    const rows = filtered.map((order) => [
+      order.po_number,
+      order.supplier_name,
+      fmtDate(order.order_date),
+      order.expected_date ? fmtDate(order.expected_date) : "",
+      order.line_count,
+      order.total,
+      PO_STATUS_LABELS[order.status],
+    ]);
+    const params = {
+      title: "Daftar Purchase Order",
+      sheetName: "Purchase Order",
+      filename:
+        format === "pdf"
+          ? "purchase-order.pdf"
+          : "purchase-order.xlsx",
+      columns: [
+        "No PO",
+        "Vendor",
+        "Tanggal",
+        "ETA",
+        "Items",
+        "Total",
+        "Status",
+      ],
+      rows,
+      summary: [
+        { label: "Total PO", value: String(filtered.length) },
+        { label: "Outstanding", value: fmtRupiah(stats.open_value) },
+      ],
+    };
+    if (format === "pdf") await exportToPDF(params);
+    else await exportToExcel(params);
   }
 
   return (
@@ -563,6 +608,14 @@ export function PurchaseOrderClient({
             </option>
           ))}
         </Select>
+        <Button type="button" variant="secondary" onClick={() => exportOrders("pdf")}>
+          <Download size={14} />
+          PDF
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => exportOrders("excel")}>
+          <FileSpreadsheet size={14} />
+          Excel
+        </Button>
       </div>
 
       {/* List */}
@@ -633,6 +686,28 @@ export function PurchaseOrderClient({
                             title="Edit"
                           >
                             <Pencil size={14} strokeWidth={1.8} />
+                          </button>
+                        ) : null}
+                        {canManage && ["approved", "receiving"].includes(o.status) ? (
+                          <button
+                            onClick={() =>
+                              router.push(`/pembelian/penerimaan?po=${o.id}`)
+                            }
+                            className="rounded p-1.5 text-sky-300/70 hover:bg-sky-500/10 hover:text-sky-200"
+                            title="Lanjut ke penerimaan barang"
+                          >
+                            <Package size={14} strokeWidth={1.8} />
+                          </button>
+                        ) : null}
+                        {canManage && ["receiving", "completed"].includes(o.status) ? (
+                          <button
+                            onClick={() =>
+                              router.push(`/pembelian/faktur?po=${o.id}`)
+                            }
+                            className="rounded p-1.5 text-emerald-300/70 hover:bg-emerald-500/10 hover:text-emerald-200"
+                            title="Lanjut ke faktur pembelian"
+                          >
+                            <Receipt size={14} strokeWidth={1.8} />
                           </button>
                         ) : null}
                       </div>
@@ -1352,14 +1427,14 @@ function ViewModal({
 
         <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] px-6 py-4 flex-shrink-0">
           <div className="flex items-center gap-2">
-            {canDelete && (po.status === "draft" || po.status === "cancelled") ? (
+            {canDelete && po.status !== "completed" ? (
               <button
                 onClick={onDelete}
                 disabled={pending}
                 className="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs text-white/60 hover:bg-red-500/10 hover:text-red-300"
               >
                 <Trash2 size={13} strokeWidth={1.8} />
-                Hapus permanen
+                Hapus PO
               </button>
             ) : null}
           </div>

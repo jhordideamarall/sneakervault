@@ -6,6 +6,8 @@ import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
 import { assertPeriodOpen } from "@/lib/fiscal-periods";
+import { deletePurchaseInvoice } from "./purchase-invoices";
+import { reverseVendorPayment } from "./vendor-payments";
 import { z } from "zod";
 
 const ROLES = ["owner", "finance"] as const;
@@ -187,13 +189,96 @@ export async function deletePurchaseOrder(id: string) {
 
   const { data: po } = await supabase
     .from("purchase_orders")
-    .select("status, po_number")
+    .select("status, po_number, purchase_order_lines(received_qty)")
     .eq("id", id)
     .single();
   if (!po) return { error: "PO tidak ditemukan" };
-  if (po.status !== "draft" && po.status !== "cancelled")
-    return { error: "Hanya PO Draft atau Cancelled yang bisa dihapus" };
+  if (po.status === "completed") {
+    return {
+      error:
+        "PO sudah selesai dan memiliki transaksi turunan. Reverse faktur/pembayaran dulu sebelum menghapus PO.",
+    };
+  }
 
+  const receivedQty = (
+    (po as unknown as { purchase_order_lines?: Array<{ received_qty: number | null }> })
+      .purchase_order_lines ?? []
+  ).reduce((sum, line) => sum + Number(line.received_qty ?? 0), 0);
+  if (receivedQty > 0) {
+    return {
+      error:
+        "PO sudah memiliki penerimaan barang. Batalkan/reverse faktur dan penerimaan terkait sebelum menghapus PO.",
+    };
+  }
+
+  const { data: invoices } = await supabase
+    .from("purchase_invoices")
+    .select("id, invoice_number, paid_amount, status")
+    .eq("po_id", id);
+  const invoiceRows = ((invoices ?? []) as Array<{
+    id: string;
+    invoice_number: string;
+    paid_amount: number | null;
+    status: string;
+  }>);
+  if (invoiceRows.length > 0) {
+    const invoiceIds = invoiceRows.map((invoice) => invoice.id);
+    const invoiceIdSet = new Set(invoiceIds);
+
+    const { data: paymentAllocations, error: allocationError } = await supabase
+      .from("vendor_payment_allocations")
+      .select("payment_id, invoice_id")
+      .in("invoice_id", invoiceIds);
+    if (allocationError) return { error: allocationError.message };
+
+    const paymentIds = Array.from(
+      new Set(((paymentAllocations ?? []) as Array<{ payment_id: string }>).map((a) => a.payment_id)),
+    );
+    if (paymentIds.length > 0) {
+      const { data: allPaymentAllocations, error: allAllocationError } = await supabase
+        .from("vendor_payment_allocations")
+        .select("payment_id, invoice_id")
+        .in("payment_id", paymentIds);
+      if (allAllocationError) return { error: allAllocationError.message };
+
+      const hasMixedPayment = ((allPaymentAllocations ?? []) as Array<{
+        invoice_id: string;
+      }>).some((allocation) => !invoiceIdSet.has(allocation.invoice_id));
+      if (hasMixedPayment) {
+        return {
+          error:
+            "PO memiliki pembayaran gabungan dengan faktur lain. Reverse pembayaran vendor manual dulu agar faktur lain tidak ikut terdampak.",
+        };
+      }
+
+      for (const paymentId of paymentIds) {
+        const reversed = await reverseVendorPayment(
+          paymentId,
+          `Auto reverse saat hapus PO ${po.po_number}`,
+        );
+        if (reversed.error) {
+          return {
+            error: `Gagal auto-reverse pembayaran vendor untuk PO ${po.po_number}: ${reversed.error}`,
+          };
+        }
+      }
+    }
+
+    for (const invoice of invoiceRows) {
+      const deletedInvoice = await deletePurchaseInvoice(invoice.id);
+      if (deletedInvoice.error) {
+        return {
+          error: `Gagal menghapus faktur ${invoice.invoice_number}: ${deletedInvoice.error}`,
+        };
+      }
+    }
+  }
+
+  await (supabase as any)
+    .from("pre_order_procurement_links")
+    .delete()
+    .eq("purchase_order_id", id);
+  await supabase.from("purchase_order_lines").delete().eq("po_id", id);
   const { error } = await supabase.from("purchase_orders").delete().eq("id", id);
   if (error) return { error: error.message };
 
@@ -205,6 +290,7 @@ export async function deletePurchaseOrder(id: string) {
     new_data: { po_number: po.po_number },
   });
   revalidatePath("/pembelian/purchase-order");
+  revalidatePath("/pre-order");
   return { success: true };
 }
 
