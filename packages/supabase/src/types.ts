@@ -1390,6 +1390,35 @@ export type Database = {
           },
         ]
       }
+      user_feature_tour_states: {
+        Row: {
+          dismissed_at: string
+          tour_key: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          dismissed_at?: string
+          tour_key: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          dismissed_at?: string
+          tour_key?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_feature_tour_states_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       packing_items: {
         Row: {
           barcode_scanned: string
