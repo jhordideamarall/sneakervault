@@ -84,3 +84,4 @@
 - Fixed asset register now has PDF/Excel export for acquisition value, accumulated depreciation, book value, method, location, department, and disposal status.
 - Purchase invoice delete now reverses purchase invoice journals before deletion, preventing orphan GL balances.
 - PO delete now supports approved PO cleanup when no stock has been received: exclusive related vendor payments are auto-reversed, invoices are deleted with journal reversal, and unsafe mixed payments/received stock are blocked.
+- QA fix after Vercel review: closing a PO-shortcut modal on `Pembelian -> Faktur` or `Pembelian -> Penerimaan` no longer reopens immediately from the lingering `?po=` URL.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -58,13 +58,17 @@ export function PenerimaanClient({
   const [detailCache, setDetailCache] =
     useState<Record<string, PoDetail>>(detailById);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+  const initialPoOpenedRef = useRef<string | null>(null);
 
   useEffect(() => {
     setDetailCache(detailById);
   }, [detailById]);
 
   useEffect(() => {
-    if (!initialPoId || receiving) return;
+    if (!initialPoId || receiving || initialPoOpenedRef.current === initialPoId) {
+      return;
+    }
+    initialPoOpenedRef.current = initialPoId;
     void startReceiveById(initialPoId);
   }, [initialPoId, receiving]);
 
@@ -139,6 +143,10 @@ export function PenerimaanClient({
   }
 
   function close() {
+    if (initialPoId) {
+      initialPoOpenedRef.current = initialPoId;
+      router.replace("/pembelian/penerimaan", { scroll: false });
+    }
     setReceiving(null);
     setForm([]);
     setNotes("");
@@ -451,8 +459,10 @@ function ReceiveModal({
             <p className="mt-1 text-sm text-white/50">{po.supplier_name}</p>
           </div>
           <button
+            type="button"
+            aria-label="Tutup penerimaan barang"
             onClick={onClose}
-            className="rounded p-1 text-white/50 hover:bg-white/[0.06] hover:text-white"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/[0.08] hover:text-white"
           >
             <X size={16} strokeWidth={1.8} />
           </button>

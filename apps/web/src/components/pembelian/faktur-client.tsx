@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -146,12 +146,16 @@ export function FakturPembelianClient({
   const [statusFilter, setStatusFilter] = useState<
     PurchaseInvoiceStatus | "all"
   >("all");
+  const initialPoOpenedRef = useRef<string | null>(null);
 
   const canManage = roles.includes("owner") || roles.includes("finance");
   const canDelete = roles.includes("owner");
 
   useEffect(() => {
-    if (!initialPoId || editing) return;
+    if (!initialPoId || editing || initialPoOpenedRef.current === initialPoId) {
+      return;
+    }
+    initialPoOpenedRef.current = initialPoId;
     setEditing({ mode: "new" });
     pickPo(initialPoId);
   }, [initialPoId, editing]);
@@ -225,6 +229,10 @@ export function FakturPembelianClient({
   }
 
   function close() {
+    if (initialPoId) {
+      initialPoOpenedRef.current = initialPoId;
+      router.replace("/pembelian/faktur", { scroll: false });
+    }
     setEditing(null);
   }
 
@@ -854,8 +862,10 @@ function FormModal({
               : `Edit ${editing.invoice.invoice_number}`}
           </h2>
           <button
+            type="button"
+            aria-label="Tutup faktur pembelian"
             onClick={onClose}
-            className="rounded p-1 text-white/50 hover:bg-white/[0.06] hover:text-white"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/[0.08] hover:text-white"
           >
             <X size={16} strokeWidth={1.8} />
           </button>
@@ -1289,8 +1299,10 @@ function ViewModal({
             <p className="mt-1 text-sm text-white/50">{invoice.supplier_name}</p>
           </div>
           <button
+            type="button"
+            aria-label="Tutup detail faktur"
             onClick={onClose}
-            className="rounded p-1 text-white/50 hover:bg-white/[0.06] hover:text-white"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/[0.08] hover:text-white"
           >
             <X size={16} strokeWidth={1.8} />
           </button>
