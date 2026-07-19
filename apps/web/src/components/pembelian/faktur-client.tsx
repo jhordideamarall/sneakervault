@@ -12,6 +12,7 @@ import {
   Alert,
 } from "@sneakervault/ui";
 import { QuickTip } from "@/components/ui/quick-tip";
+import { TransactionDeleteDialog } from "@/components/transaction-delete-dialog";
 import { exportToPDF } from "@/lib/export";
 import {
   PURCHASE_INVOICE_STATUS_LABELS,
@@ -23,9 +24,9 @@ import { formatRupiah as fmtRupiah, formatDate } from "@/lib/format";
 import {
   createPurchaseInvoice,
   updatePurchaseInvoice,
-  cancelPurchaseInvoice,
   deletePurchaseInvoice,
 } from "@/lib/actions/purchase-invoices";
+import type { TransactionDeleteResult } from "@/lib/actions/transaction-deletes";
 import type {
   PurchaseInvoiceRow,
   InvoicablePoRow,
@@ -36,7 +37,6 @@ import {
   Search,
   Eye,
   Pencil,
-  XCircle,
   Trash2,
   X,
   Receipt,
@@ -150,9 +150,14 @@ export function FakturPembelianClient({
     PurchaseInvoiceStatus | "all"
   >("all");
   const initialPoOpenedRef = useRef<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    referenceNumber: string;
+    blocker: TransactionDeleteResult | null;
+  } | null>(null);
 
   const canManage = roles.includes("owner") || roles.includes("finance");
-  const canDelete = roles.includes("owner");
+  const canDelete = canManage;
 
   useEffect(() => {
     if (!initialPoId || editing || initialPoOpenedRef.current === initialPoId) {
@@ -410,30 +415,25 @@ export function FakturPembelianClient({
     });
   }
 
-  function handleCancel(id: string) {
-    const reason = prompt("Alasan pembatalan? (opsional)");
-    if (reason === null) return;
-    startTransition(async () => {
-      const r = await cancelPurchaseInvoice(id, reason || undefined);
-      if ("error" in r && r.error) {
-        toast.push(typeof r.error === "string" ? r.error : "Gagal", "error");
-        return;
-      }
-      toast.push("Faktur dibatalkan", "success");
-      close();
-      router.refresh();
-    });
+  function openDelete(id: string, referenceNumber: string) {
+    setDeleteTarget({ id, referenceNumber, blocker: null });
   }
 
-  function handleDelete(id: string, num: string) {
-    if (!confirm(`Hapus permanen ${num}?`)) return;
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
     startTransition(async () => {
-      const r = await deletePurchaseInvoice(id);
+      const r = await deletePurchaseInvoice(target.id);
       if ("error" in r && r.error) {
         toast.push(typeof r.error === "string" ? r.error : "Gagal", "error");
         return;
       }
-      toast.push("Faktur dihapus", "success");
+      if (r.data && !r.data.deleted) {
+        setDeleteTarget({ ...target, blocker: r.data });
+        return;
+      }
+      toast.push("Faktur Pembelian dihapus", "success");
+      setDeleteTarget(null);
       close();
       router.refresh();
     });
@@ -452,7 +452,7 @@ export function FakturPembelianClient({
           rows: [
             ["No Faktur", invoice.invoice_number],
             ["Vendor", invoice.supplier_name],
-            ["Referensi PO", invoice.po_number ?? "Manual"],
+            ["Referensi Pembelian Barang", invoice.po_number ?? "Manual"],
             ["Tanggal Faktur", fmtDate(invoice.invoice_date)],
             ["Jatuh Tempo", fmtDate(invoice.due_date)],
             ["Status", PURCHASE_INVOICE_STATUS_LABELS[invoice.status]],
@@ -518,8 +518,9 @@ export function FakturPembelianClient({
       >
         Faktur catat <strong>tagihan dari vendor</strong>. Saat dibuat, sistem otomatis:
         Dr <em>Persediaan + Pajak Masukan</em> / Cr <em>Hutang Usaha (2.1.01)</em>.
-        Pilih dari PO yang sudah diterima — atau buat manual untuk pembelian tanpa PO.
+        Pilih dari Pembelian Barang supplier yang sudah diterima, atau buat manual untuk pembelian tanpa dokumen supplier.
         Setelah dicatat, lanjut ke <strong>Bayar Vendor</strong> untuk melunasi (sebagian / penuh).
+        Untuk koreksi salah input, hapus Pembayaran Vendor lebih dulu, lalu hapus Faktur Pembelian.
       </QuickTip>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -550,7 +551,7 @@ export function FakturPembelianClient({
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40"
           />
           <Input
-            placeholder="Cari nomor faktur, PO, atau vendor…"
+            placeholder="Cari nomor faktur, nomor pembelian, atau supplier…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -586,7 +587,7 @@ export function FakturPembelianClient({
               <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wider text-white/40">
                 <th className="px-4 py-3 font-medium">No Faktur</th>
                 <th className="px-4 py-3 font-medium">Vendor</th>
-                <th className="px-4 py-3 font-medium">Ref PO</th>
+                <th className="px-4 py-3 font-medium">Ref Pembelian</th>
                 <th className="px-4 py-3 font-medium">Tgl Faktur</th>
                 <th className="px-4 py-3 font-medium">Jatuh Tempo</th>
                 <th className="px-4 py-3 text-right font-medium">Total</th>
@@ -699,6 +700,16 @@ export function FakturPembelianClient({
                             <Pencil size={14} strokeWidth={1.8} />
                           </button>
                         ) : null}
+                        {canDelete ? (
+                          <button
+                            onClick={() => openDelete(i.id, i.invoice_number)}
+                            disabled={pending}
+                            className="rounded p-1.5 text-white/40 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
+                            title="Hapus Faktur Pembelian"
+                          >
+                            <Trash2 size={14} strokeWidth={1.8} />
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -737,14 +748,35 @@ export function FakturPembelianClient({
         <ViewModal
           invoice={editing.invoice}
           onClose={close}
-          canManage={canManage}
           canDelete={canDelete}
           pending={pending}
-          onCancel={() => handleCancel(editing.invoice.id)}
           onDelete={() =>
-            handleDelete(editing.invoice.id, editing.invoice.invoice_number)
+            openDelete(editing.invoice.id, editing.invoice.invoice_number)
           }
           onDownload={() => void exportInvoicePDF(editing.invoice)}
+        />
+      ) : null}
+      {deleteTarget ? (
+        <TransactionDeleteDialog
+          open
+          title={`Hapus Faktur Pembelian ${deleteTarget.referenceNumber}?`}
+          description="Faktur dan efek akuntansinya akan dihapus permanen, bukan dibatalkan atau dibuatkan reversal."
+          impacts={[
+            "Pembayaran Vendor yang masih teralokasi harus dihapus lebih dulu.",
+            "Jurnal asli Faktur Pembelian ikut dihapus.",
+            "Untuk faktur manual, stok, mutasi, dan kontribusi HPP ikut dikembalikan.",
+          ]}
+          pending={pending}
+          blocker={deleteTarget.blocker}
+          onOpenChange={(open) => !open && setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+          onOpenBlocker={() => {
+            const href = deleteTarget.blocker?.blocker_href;
+            if (!href) return;
+            setDeleteTarget(null);
+            close();
+            router.push(href);
+          }}
         />
       ) : null}
     </div>
@@ -902,10 +934,10 @@ function FormModal({
                 >
                   <div className="flex items-center gap-2 text-sm font-medium text-white">
                     <Link2 size={14} strokeWidth={1.8} />
-                    Dari PO
+                    Dari Pembelian Barang
                   </div>
                   <p className="mt-0.5 text-[11px] text-white/50">
-                    Auto-fill dari PO yang sudah diterima
+                    Auto-fill dari Pembelian Barang yang sudah diterima
                   </p>
                 </button>
                 <button
@@ -922,7 +954,7 @@ function FormModal({
                     Manual
                   </div>
                   <p className="mt-0.5 text-[11px] text-white/50">
-                    Pengeluaran non-PO (biaya ops, dll)
+                    Pengeluaran tanpa Pembelian Barang (biaya ops, dll)
                   </p>
                 </button>
               </div>
@@ -931,13 +963,13 @@ function FormModal({
 
           {form.source === "po" ? (
             <div>
-              <FieldLabel htmlFor="po_id">Pembelian Barang *</FieldLabel>
+              <FieldLabel htmlFor="po_id">Referensi Pembelian Barang *</FieldLabel>
               <Select
                 id="po_id"
                 value={form.po_id}
                 onChange={(e) => onPickPo(e.target.value)}
               >
-                <option value="">— Pilih PO —</option>
+                <option value="">— Pilih Pembelian Barang —</option>
                 {filteredPos.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.po_number} · {p.supplier_name} · {fmtRupiah(p.total)}
@@ -946,8 +978,9 @@ function FormModal({
               </Select>
               {filteredPos.length === 0 ? (
                 <p className="mt-1 text-[11px] text-white/40">
-                  Tidak ada PO yang siap difakturkan untuk vendor terpilih.
-                  Hanya PO status Receiving/Completed yang muncul.
+                  Tidak ada Pembelian Barang yang siap difakturkan untuk supplier
+                  terpilih. Hanya transaksi berstatus Receiving/Completed
+                  yang muncul.
                 </p>
               ) : null}
             </div>
@@ -1267,19 +1300,15 @@ function FormModal({
 function ViewModal({
   invoice,
   onClose,
-  canManage,
   canDelete,
   pending,
-  onCancel,
   onDelete,
   onDownload,
 }: {
   invoice: PurchaseInvoiceRow;
   onClose: () => void;
-  canManage: boolean;
   canDelete: boolean;
   pending: boolean;
-  onCancel: () => void;
   onDelete: () => void;
   onDownload: () => void;
 }) {
@@ -1350,7 +1379,7 @@ function ViewModal({
             {invoice.po_number ? (
               <Meta
                 icon={<Link2 size={11} strokeWidth={2} />}
-                label="Referensi PO"
+                label="Referensi Pembelian Barang"
                 value={invoice.po_number}
                 mono
               />
@@ -1462,9 +1491,7 @@ function ViewModal({
 
         <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-white/[0.06] px-6 py-4">
           <div>
-            {canDelete &&
-            (invoice.status === "unpaid" || invoice.status === "cancelled") &&
-            invoice.paid_amount === 0 ? (
+            {canDelete ? (
               <button
                 onClick={onDelete}
                 disabled={pending}
@@ -1483,20 +1510,6 @@ function ViewModal({
             <Button variant="ghost" onClick={onClose}>
               Tutup
             </Button>
-            {canManage &&
-            invoice.status !== "paid" &&
-            invoice.status !== "cancelled" &&
-            invoice.paid_amount === 0 ? (
-              <Button
-                variant="ghost"
-                onClick={onCancel}
-                disabled={pending}
-                className="gap-1.5 text-red-300 hover:bg-red-500/10"
-              >
-                <XCircle size={14} strokeWidth={1.8} />
-                Batalkan
-              </Button>
-            ) : null}
           </div>
         </div>
       </div>
@@ -1586,7 +1599,7 @@ function EmptyState({
       <p className="mx-auto mt-1 max-w-md text-sm text-white/50">
         {hasFilter
           ? "Coba ubah filter pencarian."
-          : "Buat faktur dari PO yang sudah diterima, atau manual untuk pengeluaran non-PO (sewa, listrik, gaji, dll)."}
+          : "Buat faktur dari Pembelian Barang yang sudah diterima, atau manual untuk pengeluaran tanpa dokumen supplier (sewa, listrik, gaji, dan lainnya)."}
       </p>
       {!hasFilter && onCreate ? (
         <Button onClick={onCreate} className="mt-5 gap-2">

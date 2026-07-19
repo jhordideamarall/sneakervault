@@ -11,6 +11,7 @@ import {
   Alert,
 } from "@sneakervault/ui";
 import { QuickTip } from "@/components/ui/quick-tip";
+import { TransactionDeleteDialog } from "@/components/transaction-delete-dialog";
 import { formatRupiah as fmtRupiah, formatDate } from "@/lib/format";
 import {
   CUSTOMER_CHANNELS,
@@ -26,10 +27,10 @@ import {
   createSalesInvoice,
   updateSalesInvoice,
   issueSalesInvoice,
-  cancelSalesInvoice,
   deleteSalesInvoice,
   loadSalesInvoiceDetailAction,
 } from "@/lib/actions/sales-invoices";
+import type { TransactionDeleteResult } from "@/lib/actions/transaction-deletes";
 import type {
   SalesInvoiceRow,
   SalesInvoiceDetail,
@@ -41,7 +42,6 @@ import {
   Search,
   Eye,
   Pencil,
-  XCircle,
   Trash2,
   X,
   FileText,
@@ -175,6 +175,11 @@ export function SalesInvoiceClient({
   const [detailCache, setDetailCache] =
     useState<Record<string, SalesInvoiceDetail>>(detailById);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    referenceNumber: string;
+    blocker: TransactionDeleteResult | null;
+  } | null>(null);
 
   useEffect(() => {
     setDetailCache(detailById);
@@ -184,7 +189,7 @@ export function SalesInvoiceClient({
     roles.includes("owner") ||
     roles.includes("finance") ||
     roles.includes("admin_online");
-  const canDelete = roles.includes("owner");
+  const canDelete = roles.includes("owner") || roles.includes("finance");
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -477,34 +482,25 @@ export function SalesInvoiceClient({
     });
   }
 
-  function handleCancel(id: string, status: string) {
-    const msg =
-      status === "issued" || status === "partial"
-        ? "Batalkan invoice ini? Stok akan dikembalikan."
-        : "Batalkan invoice ini?";
-    const reason = prompt(`${msg}\nAlasan (opsional):`);
-    if (reason === null) return;
-    startTransition(async () => {
-      const r = await cancelSalesInvoice(id, reason || undefined);
-      if ("error" in r && r.error) {
-        toast.push(typeof r.error === "string" ? r.error : "Gagal", "error");
-        return;
-      }
-      toast.push("Invoice dibatalkan", "success");
-      close();
-      router.refresh();
-    });
+  function openDelete(id: string, referenceNumber: string) {
+    setDeleteTarget({ id, referenceNumber, blocker: null });
   }
 
-  function handleDelete(id: string, num: string) {
-    if (!confirm(`Hapus permanen ${num}?`)) return;
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
     startTransition(async () => {
-      const r = await deleteSalesInvoice(id);
+      const r = await deleteSalesInvoice(target.id);
       if ("error" in r && r.error) {
         toast.push(typeof r.error === "string" ? r.error : "Gagal", "error");
         return;
       }
-      toast.push("Invoice dihapus", "success");
+      if (r.data && !r.data.deleted) {
+        setDeleteTarget({ ...target, blocker: r.data });
+        return;
+      }
+      toast.push("Invoice Penjualan dihapus", "success");
+      setDeleteTarget(null);
       close();
       router.refresh();
     });
@@ -545,6 +541,7 @@ export function SalesInvoiceClient({
       >
         <strong>Draft</strong> → <strong>Terbitkan</strong> (stok turun + jurnal Dr Piutang/Cr Pendapatan + Dr HPP/Cr Persediaan dibuat otomatis) → <strong>Penerimaan Kas</strong> (bayar piutang).
         Harga otomatis terisi sesuai kanal: <em>Online (Shopee/TikTok)</em> pakai harga online, <em>Offline (WA/Toko)</em> pakai harga offline. Jenis pesanan marketplace dibaca dari kolom status/type export. Biaya admin final dibukukan dari settlement.
+        Untuk koreksi salah input, hapus Penerimaan Customer lebih dulu, lalu hapus Invoice Penjualan.
       </QuickTip>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -750,6 +747,16 @@ export function SalesInvoiceClient({
                             <Pencil size={14} strokeWidth={1.8} />
                           </button>
                         ) : null}
+                        {canDelete ? (
+                          <button
+                            onClick={() => openDelete(i.id, i.invoice_number)}
+                            disabled={pending}
+                            className="rounded p-1.5 text-white/40 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
+                            title="Hapus Invoice Penjualan"
+                          >
+                            <Trash2 size={14} strokeWidth={1.8} />
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -790,11 +797,33 @@ export function SalesInvoiceClient({
           canDelete={canDelete}
           pending={pending}
           onIssue={() => handleIssue(editing.inv.id)}
-          onCancel={() => handleCancel(editing.inv.id, editing.inv.status)}
           onDelete={() =>
-            handleDelete(editing.inv.id, editing.inv.invoice_number)
+            openDelete(editing.inv.id, editing.inv.invoice_number)
           }
           onReceivePayment={() => openReceivePayment(editing.inv.id)}
+        />
+      ) : null}
+      {deleteTarget ? (
+        <TransactionDeleteDialog
+          open
+          title={`Hapus Invoice Penjualan ${deleteTarget.referenceNumber}?`}
+          description="Invoice accounting ini akan dibuang permanen, bukan dibatalkan atau dibuatkan reversal."
+          impacts={[
+            "Penerimaan Customer yang masih teralokasi harus dihapus lebih dulu.",
+            "Untuk invoice issued, stok dikembalikan dan mutasi serta jurnal penjualan dihapus.",
+            "Invoice POS, marketplace, packing, retur, dan settlement tetap dilindungi dan tidak dapat dihapus dari flow ini.",
+          ]}
+          pending={pending}
+          blocker={deleteTarget.blocker}
+          onOpenChange={(open) => !open && setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+          onOpenBlocker={() => {
+            const href = deleteTarget.blocker?.blocker_href;
+            if (!href) return;
+            setDeleteTarget(null);
+            close();
+            router.push(href);
+          }}
         />
       ) : null}
     </div>
@@ -1297,7 +1326,6 @@ function ViewModal({
   canDelete,
   pending,
   onIssue,
-  onCancel,
   onDelete,
   onReceivePayment,
 }: {
@@ -1307,7 +1335,6 @@ function ViewModal({
   canDelete: boolean;
   pending: boolean;
   onIssue: () => void;
-  onCancel: () => void;
   onDelete: () => void;
   onReceivePayment: () => void;
 }) {
@@ -1486,9 +1513,7 @@ function ViewModal({
 
         <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-white/[0.06] px-6 py-4">
           <div>
-            {canDelete &&
-            (inv.status === "draft" || inv.status === "cancelled") &&
-            inv.paid_amount === 0 ? (
+            {canDelete ? (
               <button
                 onClick={onDelete}
                 disabled={pending}
@@ -1503,20 +1528,6 @@ function ViewModal({
             <Button variant="ghost" onClick={onClose}>
               Tutup
             </Button>
-            {canManage &&
-            inv.status !== "paid" &&
-            inv.status !== "cancelled" &&
-            inv.paid_amount === 0 ? (
-              <Button
-                variant="ghost"
-                onClick={onCancel}
-                disabled={pending}
-                className="gap-1.5 text-red-300 hover:bg-red-500/10"
-              >
-                <XCircle size={14} strokeWidth={1.8} />
-                Batalkan
-              </Button>
-            ) : null}
             {canReceivePayment ? (
               <Button
                 variant="secondary"

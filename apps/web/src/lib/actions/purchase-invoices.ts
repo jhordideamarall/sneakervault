@@ -5,9 +5,10 @@ import { purchaseInvoiceInputSchema } from "@sneakervault/shared";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
-import { journalForPurchaseInvoice, reverseJournalBySource } from "../journal-engine";
+import { journalForPurchaseInvoice } from "../journal-engine";
 import { assertPeriodOpen } from "@/lib/fiscal-periods";
 import { createStockMovement } from "./stock-movements";
+import { deletePurchaseInvoiceAtomic } from "./transaction-deletes";
 
 const ROLES = ["owner", "finance"] as const;
 
@@ -266,120 +267,6 @@ export async function updatePurchaseInvoice(id: string, input: unknown) {
   return { success: true };
 }
 
-export async function cancelPurchaseInvoice(id: string, reason?: string) {
-  const profile = await requireRole([...ROLES]);
-  const supabase = await createClient();
-  const { data: existing } = await supabase
-    .from("purchase_invoices")
-    .select("status, paid_amount, notes, purchase_invoice_lines(id, product_id, qty, unit_cost)")
-    .eq("id", id)
-    .single();
-  if (!existing) return { error: "Faktur tidak ditemukan" };
-  if (existing.status === "paid")
-    return { error: "Faktur lunas tidak bisa dibatalkan" };
-  if (Number(existing.paid_amount) > 0)
-    return {
-      error:
-        "Faktur sudah ada pembayaran. Reverse pembayaran dulu sebelum membatalkan.",
-    };
-
-  const merged = reason
-    ? `${existing.notes ?? ""}\n[Dibatalkan]: ${reason}`.trim()
-    : existing.notes;
-
-  const manualLines =
-    ((existing as unknown as {
-      purchase_invoice_lines?: Array<{
-        id: string;
-        product_id: string;
-        qty: number;
-        unit_cost: number;
-      }> | null;
-    }).purchase_invoice_lines ?? []);
-
-  for (const line of manualLines) {
-    const { data: decremented, error: decrementError } = await supabase.rpc(
-      "decrement_product_quantity",
-      {
-        p_id: line.product_id,
-        qty: Number(line.qty),
-      },
-    );
-    if (decrementError || !decremented) {
-      return {
-        error:
-          decrementError?.message ??
-          "Stok produk tidak cukup untuk membatalkan faktur manual ini",
-      };
-    }
-
-    const movement = await createStockMovement(supabase, {
-      product_id: line.product_id,
-      type: "adjustment",
-      quantity: Number(line.qty),
-      unit_cost: Number(line.unit_cost),
-      reference_type: "purchase_invoice_cancel",
-      reference_id: line.id,
-      notes: `Rollback stok dari pembatalan faktur${reason ? `: ${reason}` : ""}`,
-    });
-    if (movement.error) return { error: movement.error };
-  }
-
-  const { error } = await supabase
-    .from("purchase_invoices")
-    .update({ status: "cancelled", notes: merged })
-    .eq("id", id);
-  if (error) return { error: error.message };
-
-  await reverseJournalBySource("purchase_invoice", id, reason);
-
-  await logActivity({
-    user_id: profile.id,
-    action: "cancel",
-    entity_type: "purchase_invoice",
-    entity_id: id,
-    new_data: { reason },
-  });
-  revalidatePath("/pembelian/faktur");
-  revalidatePath("/inventory");
-  revalidatePath("/buku-besar/journal");
-  return { success: true };
-}
-
 export async function deletePurchaseInvoice(id: string) {
-  const profile = await requireRole(["owner"]);
-  const supabase = await createClient();
-  const { data: existing } = await supabase
-    .from("purchase_invoices")
-    .select("status, paid_amount, invoice_number")
-    .eq("id", id)
-    .single();
-  if (!existing) return { error: "Faktur tidak ditemukan" };
-  if (Number(existing.paid_amount) > 0)
-    return { error: "Faktur dengan pembayaran tidak bisa dihapus" };
-
-  if (existing.status !== "cancelled") {
-    const journal = await reverseJournalBySource(
-      "purchase_invoice",
-      id,
-      "Delete faktur pembelian",
-    );
-    if (journal.error) return { error: journal.error };
-  }
-
-  const { error } = await supabase
-    .from("purchase_invoices")
-    .delete()
-    .eq("id", id);
-  if (error) return { error: error.message };
-
-  await logActivity({
-    user_id: profile.id,
-    action: "delete",
-    entity_type: "purchase_invoice",
-    entity_id: id,
-    new_data: { invoice_number: existing.invoice_number },
-  });
-  revalidatePath("/pembelian/faktur");
-  return { success: true };
+  return deletePurchaseInvoiceAtomic(id);
 }

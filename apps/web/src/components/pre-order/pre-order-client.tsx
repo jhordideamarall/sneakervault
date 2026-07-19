@@ -338,7 +338,7 @@ export function PreOrderClient({
         return;
       }
       toast.push(
-        `PO Pembelian ${result.data?.po_number ?? ""} dibuat dari Pre Order`,
+        `Pembelian Barang ${result.data?.po_number ?? ""} dibuat dari Pre Order`,
         "success",
       );
       setProcurementOrder(null);
@@ -487,9 +487,9 @@ export function PreOrderClient({
                     type="button"
                     onClick={() => openProcurement(order)}
                     className="rounded-lg px-2 py-1.5 text-xs font-medium text-sky-300 hover:bg-sky-500/10"
-                    title="Buat PO Pembelian dari kekurangan Pre Order"
+                    title="Buat Pembelian Barang dari kekurangan Pre Order"
                   >
-                    Buat PO
+                    Buat Pembelian Barang
                   </button>
                 ) : null}
                 {canManage && order.computed_status !== "cancelled" ? (
@@ -607,7 +607,7 @@ function ProcurementModal({
         <div className="flex items-start justify-between border-b border-white/[0.06] px-6 py-4">
           <div>
             <h2 className="text-base font-semibold text-white">
-              Buat PO Pembelian dari Pre Order
+              Buat Pembelian Barang dari Pre Order
             </h2>
             <p className="mt-1 text-xs text-white/45">
               Customer {order.customer_name}
@@ -689,8 +689,9 @@ function ProcurementModal({
           </div>
 
           <Alert tone="info" className="text-xs leading-relaxed">
-            PO dibuat sebagai Draft. Saat PO diterima, barang masuk inventory dan
-            link Pre Order tetap tersimpan untuk tracking demand.
+            Dokumen Pembelian Barang dibuat sebagai Draft. Saat Pembelian Barang
+            diterima, barang masuk inventory dan link Pre Order tetap tersimpan
+            untuk tracking demand.
           </Alert>
         </div>
 
@@ -699,7 +700,7 @@ function ProcurementModal({
             Batal
           </Button>
           <Button onClick={onCreate} disabled={pending || suppliers.length === 0}>
-            {pending ? "Membuat..." : "Buat PO Pembelian"}
+            {pending ? "Membuat..." : "Buat Pembelian Barang"}
           </Button>
         </div>
       </div>
@@ -910,7 +911,7 @@ function PreOrderModal({
                 onChange={(event) =>
                   setForm({ ...form, marketplace_status: event.target.value })
                 }
-                placeholder="Contoh: Perlu dikirim / PO / Menunggu pembayaran"
+                placeholder="Contoh: Perlu dikirim / Menunggu pengadaan / Menunggu pembayaran"
               />
             </div>
             <div>

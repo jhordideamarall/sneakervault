@@ -6,8 +6,7 @@ import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
 import { assertPeriodOpen } from "@/lib/fiscal-periods";
-import { deletePurchaseInvoice } from "./purchase-invoices";
-import { reverseVendorPayment } from "./vendor-payments";
+import { deletePurchaseOrderAtomic } from "./transaction-deletes";
 import { z } from "zod";
 
 const ROLES = ["owner", "finance"] as const;
@@ -151,147 +150,65 @@ export async function approvePurchaseOrder(id: string) {
 
 export async function cancelPurchaseOrder(id: string, reason?: string) {
   const profile = await requireRole([...ROLES]);
+  const cleanReason = reason?.trim();
+  if (!cleanReason) return { error: "Alasan pembatalan supplier wajib diisi" };
+
   const supabase = await createClient();
 
   const { data: po } = await supabase
     .from("purchase_orders")
-    .select("status, notes")
+    .select("status, notes, purchase_order_lines(received_qty)")
     .eq("id", id)
     .single();
   if (!po) return { error: "PO tidak ditemukan" };
-  if (po.status === "completed" || po.status === "cancelled")
-    return { error: "PO ini tidak bisa dibatalkan" };
+  if (po.status === "cancelled") return { error: "PO sudah dibatalkan" };
+  const receivedQty = (
+    (po.purchase_order_lines ?? []) as Array<{ received_qty: number | null }>
+  ).reduce((sum, line) => sum + Number(line.received_qty ?? 0), 0);
+  const { count: receiptCount, error: receiptError } = await supabase
+    .from("purchase_receipts")
+    .select("id", { count: "exact", head: true })
+    .eq("po_id", id);
+  if (receiptError) return { error: receiptError.message };
 
-  const newNotes = reason
-    ? `${po.notes ?? ""}\n[Dibatalkan]: ${reason}`.trim()
-    : po.notes;
+  if (receivedQty > 0 || Number(receiptCount ?? 0) > 0) {
+    return {
+      error:
+        "Pembelian Barang sudah memiliki Penerimaan Barang. Gunakan alur Hapus berurutan untuk koreksi data.",
+    };
+  }
 
-  const { error } = await supabase
+  const newNotes =
+    `${po.notes ?? ""}\n[Dibatalkan supplier]: ${cleanReason}`.trim();
+
+  const { data: cancelledPo, error } = await supabase
     .from("purchase_orders")
     .update({ status: "cancelled", notes: newNotes })
-    .eq("id", id);
+    .eq("id", id)
+    .in("status", ["draft", "approved"])
+    .select("id")
+    .maybeSingle();
   if (error) return { error: error.message };
+  if (!cancelledPo) {
+    return {
+      error:
+        "Status Pembelian Barang sudah berubah. Muat ulang halaman dan periksa Penerimaan Barang sebelum membatalkan.",
+    };
+  }
 
   await logActivity({
     user_id: profile.id,
     action: "cancel",
     entity_type: "purchase_order",
     entity_id: id,
-    new_data: { reason },
+    new_data: { reason: cleanReason },
   });
   revalidatePath("/pembelian/purchase-order");
   return { success: true };
 }
 
 export async function deletePurchaseOrder(id: string) {
-  const profile = await requireRole(["owner"]);
-  const supabase = await createClient();
-
-  const { data: po } = await supabase
-    .from("purchase_orders")
-    .select("status, po_number, purchase_order_lines(received_qty)")
-    .eq("id", id)
-    .single();
-  if (!po) return { error: "PO tidak ditemukan" };
-  if (po.status === "completed") {
-    return {
-      error:
-        "PO sudah selesai dan memiliki transaksi turunan. Reverse faktur/pembayaran dulu sebelum menghapus PO.",
-    };
-  }
-
-  const receivedQty = (
-    (po as unknown as { purchase_order_lines?: Array<{ received_qty: number | null }> })
-      .purchase_order_lines ?? []
-  ).reduce((sum, line) => sum + Number(line.received_qty ?? 0), 0);
-  if (receivedQty > 0) {
-    return {
-      error:
-        "PO sudah memiliki penerimaan barang. Batalkan/reverse faktur dan penerimaan terkait sebelum menghapus PO.",
-    };
-  }
-
-  const { data: invoices } = await supabase
-    .from("purchase_invoices")
-    .select("id, invoice_number, paid_amount, status")
-    .eq("po_id", id);
-  const invoiceRows = ((invoices ?? []) as Array<{
-    id: string;
-    invoice_number: string;
-    paid_amount: number | null;
-    status: string;
-  }>);
-  if (invoiceRows.length > 0) {
-    const invoiceIds = invoiceRows.map((invoice) => invoice.id);
-    const invoiceIdSet = new Set(invoiceIds);
-
-    const { data: paymentAllocations, error: allocationError } = await supabase
-      .from("vendor_payment_allocations")
-      .select("payment_id, invoice_id")
-      .in("invoice_id", invoiceIds);
-    if (allocationError) return { error: allocationError.message };
-
-    const paymentIds = Array.from(
-      new Set(((paymentAllocations ?? []) as Array<{ payment_id: string }>).map((a) => a.payment_id)),
-    );
-    if (paymentIds.length > 0) {
-      const { data: allPaymentAllocations, error: allAllocationError } = await supabase
-        .from("vendor_payment_allocations")
-        .select("payment_id, invoice_id")
-        .in("payment_id", paymentIds);
-      if (allAllocationError) return { error: allAllocationError.message };
-
-      const hasMixedPayment = ((allPaymentAllocations ?? []) as Array<{
-        invoice_id: string;
-      }>).some((allocation) => !invoiceIdSet.has(allocation.invoice_id));
-      if (hasMixedPayment) {
-        return {
-          error:
-            "PO memiliki pembayaran gabungan dengan faktur lain. Reverse pembayaran vendor manual dulu agar faktur lain tidak ikut terdampak.",
-        };
-      }
-
-      for (const paymentId of paymentIds) {
-        const reversed = await reverseVendorPayment(
-          paymentId,
-          `Auto reverse saat hapus PO ${po.po_number}`,
-        );
-        if (reversed.error) {
-          return {
-            error: `Gagal auto-reverse pembayaran vendor untuk PO ${po.po_number}: ${reversed.error}`,
-          };
-        }
-      }
-    }
-
-    for (const invoice of invoiceRows) {
-      const deletedInvoice = await deletePurchaseInvoice(invoice.id);
-      if (deletedInvoice.error) {
-        return {
-          error: `Gagal menghapus faktur ${invoice.invoice_number}: ${deletedInvoice.error}`,
-        };
-      }
-    }
-  }
-
-  await (supabase as any)
-    .from("pre_order_procurement_links")
-    .delete()
-    .eq("purchase_order_id", id);
-  await supabase.from("purchase_order_lines").delete().eq("po_id", id);
-  const { error } = await supabase.from("purchase_orders").delete().eq("id", id);
-  if (error) return { error: error.message };
-
-  await logActivity({
-    user_id: profile.id,
-    action: "delete",
-    entity_type: "purchase_order",
-    entity_id: id,
-    new_data: { po_number: po.po_number },
-  });
-  revalidatePath("/pembelian/purchase-order");
-  revalidatePath("/pre-order");
-  return { success: true };
+  return deletePurchaseOrderAtomic(id);
 }
 
 export async function updatePurchaseOrder(id: string, input: unknown) {
@@ -448,7 +365,7 @@ export async function createPurchaseOrderFromPreOrder(input: unknown) {
     return { error: { _form: ["Pre Order tidak ditemukan"] } };
   }
   if (["cancelled", "packed"].includes(String(preOrder.status))) {
-    return { error: { _form: ["Pre Order ini tidak bisa dibuatkan PO Pembelian"] } };
+    return { error: { _form: ["Pre Order ini tidak bisa dibuatkan Pembelian Barang"] } };
   }
 
   const lines = ((preOrder.pre_order_lines ?? []) as PreOrderLineForPo[])
@@ -470,7 +387,7 @@ export async function createPurchaseOrderFromPreOrder(input: unknown) {
     return {
       error: {
         _form: [
-          "Tidak ada item yang perlu dibelikan. Semua item sudah ready atau sudah punya link PO Pembelian.",
+          "Tidak ada item yang perlu dibelikan. Semua item sudah ready atau sudah punya link Pembelian Barang.",
         ],
       },
     };
@@ -512,7 +429,7 @@ export async function createPurchaseOrderFromPreOrder(input: unknown) {
     .single();
 
   if (poErr || !po) {
-    return { error: { _form: [poErr?.message ?? "Gagal membuat PO Pembelian"] } };
+    return { error: { _form: [poErr?.message ?? "Gagal membuat Pembelian Barang"] } };
   }
 
   const createdLinks: Array<{
@@ -548,7 +465,7 @@ export async function createPurchaseOrderFromPreOrder(input: unknown) {
       await supabase.from("purchase_orders").delete().eq("id", po.id);
       return {
         error: {
-          _form: [lineErr?.message ?? "Gagal membuat line PO Pembelian"],
+          _form: [lineErr?.message ?? "Gagal membuat item Pembelian Barang"],
         },
       };
     }

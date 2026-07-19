@@ -7,14 +7,28 @@ import {
   Input,
   Alert,
   FieldLabel,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
 } from "@sneakervault/ui";
 import { PO_STATUS_LABELS, PO_STATUS_TONES } from "@sneakervault/shared";
 import { useToast } from "@/components/toast";
 import { QuickTip } from "@/components/ui/quick-tip";
+import { TransactionDeleteDialog } from "@/components/transaction-delete-dialog";
 import { formatRupiah as fmtRupiah, formatDate as fmtDate } from "@/lib/format";
-import { receivePurchaseOrder } from "@/lib/actions/purchase-receive";
+import {
+  deletePurchaseReceipt,
+  receivePurchaseOrder,
+} from "@/lib/actions/purchase-receive";
 import { loadPoDetailAction } from "@/lib/actions/purchase-orders";
-import type { ReceivablePoRow, PoDetail } from "@/lib/queries";
+import type { TransactionDeleteResult } from "@/lib/actions/transaction-deletes";
+import type {
+  ReceivablePoRow,
+  PoDetail,
+  PurchaseReceiptRow,
+} from "@/lib/queries";
 import {
   PackagePlus,
   Search,
@@ -23,6 +37,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Truck,
+  History,
+  Trash2,
+  Eye,
 } from "lucide-react";
 
 type ReceiveLineForm = {
@@ -38,13 +55,17 @@ type ReceiveLineForm = {
 
 export function PenerimaanClient({
   receivablePos,
+  receipts,
   detailById,
   initialPoId,
+  initialTab,
   roles,
 }: {
   receivablePos: ReceivablePoRow[];
+  receipts: PurchaseReceiptRow[];
   detailById: Record<string, PoDetail>;
   initialPoId?: string;
+  initialTab: "queue" | "history";
   roles: string[];
 }) {
   const router = useRouter();
@@ -58,6 +79,13 @@ export function PenerimaanClient({
   const [detailCache, setDetailCache] =
     useState<Record<string, PoDetail>>(detailById);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"queue" | "history">(initialTab);
+  const [deletingReceipt, setDeletingReceipt] =
+    useState<PurchaseReceiptRow | null>(null);
+  const [viewingReceipt, setViewingReceipt] =
+    useState<PurchaseReceiptRow | null>(null);
+  const [deleteBlocker, setDeleteBlocker] =
+    useState<TransactionDeleteResult | null>(null);
   const initialPoOpenedRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -76,6 +104,7 @@ export function PenerimaanClient({
     roles.includes("owner") ||
     roles.includes("admin_gudang") ||
     roles.includes("finance");
+  const canDelete = roles.includes("owner") || roles.includes("finance");
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -127,7 +156,7 @@ export function PenerimaanClient({
         error?: string;
       };
       if (result.error || !result.data) {
-        toast.push(result.error ?? "Detail PO tidak ditemukan", "error");
+        toast.push(result.error ?? "Detail Pembelian Barang tidak ditemukan", "error");
         return null;
       }
       setDetailCache((prev) => ({ ...prev, [id]: result.data! }));
@@ -215,11 +244,12 @@ export function PenerimaanClient({
       if (r.new_status === "completed") {
         if (r.auto_payment_id && r.auto_payment_amount) {
           const amtFmt = `Rp ${Math.round(r.auto_payment_amount).toLocaleString("id-ID")}`;
-          statusLabel = `PO selesai. Faktur + Pembayaran auto-dibuat (${amtFmt}) ✓`;
+          statusLabel = `Pembelian Barang selesai. Faktur dan Pembayaran Vendor dibuat otomatis (${amtFmt})`;
         } else if (r.auto_invoice_id) {
-          statusLabel = "PO selesai. Faktur Pembelian otomatis dibuat ✓";
+          statusLabel =
+            "Pembelian Barang selesai. Faktur Pembelian dibuat otomatis";
         } else {
-          statusLabel = "PO selesai diterima";
+          statusLabel = "Pembelian Barang selesai diterima";
         }
       }
       toast.push(
@@ -227,6 +257,29 @@ export function PenerimaanClient({
         "success",
       );
       close();
+      router.refresh();
+    });
+  }
+
+  function confirmDeleteReceipt() {
+    if (!deletingReceipt) return;
+    const receipt = deletingReceipt;
+    startTransition(async () => {
+      const result = await deletePurchaseReceipt(receipt.id);
+      if (result.error) {
+        toast.push(result.error, "error");
+        return;
+      }
+      if (!result.data?.deleted) {
+        if (result.data) setDeleteBlocker(result.data);
+        return;
+      }
+      setDeletingReceipt(null);
+      setDeleteBlocker(null);
+      toast.push(
+        `Penerimaan ${result.data.reference_number} berhasil dihapus`,
+        "success",
+      );
       router.refresh();
     });
   }
@@ -243,27 +296,56 @@ export function PenerimaanClient({
               Penerimaan Barang
             </h1>
             <p className="text-sm text-white/50">
-              PO yang sudah disetujui dan siap diterima di gudang
+              Pembelian Barang supplier yang sudah disetujui dan siap diterima
             </p>
           </div>
         </div>
       </div>
 
       <QuickTip
-        id="pembelian-penerimaan-intro"
+        id="pembelian-penerimaan-intro-v2"
         title="Apa yang terjadi saat Anda klik Terima"
         tone="info"
       >
         Saat Anda terima barang, sistem akan: <strong>(1)</strong> tambah stok di inventory,{" "}
         <strong>(2)</strong> hitung ulang HPP rata-rata per SKU,{" "}
-        <strong>(3)</strong> set status PO jadi <em>Receiving</em> (parsial) atau{" "}
+        <strong>(3)</strong> set status Pembelian Barang menjadi <em>Receiving</em> (parsial) atau{" "}
         <em>Completed</em> (full).{" "}
-        <strong>✨ Saat PO completed, Faktur Pembelian otomatis dibuat</strong> — tidak perlu input ulang manual.
+        <strong>Saat Pembelian Barang selesai, Faktur Pembelian otomatis dibuat</strong> sehingga tidak perlu input ulang.
         Tinggal cek dan lanjut ke <strong>Bayar Vendor</strong>.
+        Untuk koreksi salah input, hapus Faktur Pembelian lebih dulu, lalu hapus dokumen RCV di Riwayat Penerimaan.
       </QuickTip>
 
+      <div className="inline-flex rounded-lg border border-white/[0.08] bg-[#222] p-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab("queue")}
+          className={`rounded-md px-4 py-2 text-sm font-medium transition ${
+            activeTab === "queue"
+              ? "bg-white text-black"
+              : "text-white/55 hover:text-white"
+          }`}
+        >
+          Antrian Penerimaan
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("history")}
+          className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition ${
+            activeTab === "history"
+              ? "bg-white text-black"
+              : "text-white/55 hover:text-white"
+          }`}
+        >
+          <History size={14} />
+          Riwayat Penerimaan
+        </button>
+      </div>
+
+      {activeTab === "queue" ? (
+        <>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile label="Antrian PO" value={stats.total.toString()} />
+        <StatTile label="Antrian Pembelian Barang" value={stats.total.toString()} />
         <StatTile
           label="Siap Diterima"
           value={stats.approved.toString()}
@@ -288,7 +370,7 @@ export function PenerimaanClient({
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40"
           />
           <Input
-            placeholder="Cari nomor PO atau vendor…"
+            placeholder="Cari nomor pembelian atau supplier…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -405,6 +487,263 @@ export function PenerimaanClient({
           onSubmit={submit}
         />
       ) : null}
+        </>
+      ) : (
+        <ReceiptHistory
+          receipts={receipts}
+          canDelete={canDelete}
+          onView={setViewingReceipt}
+          onDelete={(receipt) => {
+            setDeletingReceipt(receipt);
+            setDeleteBlocker(null);
+          }}
+        />
+      )}
+
+      {viewingReceipt ? (
+        <ReceiptDetailDialog
+          receipt={viewingReceipt}
+          canDelete={canDelete}
+          pending={pending}
+          onOpenChange={(open) => !open && setViewingReceipt(null)}
+          onDelete={() => {
+            setViewingReceipt(null);
+            setDeletingReceipt(viewingReceipt);
+            setDeleteBlocker(null);
+          }}
+        />
+      ) : null}
+
+      {deletingReceipt ? (
+        <TransactionDeleteDialog
+          open
+          title={`Hapus Penerimaan ${deletingReceipt.receipt_number}?`}
+          description="Dokumen RCV dan seluruh efek penerimaan fisiknya akan dihapus permanen."
+          impacts={[
+            `Faktur Pembelian untuk ${deletingReceipt.po_number} harus dihapus lebih dulu.`,
+            "Stok, mutasi masuk, kontribusi HPP, received qty, dan status Pembelian Barang dihitung ulang.",
+            "Produk master dan Pre Order customer tidak ikut dihapus.",
+          ]}
+          pending={pending}
+          blocker={deleteBlocker}
+          onOpenChange={(open) => {
+            if (open) return;
+            setDeletingReceipt(null);
+            setDeleteBlocker(null);
+          }}
+          onConfirm={confirmDeleteReceipt}
+          onOpenBlocker={() => {
+            const href = deleteBlocker?.blocker_href;
+            if (!href) return;
+            setDeletingReceipt(null);
+            setDeleteBlocker(null);
+            router.push(href);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ReceiptHistory({
+  receipts,
+  canDelete,
+  onView,
+  onDelete,
+}: {
+  receipts: PurchaseReceiptRow[];
+  canDelete: boolean;
+  onView: (receipt: PurchaseReceiptRow) => void;
+  onDelete: (receipt: PurchaseReceiptRow) => void;
+}) {
+  if (receipts.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-white/10 bg-[#262626] px-6 py-16 text-center">
+        <History size={32} className="mx-auto mb-4 text-white/30" />
+        <h3 className="text-base font-medium text-white">
+          Belum ada riwayat penerimaan
+        </h3>
+        <p className="mt-1 text-sm text-white/50">
+          Dokumen RCV akan muncul setelah Pembelian Barang diterima.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-white/[0.06] bg-[#262626]">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[860px] text-sm">
+          <thead className="bg-[#1f1f1f] text-left text-[11px] uppercase tracking-wider text-white/40">
+            <tr>
+              <th className="px-4 py-3 font-medium">Penerimaan</th>
+              <th className="px-4 py-3 font-medium">No. Pembelian</th>
+              <th className="px-4 py-3 font-medium">Vendor</th>
+              <th className="px-4 py-3 font-medium">Tanggal</th>
+              <th className="px-4 py-3 text-right font-medium">Qty</th>
+              <th className="px-4 py-3 text-right font-medium">Nilai</th>
+              <th className="px-4 py-3 text-right font-medium">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {receipts.map((receipt) => (
+              <tr
+                key={receipt.id}
+                className="border-t border-white/[0.05] text-white/72"
+              >
+                <td className="px-4 py-3">
+                  <div className="font-mono font-semibold text-white">
+                    {receipt.receipt_number}
+                  </div>
+                  <div className="mt-1 max-w-[260px] truncate text-xs text-white/40">
+                    {receipt.lines.map((line) => line.product_label).join(", ")}
+                  </div>
+                </td>
+                <td className="px-4 py-3 font-mono text-xs">
+                  {receipt.po_number}
+                </td>
+                <td className="px-4 py-3">{receipt.supplier_name}</td>
+                <td className="px-4 py-3">{fmtDate(receipt.receipt_date)}</td>
+                <td className="px-4 py-3 text-right tabular-nums">
+                  {receipt.total_quantity}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums">
+                  {fmtRupiah(receipt.total_value)}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="inline-flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onView(receipt)}
+                      className="rounded p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white"
+                      title="Lihat detail penerimaan"
+                    >
+                      <Eye size={14} strokeWidth={1.8} />
+                    </button>
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        onClick={() => onDelete(receipt)}
+                        className="rounded p-1.5 text-white/40 hover:bg-red-500/10 hover:text-red-300"
+                        title="Hapus penerimaan"
+                      >
+                        <Trash2 size={14} strokeWidth={1.8} />
+                      </button>
+                    ) : null}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ReceiptDetailDialog({
+  receipt,
+  canDelete,
+  pending,
+  onOpenChange,
+  onDelete,
+}: {
+  receipt: PurchaseReceiptRow;
+  canDelete: boolean;
+  pending: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDelete: () => void;
+}) {
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl rounded-lg">
+        <DialogHeader className="pr-10">
+          <DialogTitle>Penerimaan {receipt.receipt_number}</DialogTitle>
+          <DialogDescription>
+            Pembelian Barang {receipt.po_number} dari {receipt.supplier_name}
+          </DialogDescription>
+        </DialogHeader>
+
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm md:grid-cols-4">
+          <DetailTerm label="Tanggal" value={fmtDate(receipt.receipt_date)} />
+          <DetailTerm
+            label="Total Qty"
+            value={receipt.total_quantity.toLocaleString("id-ID")}
+          />
+          <DetailTerm label="Total Nilai" value={fmtRupiah(receipt.total_value)} />
+          <DetailTerm
+            label="Dibuat oleh"
+            value={receipt.created_by_name ?? "Sistem"}
+          />
+        </dl>
+
+        <div className="overflow-x-auto rounded-md border border-white/[0.06]">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead className="bg-white/[0.03] text-left text-[11px] uppercase text-white/40">
+              <tr>
+                <th className="px-3 py-2 font-medium">Produk</th>
+                <th className="px-3 py-2 text-right font-medium">Qty</th>
+                <th className="px-3 py-2 text-right font-medium">Biaya/Unit</th>
+                <th className="px-3 py-2 text-right font-medium">Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              {receipt.lines.map((line) => (
+                <tr key={line.id} className="border-t border-white/[0.05]">
+                  <td className="px-3 py-2 text-white/75">{line.product_label}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-white/70">
+                    {line.quantity}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-white/70">
+                    {fmtRupiah(line.unit_cost)}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-white">
+                    {fmtRupiah(line.quantity * line.unit_cost)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {receipt.notes ? (
+          <div className="text-sm">
+            <div className="text-xs uppercase tracking-wide text-white/40">
+              Catatan
+            </div>
+            <p className="mt-1 whitespace-pre-wrap text-white/65">{receipt.notes}</p>
+          </div>
+        ) : null}
+
+        <div className="flex justify-between gap-2 border-t border-white/[0.06] pt-4">
+          <div>
+            {canDelete ? (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={pending}
+                className="gap-2 text-red-300 hover:text-red-200"
+                onClick={onDelete}
+              >
+                <Trash2 size={14} />
+                Hapus Penerimaan
+              </Button>
+            ) : null}
+          </div>
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+            Tutup
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DetailTerm({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-white/40">{label}</dt>
+      <dd className="mt-1 font-medium text-white/75">{value}</dd>
     </div>
   );
 }
@@ -452,7 +791,7 @@ function ReceiveModal({
             <div className="flex items-center gap-2">
               <PackagePlus size={16} strokeWidth={1.8} className="text-white/60" />
               <h2 className="text-base font-semibold text-white">
-                Terima Barang dari{" "}
+                Terima Barang dari Pembelian{" "}
                 <span className="font-mono">{po.po_number}</span>
               </h2>
             </div>
@@ -662,11 +1001,12 @@ function EmptyState() {
         className="mx-auto mb-4 text-white/30"
       />
       <h3 className="text-base font-medium text-white">
-        Tidak ada PO yang menunggu diterima
+        Tidak ada Pembelian Barang yang menunggu diterima
       </h3>
       <p className="mx-auto mt-1 max-w-md text-sm text-white/50">
-        Penerimaan akan muncul di sini setelah finance menyetujui Pembelian Barang.
-        Buat dan setujui PO baru di menu <strong>Pembelian → Pembelian Barang</strong>.
+        Penerimaan akan muncul di sini setelah Finance menyetujui Pembelian Barang.
+        Buat dan setujui transaksi baru di menu{" "}
+        <strong>Pembelian → Pembelian Barang</strong>.
       </p>
     </div>
   );

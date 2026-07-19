@@ -5,9 +5,10 @@ import { salesInvoiceInputSchema } from "@sneakervault/shared";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
-import { journalForSalesInvoice, reverseJournalBySource } from "../journal-engine";
+import { journalForSalesInvoice } from "../journal-engine";
 import { assertPeriodOpen } from "@/lib/fiscal-periods";
 import { createStockMovement } from "./stock-movements";
+import { deleteSalesInvoiceAtomic } from "./transaction-deletes";
 
 const ROLES = ["owner", "finance", "admin_online"] as const;
 
@@ -314,101 +315,8 @@ export async function issueSalesInvoice(id: string) {
   return { success: true };
 }
 
-export async function cancelSalesInvoice(id: string, reason?: string) {
-  const profile = await requireRole([...ROLES]);
-  const supabase = await createClient();
-
-  const { data: inv } = await supabase
-    .from("sales_invoices")
-    .select(
-      "status, paid_amount, notes, sales_invoice_lines(product_id, qty, unit_cost)",
-    )
-    .eq("id", id)
-    .single();
-  if (!inv) return { error: "Invoice tidak ditemukan" };
-  if (inv.status === "cancelled" || inv.status === "paid")
-    return { error: "Invoice tidak bisa dibatalkan" };
-  if (Number(inv.paid_amount) > 0)
-    return {
-      error: "Invoice sudah ada pembayaran. Reverse pembayaran dulu.",
-    };
-
-  // If was issued/partial, restore stock
-  if (inv.status === "issued" || inv.status === "partial") {
-    const lines = (inv.sales_invoice_lines ?? []) as Array<{
-      product_id: string;
-      qty: number;
-      unit_cost: number;
-    }>;
-    for (const l of lines) {
-      const { error: incErr } = await supabase.rpc("increment_product_quantity", {
-        p_id: l.product_id,
-        qty: l.qty,
-      });
-      if (incErr) return { error: incErr.message };
-      const movement = await createStockMovement(supabase, {
-        product_id: l.product_id,
-        type: "inbound",
-        quantity: l.qty,
-        unit_cost: Number(l.unit_cost),
-        reference_type: "sales_invoice_cancel",
-        reference_id: id,
-      });
-      if (movement.error) return { error: movement.error };
-    }
-  }
-
-  const merged = reason
-    ? `${inv.notes ?? ""}\n[Dibatalkan]: ${reason}`.trim()
-    : inv.notes;
-
-  await supabase
-    .from("sales_invoices")
-    .update({ status: "cancelled", notes: merged })
-    .eq("id", id);
-
-  await reverseJournalBySource("sales_invoice", id, reason);
-
-  await logActivity({
-    user_id: profile.id,
-    action: "cancel",
-    entity_type: "sales_invoice",
-    entity_id: id,
-    new_data: { reason },
-  });
-
-  revalidatePath("/penjualan/invoice");
-  revalidatePath("/inventory");
-  revalidatePath("/buku-besar/journal");
-  return { success: true };
-}
-
 export async function deleteSalesInvoice(id: string) {
-  const profile = await requireRole(["owner"]);
-  const supabase = await createClient();
-  const { data: inv } = await supabase
-    .from("sales_invoices")
-    .select("status, paid_amount, invoice_number")
-    .eq("id", id)
-    .single();
-  if (!inv) return { error: "Invoice tidak ditemukan" };
-  if (inv.status !== "draft" && inv.status !== "cancelled")
-    return { error: "Hanya Draft/Cancelled yang bisa dihapus" };
-  if (Number(inv.paid_amount) > 0)
-    return { error: "Invoice dengan pembayaran tidak bisa dihapus" };
-
-  const { error } = await supabase.from("sales_invoices").delete().eq("id", id);
-  if (error) return { error: error.message };
-
-  await logActivity({
-    user_id: profile.id,
-    action: "delete",
-    entity_type: "sales_invoice",
-    entity_id: id,
-    new_data: { invoice_number: inv.invoice_number },
-  });
-  revalidatePath("/penjualan/invoice");
-  return { success: true };
+  return deleteSalesInvoiceAtomic(id);
 }
 
 export async function updateSalesInvoice(id: string, input: unknown) {

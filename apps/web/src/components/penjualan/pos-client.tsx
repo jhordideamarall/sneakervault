@@ -6,17 +6,15 @@ import {
   Minus,
   Package,
   Plus,
-  RotateCcw,
   ScanBarcode,
   Search,
   Settings2,
   ShoppingCart,
-  Trash2,
 } from "lucide-react";
 import { cn, NumberInput } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { formatRupiah as rp, formatDate } from "@/lib/format";
-import { cancelPosCheckout, posCheckout } from "@/lib/actions/pos";
+import { posCheckout } from "@/lib/actions/pos";
 import { SALES_INVOICE_STATUS_LABELS } from "@sneakervault/shared";
 import type { BankAccountRow, CustomerRow, PosSaleRow } from "@/lib/queries";
 import {
@@ -244,20 +242,6 @@ export function PosClient({
     });
   }
 
-  function cancelSale(sale: PosSaleRow) {
-    const reason = prompt(
-      `Batalkan transaksi POS ${sale.invoice_number}?\nStok, pembayaran, saldo bank, dan jurnal akan dibalik.\n\nAlasan (opsional):`,
-    );
-    if (reason === null) return;
-    startTransition(async () => {
-      const result = await cancelPosCheckout(sale.id, reason || undefined);
-      const message = actionError(result);
-      if (message) return toast.push(message, "error");
-      router.refresh();
-      toast.push(`Transaksi ${sale.invoice_number} dibatalkan`, "success");
-    });
-  }
-
   return (
     <div className="flex h-full min-h-[640px] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1f1f1f] text-white shadow-xl">
       {/* LEFT — search + grid */}
@@ -326,9 +310,7 @@ export function PosClient({
               </div>
             </div>
             <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-              {recentSales.slice(0, 6).map((sale) => {
-                const cancellable = sale.status === "paid";
-                return (
+              {recentSales.slice(0, 6).map((sale) => (
                   <div
                     key={sale.id}
                     className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-3"
@@ -366,29 +348,10 @@ export function PosClient({
                         <div className="text-sm font-black tabular-nums text-white">
                           {rp(sale.total)}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => cancelSale(sale)}
-                          disabled={pending || !cancellable}
-                          className="mt-1 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-wide text-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35"
-                          title={
-                            cancellable
-                              ? "Batalkan transaksi POS"
-                              : "Transaksi sudah tidak bisa dibatalkan dari POS"
-                          }
-                        >
-                          {cancellable ? (
-                            <Trash2 className="size-3" />
-                          ) : (
-                            <RotateCcw className="size-3" />
-                          )}
-                          {cancellable ? "Batalkan" : "Selesai"}
-                        </button>
                       </div>
                     </div>
                   </div>
-                );
-              })}
+                ))}
             </div>
           </div>
         ) : null}

@@ -14,11 +14,13 @@ import { PAYMENT_METHODS } from "@sneakervault/shared";
 import type { PaymentMethod } from "@sneakervault/shared";
 import { useToast } from "@/components/toast";
 import { QuickTip } from "@/components/ui/quick-tip";
+import { TransactionDeleteDialog } from "@/components/transaction-delete-dialog";
 import { formatRupiah as fmtRupiah, formatDate } from "@/lib/format";
 import {
   createVendorPayment,
-  reverseVendorPayment,
+  deleteVendorPayment,
 } from "@/lib/actions/vendor-payments";
+import type { TransactionDeleteResult } from "@/lib/actions/transaction-deletes";
 import type {
   VendorPaymentRow,
   OutstandingInvoiceRow,
@@ -35,7 +37,7 @@ import {
   Landmark,
   Wallet,
   Smartphone,
-  RotateCcw,
+  Trash2,
   AlertTriangle,
   Paperclip,
   ExternalLink,
@@ -112,6 +114,10 @@ export function PembayaranVendorClient({
     supplierId: string;
   } | null>(null);
   const [viewing, setViewing] = useState<VendorPaymentRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    payment: VendorPaymentRow;
+    blocker: TransactionDeleteResult | null;
+  } | null>(null);
 
   const canManage = roles.includes("owner") || roles.includes("finance");
 
@@ -187,18 +193,25 @@ export function PembayaranVendorClient({
     setCreating({ supplierId: supplierId ?? "" });
   }
 
-  function handleReverse(p: VendorPaymentRow) {
-    const reason = prompt(
-      `Reverse pembayaran ${p.payment_number}?\nFaktur akan dikembalikan ke status outstanding, saldo bank dikembalikan.\n\nAlasan (opsional):`,
-    );
-    if (reason === null) return;
+  function openDelete(payment: VendorPaymentRow) {
+    setDeleteTarget({ payment, blocker: null });
+  }
+
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
     startTransition(async () => {
-      const r = await reverseVendorPayment(p.id, reason || undefined);
+      const r = await deleteVendorPayment(target.payment.id);
       if ("error" in r && r.error) {
         toast.push(typeof r.error === "string" ? r.error : "Gagal", "error");
         return;
       }
-      toast.push("Pembayaran dibatalkan, faktur+saldo dikembalikan", "success");
+      if (r.data && !r.data.deleted) {
+        setDeleteTarget({ ...target, blocker: r.data });
+        return;
+      }
+      toast.push("Pembayaran Vendor dihapus permanen", "success");
+      setDeleteTarget(null);
       setViewing(null);
       router.refresh();
     });
@@ -238,8 +251,8 @@ export function PembayaranVendorClient({
         Tab <strong>"Sudah Dibayar"</strong>: riwayat semua pembayaran yang sudah dibuat.
         <br />
         <span className="mt-1 inline-block text-[12px] text-white/55">
-          💡 <strong>Tunai</strong> pakai metode <em>Cash</em> · <strong>Transfer</strong> pakai akun bank ·{" "}
-          <strong>Uang muka / DP</strong>: bayar partial saja, sisanya tetap tercatat di faktur.
+          <strong>Hapus</strong> dipakai untuk koreksi salah input dan menghapus transaksi beserta efek kas/bank dan jurnalnya.{" "}
+          <strong>Batalkan Pembelian Barang</strong> hanya dipakai saat supplier batal order sebelum barang diterima.
         </span>
       </QuickTip>
 
@@ -490,13 +503,25 @@ export function PembayaranVendorClient({
                     {fmtRupiah(p.amount)}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => setViewing(p)}
-                      className="rounded p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white"
-                      title="Detail"
-                    >
-                      <Eye size={14} strokeWidth={1.8} />
-                    </button>
+                    <div className="inline-flex items-center gap-1">
+                      <button
+                        onClick={() => setViewing(p)}
+                        className="rounded p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white"
+                        title="Detail"
+                      >
+                        <Eye size={14} strokeWidth={1.8} />
+                      </button>
+                      {canManage ? (
+                        <button
+                          onClick={() => openDelete(p)}
+                          disabled={pending}
+                          className="rounded p-1.5 text-white/40 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
+                          title="Hapus Pembayaran Vendor"
+                        >
+                          <Trash2 size={14} strokeWidth={1.8} />
+                        </button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -523,9 +548,25 @@ export function PembayaranVendorClient({
         <ViewModal
           payment={viewing}
           onClose={() => setViewing(null)}
-          canReverse={canManage}
+          canDelete={canManage}
           pending={pending}
-          onReverse={() => handleReverse(viewing)}
+          onDelete={() => openDelete(viewing)}
+        />
+      ) : null}
+      {deleteTarget ? (
+        <TransactionDeleteDialog
+          open
+          title={`Hapus Pembayaran Vendor ${deleteTarget.payment.payment_number}?`}
+          description="Pembayaran salah input akan dibuang permanen tanpa menyimpan transaksi reversal."
+          impacts={[
+            "Alokasi ke Faktur Pembelian ikut dihapus.",
+            "Mutasi kas/bank dan jurnal asli ikut dihapus.",
+            "Saldo kas/bank, paid amount, dan status faktur dihitung ulang.",
+          ]}
+          pending={pending}
+          blocker={deleteTarget.blocker}
+          onOpenChange={(open) => !open && setDeleteTarget(null)}
+          onConfirm={confirmDelete}
         />
       ) : null}
     </div>
@@ -961,15 +1002,15 @@ function PayModal({
 function ViewModal({
   payment,
   onClose,
-  canReverse,
+  canDelete,
   pending,
-  onReverse,
+  onDelete,
 }: {
   payment: VendorPaymentRow;
   onClose: () => void;
-  canReverse: boolean;
+  canDelete: boolean;
   pending: boolean;
-  onReverse: () => void;
+  onDelete: () => void;
 }) {
   return (
     <div
@@ -1094,15 +1135,15 @@ function ViewModal({
 
         <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-white/[0.06] px-6 py-4">
           <div>
-            {canReverse ? (
+            {canDelete ? (
               <button
-                onClick={onReverse}
+                onClick={onDelete}
                 disabled={pending}
                 className="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs text-white/60 hover:bg-red-500/10 hover:text-red-300"
-                title="Batalkan pembayaran ini & kembalikan saldo+faktur"
+                title="Hapus Pembayaran Vendor beserta efeknya"
               >
-                <RotateCcw size={13} strokeWidth={1.8} />
-                Reverse Pembayaran
+                <Trash2 size={13} strokeWidth={1.8} />
+                Hapus Pembayaran
               </button>
             ) : null}
           </div>
