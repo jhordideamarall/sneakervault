@@ -14,8 +14,8 @@
 - [x] Remove the mistaken POS cancellation flow and obsolete reversal/cancel copy
 - [x] Update Quick Tips and welcome card without conflating Pembelian Barang with Pre Order
 - [x] Run database rollback tests, type-check, lint, and production build
-- [ ] Run authenticated UI QA on the Vercel production deployment
-- [ ] Commit, push, open PR, merge, and verify Vercel production
+- [ ] Run authenticated UI QA on the Vercel production deployment (deferred by user)
+- [x] Commit, push, open PR, merge, and verify Vercel production
 
 ## Blockers
 - None.
@@ -60,3 +60,6 @@
 - `pnpm --filter @sneakervault/web lint`: passed with 72 existing warnings
 - `pnpm --filter @sneakervault/web build`: passed
 - `git diff --check`: passed
+- GitHub PR `#15`: merged to `main` as `9682c14015c570b87e487ea63c2dfff02dfc071d`
+- Vercel production: READY at `https://dewinst.vercel.app`
+- Authenticated production UI QA: deferred by user on 2026-07-19
