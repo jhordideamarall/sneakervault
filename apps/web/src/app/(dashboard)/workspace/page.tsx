@@ -10,6 +10,7 @@ import { RevenueChart, StockPieChart, TopProductsChart, WeeklySalesChart } from 
 import { PendingActionsTable } from "@/components/dashboard/pending-actions-table";
 import { RecentOrdersTable } from "@/components/dashboard/recent-orders-table";
 import { canSeeFinancialDashboard } from "@/config/permissions";
+import { ClientReviewWelcomeCard } from "@/components/dashboard/client-review-welcome-card";
 import type { Role } from "@sneakervault/shared";
 import { ArrowRight, Wallet } from "lucide-react";
 
@@ -60,6 +61,8 @@ export default async function WorkspacePage() {
         <Greeting name={profile.full_name} />
         <WorkspaceSubtitle role={role} userId={profile.id} />
       </div>
+
+      <ClientReviewWelcomeCard roles={roles} userId={profile.id} />
 
       {/* Finance Command Center — prominent CTA for owner & finance */}
       {hasFinanceAccess && (
