@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition, useEffect } from "react";
+import { useMemo, useRef, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -92,21 +92,49 @@ export function PenerimaanKasClient({
   bankAccounts,
   customers,
   roles,
+  initialInvoiceId,
 }: {
   payments: CustomerPaymentRow[];
   outstanding: OutstandingSalesInvoiceRow[];
   bankAccounts: BankAccountRow[];
   customers: CustomerRow[];
   roles: string[];
+  initialInvoiceId?: string;
 }) {
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
-  const [creating, setCreating] = useState<{ customerId: string } | null>(null);
+  const [creating, setCreating] = useState<{
+    customerId: string;
+    invoiceId?: string;
+  } | null>(null);
   const [viewing, setViewing] = useState<CustomerPaymentRow | null>(null);
+  const initialInvoiceOpenedRef = useRef<string | null>(null);
 
   const canManage = roles.includes("owner") || roles.includes("finance");
+
+  useEffect(() => {
+    if (
+      !initialInvoiceId ||
+      creating ||
+      initialInvoiceOpenedRef.current === initialInvoiceId
+    ) {
+      return;
+    }
+    initialInvoiceOpenedRef.current = initialInvoiceId;
+    const invoice = outstanding.find((item) => item.id === initialInvoiceId);
+    queueMicrotask(() => {
+      if (!invoice) {
+        router.replace("/penjualan/penerimaan-kas", { scroll: false });
+        return;
+      }
+      setCreating({
+        customerId: invoice.customer_id ?? "",
+        invoiceId: initialInvoiceId,
+      });
+    });
+  }, [creating, initialInvoiceId, outstanding, router]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -161,6 +189,14 @@ export function PenerimaanKasClient({
       setViewing(null);
       router.refresh();
     });
+  }
+
+  function closeCreateModal() {
+    if (initialInvoiceId) {
+      initialInvoiceOpenedRef.current = initialInvoiceId;
+      router.replace("/penjualan/penerimaan-kas", { scroll: false });
+    }
+    setCreating(null);
   }
 
   return (
@@ -318,13 +354,14 @@ export function PenerimaanKasClient({
       {creating ? (
         <ReceiveModal
           initialCustomerId={creating.customerId}
+          initialInvoiceId={creating.invoiceId}
           allOutstanding={outstanding}
           bankAccounts={bankAccounts}
           customers={customers}
           pending={pending}
-          onClose={() => setCreating(null)}
+          onClose={closeCreateModal}
           onCreated={() => {
-            setCreating(null);
+            closeCreateModal();
             router.refresh();
           }}
         />
@@ -344,6 +381,7 @@ export function PenerimaanKasClient({
 
 function ReceiveModal({
   initialCustomerId,
+  initialInvoiceId,
   allOutstanding,
   bankAccounts,
   customers,
@@ -352,6 +390,7 @@ function ReceiveModal({
   onCreated,
 }: {
   initialCustomerId: string;
+  initialInvoiceId?: string;
   allOutstanding: OutstandingSalesInvoiceRow[];
   bankAccounts: BankAccountRow[];
   customers: CustomerRow[];
@@ -360,7 +399,16 @@ function ReceiveModal({
   onCreated: () => void;
 }) {
   const [customerId, setCustomerId] = useState(initialCustomerId);
-  const [customerName, setCustomerName] = useState("");
+  const initialInvoice = useMemo(
+    () =>
+      initialInvoiceId
+        ? allOutstanding.find((item) => item.id === initialInvoiceId)
+        : null,
+    [allOutstanding, initialInvoiceId],
+  );
+  const [customerName, setCustomerName] = useState(
+    initialInvoice?.customer_name ?? "",
+  );
   const [paymentDate, setPaymentDate] = useState(todayIso());
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bank_transfer");
   const defaultBank = bankAccounts.find((b) => b.is_default && b.is_active);
@@ -399,11 +447,14 @@ function ReceiveModal({
             paid_amount: o.paid_amount,
             remaining: o.remaining,
             due_date: o.due_date,
-            amount: 0,
-            selected: false,
+            amount: o.id === initialInvoiceId ? o.remaining : 0,
+            selected: o.id === initialInvoiceId,
           }));
         setAllocs(list);
       } else {
+        if (initialInvoice && !initialInvoice.customer_id && !customerName) {
+          setCustomerName(initialInvoice.customer_name);
+        }
         // Walk-in mode: show all outstanding without customer_id, OR filter by name match
         const list = allOutstanding
           .filter(
@@ -416,13 +467,20 @@ function ReceiveModal({
             paid_amount: o.paid_amount,
             remaining: o.remaining,
             due_date: o.due_date,
-            amount: 0,
-            selected: false,
+            amount: o.id === initialInvoiceId ? o.remaining : 0,
+            selected: o.id === initialInvoiceId,
           }));
         setAllocs(list);
       }
     });
-  }, [customerId, customerName, allOutstanding, customers]);
+  }, [
+    customerId,
+    customerName,
+    allOutstanding,
+    customers,
+    initialInvoice,
+    initialInvoiceId,
+  ]);
 
   const totalAlloc = allocs.reduce((a, x) => a + (x.selected ? x.amount : 0), 0);
   const activeBanks = useMemo(() => bankAccounts.filter((b) => b.is_active), [bankAccounts]);
@@ -629,7 +687,14 @@ function ReceiveModal({
                     const due = daysUntil(a.due_date);
                     const isOverdue = due !== null && due < 0;
                     return (
-                      <tr key={a.invoice_id} className="border-b border-white/[0.04] last:border-0">
+                      <tr
+                        key={a.invoice_id}
+                        className={`border-b border-white/[0.04] last:border-0 ${
+                          a.invoice_id === initialInvoiceId
+                            ? "bg-emerald-500/[0.04]"
+                            : ""
+                        }`}
+                      >
                         <td className="px-3 py-2 text-center">
                           <input
                             type="checkbox"

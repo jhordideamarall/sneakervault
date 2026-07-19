@@ -50,6 +50,7 @@ import {
   AlertTriangle,
   Send,
   Package,
+  Wallet,
 } from "lucide-react";
 
 type FormLine = {
@@ -509,6 +510,10 @@ export function SalesInvoiceClient({
     });
   }
 
+  function openReceivePayment(invoiceId: string) {
+    router.push(`/penjualan/penerimaan-kas?invoice=${invoiceId}`);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -723,6 +728,18 @@ export function SalesInvoiceClient({
                         >
                           <Eye size={14} strokeWidth={1.8} />
                         </button>
+                        {canManage &&
+                        (i.status === "issued" || i.status === "partial") &&
+                        remaining > 0 ? (
+                          <button
+                            onClick={() => openReceivePayment(i.id)}
+                            disabled={detailLoading}
+                            className="rounded p-1.5 text-white/50 hover:bg-emerald-500/10 hover:text-emerald-300 disabled:cursor-wait disabled:opacity-40"
+                            title="Terima pembayaran"
+                          >
+                            <Wallet size={14} strokeWidth={1.8} />
+                          </button>
+                        ) : null}
                         {canManage && i.status === "draft" ? (
                           <button
                             onClick={() => void openEditById(i.id)}
@@ -777,6 +794,7 @@ export function SalesInvoiceClient({
           onDelete={() =>
             handleDelete(editing.inv.id, editing.inv.invoice_number)
           }
+          onReceivePayment={() => openReceivePayment(editing.inv.id)}
         />
       ) : null}
     </div>
@@ -1281,6 +1299,7 @@ function ViewModal({
   onIssue,
   onCancel,
   onDelete,
+  onReceivePayment,
 }: {
   inv: SalesInvoiceDetail;
   onClose: () => void;
@@ -1290,8 +1309,13 @@ function ViewModal({
   onIssue: () => void;
   onCancel: () => void;
   onDelete: () => void;
+  onReceivePayment: () => void;
 }) {
   const remaining = inv.total - inv.paid_amount;
+  const canReceivePayment =
+    canManage &&
+    remaining > 0 &&
+    (inv.status === "issued" || inv.status === "partial");
 
   return (
     <div
@@ -1451,10 +1475,13 @@ function ViewModal({
             </div>
           ) : null}
 
-          <div className="rounded-lg border border-sky-500/15 bg-sky-500/[0.04] p-3 text-xs text-sky-200/80">
-            Untuk mencatat pembayaran customer, buka menu{" "}
-            <strong>Penjualan → Penerimaan Kas</strong>.
-          </div>
+          {canReceivePayment ? (
+            <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/[0.04] p-3 text-xs text-emerald-200/80">
+              Pembayaran bisa dicatat langsung dari invoice ini. Klik{" "}
+              <strong>Terima Pembayaran</strong> untuk membuka Penerimaan Kas
+              dengan invoice ini otomatis terpilih.
+            </div>
+          ) : null}
         </div>
 
         <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-white/[0.06] px-6 py-4">
@@ -1488,6 +1515,17 @@ function ViewModal({
               >
                 <XCircle size={14} strokeWidth={1.8} />
                 Batalkan
+              </Button>
+            ) : null}
+            {canReceivePayment ? (
+              <Button
+                variant="secondary"
+                onClick={onReceivePayment}
+                disabled={pending}
+                className="gap-1.5"
+              >
+                <Wallet size={14} strokeWidth={1.8} />
+                Terima Pembayaran
               </Button>
             ) : null}
             {canManage && inv.status === "draft" ? (

@@ -209,3 +209,42 @@ export async function createPayrollRun(input: unknown) {
   revalidatePath("/kas-bank/mutasi");
   return { data: { id: run.id, journal_id: journal.id } };
 }
+
+export async function updatePayrollRun(id: string, input: unknown) {
+  const profile = await requireRole([...ROLES]);
+  const parsed = payrollRunInputSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+
+  const supabase = await createClient();
+  const { data, error } = await (supabase as any).rpc(
+    "update_payroll_run_atomic",
+    {
+      p_run_id: id,
+      p_payload: {
+        period_month: parsed.data.period_month,
+        payment_date: parsed.data.payment_date,
+        bank_account_id: parsed.data.bank_account_id ?? null,
+        notes: parsed.data.notes ?? null,
+        lines: parsed.data.lines,
+      },
+    },
+  );
+
+  if (error) return { error: { _form: [error.message] } };
+
+  await logActivity({
+    user_id: profile.id,
+    action: "update",
+    entity_type: "payroll_run",
+    entity_id: id,
+    new_data: {
+      period_month: parsed.data.period_month,
+      employee_count: parsed.data.lines.length,
+    },
+  });
+
+  revalidatePayroll();
+  revalidatePath("/kas-bank/akun");
+  revalidatePath("/kas-bank/mutasi");
+  return { data };
+}

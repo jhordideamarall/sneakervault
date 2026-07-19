@@ -12,7 +12,7 @@ import {
   Alert,
 } from "@sneakervault/ui";
 import { QuickTip } from "@/components/ui/quick-tip";
-import { exportToExcel, exportToPDF } from "@/lib/export";
+import { exportToPDF } from "@/lib/export";
 import {
   PURCHASE_INVOICE_STATUS_LABELS,
   PURCHASE_INVOICE_STATUS_TONES,
@@ -46,7 +46,6 @@ import {
   ExternalLink,
   Paperclip,
   Download,
-  FileSpreadsheet,
 } from "lucide-react";
 
 type SupplierOpt = { id: string; name: string };
@@ -113,6 +112,10 @@ function daysUntil(iso: string | null): number | null {
   today.setHours(0, 0, 0, 0);
   const due = new Date(iso);
   return Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function fileSlug(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
 export function FakturPembelianClient({
@@ -436,42 +439,52 @@ export function FakturPembelianClient({
     });
   }
 
-  async function exportInvoices(format: "pdf" | "excel") {
-    const rows = filtered.map((invoice) => [
-      invoice.invoice_number,
-      invoice.supplier_name,
-      invoice.po_number ?? "Manual",
-      fmtDate(invoice.invoice_date),
-      fmtDate(invoice.due_date),
-      invoice.total,
-      invoice.total - invoice.paid_amount,
-      PURCHASE_INVOICE_STATUS_LABELS[invoice.status],
-    ]);
-    const params = {
-      title: "Daftar Faktur Pembelian",
-      sheetName: "Faktur Pembelian",
-      filename:
-        format === "pdf"
-          ? "faktur-pembelian.pdf"
-          : "faktur-pembelian.xlsx",
-      columns: [
-        "No Faktur",
-        "Vendor",
-        "Ref PO",
-        "Tanggal",
-        "Jatuh Tempo",
-        "Total",
-        "Sisa",
-        "Status",
+  async function exportInvoicePDF(invoice: PurchaseInvoiceRow) {
+    const remaining = invoice.total - invoice.paid_amount;
+    await exportToPDF({
+      title: `Faktur Pembelian ${invoice.invoice_number}`,
+      filename: `${fileSlug(invoice.invoice_number)}-${fileSlug(invoice.supplier_name)}.pdf`,
+      period: fmtDate(invoice.invoice_date),
+      sections: [
+        {
+          title: "Informasi Faktur",
+          columns: ["Field", "Nilai"],
+          rows: [
+            ["No Faktur", invoice.invoice_number],
+            ["Vendor", invoice.supplier_name],
+            ["Referensi PO", invoice.po_number ?? "Manual"],
+            ["Tanggal Faktur", fmtDate(invoice.invoice_date)],
+            ["Jatuh Tempo", fmtDate(invoice.due_date)],
+            ["Status", PURCHASE_INVOICE_STATUS_LABELS[invoice.status]],
+          ],
+        },
+        {
+          title: "Item Faktur",
+          columns: ["Item", "Qty", "Harga/Unit", "Subtotal", "Catatan"],
+          rows:
+            invoice.lines.length > 0
+              ? invoice.lines.map((line) => [
+                  line.product_label,
+                  line.qty,
+                  line.unit_cost,
+                  line.subtotal,
+                  line.notes ?? "",
+                ])
+              : [["Subtotal faktur", "", "", invoice.subtotal, ""]],
+        },
+        {
+          title: "Ringkasan",
+          columns: ["Keterangan", "Nominal"],
+          rows: [
+            ["Subtotal", invoice.subtotal],
+            ["Pajak", invoice.tax],
+            ["Total", invoice.total],
+            ["Sudah Dibayar", invoice.paid_amount],
+            ["Sisa Hutang", remaining],
+          ],
+        },
       ],
-      rows,
-      summary: [
-        { label: "Total Faktur", value: String(filtered.length) },
-        { label: "Outstanding", value: fmtRupiah(stats.outstanding) },
-      ],
-    };
-    if (format === "pdf") await exportToPDF(params);
-    else await exportToExcel(params);
+    });
   }
 
   return (
@@ -559,14 +572,6 @@ export function FakturPembelianClient({
             ),
           )}
         </Select>
-        <Button type="button" variant="secondary" onClick={() => exportInvoices("pdf")}>
-          <Download size={14} />
-          PDF
-        </Button>
-        <Button type="button" variant="secondary" onClick={() => exportInvoices("excel")}>
-          <FileSpreadsheet size={14} />
-          Excel
-        </Button>
       </div>
 
       {filtered.length === 0 ? (
@@ -676,6 +681,13 @@ export function FakturPembelianClient({
                         >
                           <Eye size={14} strokeWidth={1.8} />
                         </button>
+                        <button
+                          onClick={() => void exportInvoicePDF(i)}
+                          className="rounded p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white"
+                          title="Download faktur PDF"
+                        >
+                          <Download size={14} strokeWidth={1.8} />
+                        </button>
                         {canManage &&
                         (i.status === "unpaid" || i.status === "partial") &&
                         i.paid_amount === 0 ? (
@@ -732,6 +744,7 @@ export function FakturPembelianClient({
           onDelete={() =>
             handleDelete(editing.invoice.id, editing.invoice.invoice_number)
           }
+          onDownload={() => void exportInvoicePDF(editing.invoice)}
         />
       ) : null}
     </div>
@@ -1259,6 +1272,7 @@ function ViewModal({
   pending,
   onCancel,
   onDelete,
+  onDownload,
 }: {
   invoice: PurchaseInvoiceRow;
   onClose: () => void;
@@ -1267,6 +1281,7 @@ function ViewModal({
   pending: boolean;
   onCancel: () => void;
   onDelete: () => void;
+  onDownload: () => void;
 }) {
   const remaining = invoice.total - invoice.paid_amount;
   const due = daysUntil(invoice.due_date);
@@ -1364,6 +1379,49 @@ function ViewModal({
             ) : null}
           </div>
 
+          {invoice.lines.length > 0 ? (
+            <div className="rounded-lg border border-white/[0.06]">
+              <div className="border-b border-white/[0.06] bg-[#1f1f1f] px-4 py-2 text-sm font-medium text-white">
+                Item Faktur ({invoice.lines.length})
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/[0.04] text-left text-[11px] uppercase tracking-wider text-white/40">
+                    <th className="px-3 py-2 font-medium">Item</th>
+                    <th className="px-3 py-2 text-center font-medium">Qty</th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Harga/unit
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Subtotal
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoice.lines.map((line) => (
+                    <tr
+                      key={line.id}
+                      className="border-b border-white/[0.04] last:border-0"
+                    >
+                      <td className="px-3 py-2 text-white/80">
+                        {line.product_label}
+                      </td>
+                      <td className="px-3 py-2 text-center text-white">
+                        {line.qty}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-white/70">
+                        {fmtRupiah(line.unit_cost)}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-white">
+                        {fmtRupiah(line.subtotal)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+
           <div className="rounded-lg border border-white/[0.06] bg-[#1f1f1f] p-4 space-y-1.5">
             <Row label="Subtotal" value={fmtRupiah(invoice.subtotal)} />
             <Row label="Pajak" value={fmtRupiah(invoice.tax)} />
@@ -1418,6 +1476,10 @@ function ViewModal({
             ) : null}
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={onDownload} className="gap-1.5">
+              <Download size={14} strokeWidth={1.8} />
+              Download PDF
+            </Button>
             <Button variant="ghost" onClick={onClose}>
               Tutup
             </Button>

@@ -4,15 +4,24 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, FieldLabel, Input, NumberInput, Select, Textarea } from "@sneakervault/ui";
 import { exportToPDF } from "@/lib/export";
-import { createPayrollRun } from "@/lib/actions/payroll";
+import { createPayrollRun, updatePayrollRun } from "@/lib/actions/payroll";
 import { useToast } from "@/components/toast";
 import type { BankAccountRow, EmployeeRow, PayrollRunRow } from "@/lib/queries";
 import { formatDate, formatRupiah } from "@/lib/format";
-import { Download, Plus, ReceiptText } from "lucide-react";
+import { Download, Pencil, Plus, ReceiptText } from "lucide-react";
 
 function currentMonth() {
   return new Date().toISOString().slice(0, 7);
 }
+
+type PayrollLineDraft = {
+  employee_id: string;
+  employee_name: string;
+  base_salary: number;
+  allowances: number;
+  deductions: number;
+  notes: string;
+};
 
 export function PayrollClient({
   employees,
@@ -27,22 +36,12 @@ export function PayrollClient({
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [formOpen, setFormOpen] = useState(false);
+  const [editingRun, setEditingRun] = useState<PayrollRunRow | null>(null);
   const [periodMonth, setPeriodMonth] = useState(currentMonth());
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [bankAccountId, setBankAccountId] = useState("");
   const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState(() =>
-    employees
-      .filter((employee) => employee.is_active)
-      .map((employee) => ({
-        employee_id: employee.id,
-        employee_name: employee.full_name,
-        base_salary: employee.base_salary,
-        allowances: 0,
-        deductions: 0,
-        notes: "",
-      })),
-  );
+  const [lines, setLines] = useState<PayrollLineDraft[]>(() => activeEmployeeLines(employees));
 
   const totals = useMemo(() => {
     const gross = lines.reduce((sum, line) => sum + line.base_salary + line.allowances, 0);
@@ -56,21 +55,61 @@ export function PayrollClient({
     );
   }
 
+  function openCreate() {
+    setEditingRun(null);
+    setPeriodMonth(currentMonth());
+    setPaymentDate(new Date().toISOString().slice(0, 10));
+    setBankAccountId("");
+    setNotes("");
+    setLines(activeEmployeeLines(employees));
+    setFormOpen(true);
+  }
+
+  function openEdit(run: PayrollRunRow) {
+    setEditingRun(run);
+    setPeriodMonth(run.period_month);
+    setPaymentDate(run.payment_date);
+    setBankAccountId(run.bank_account_id ?? "");
+    setNotes(run.notes ?? "");
+    setLines(
+      run.lines.map((line) => ({
+        employee_id: line.employee_id,
+        employee_name: line.employee_name,
+        base_salary: line.base_salary,
+        allowances: line.allowances,
+        deductions: line.deductions,
+        notes: line.notes ?? "",
+      })),
+    );
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    setEditingRun(null);
+  }
+
   function save() {
     startTransition(async () => {
-      const result = await createPayrollRun({
+      const payload = {
         period_month: periodMonth,
         payment_date: paymentDate,
         bank_account_id: bankAccountId || null,
         notes,
         lines,
-      });
+      };
+      const result = editingRun
+        ? await updatePayrollRun(editingRun.id, payload)
+        : await createPayrollRun(payload);
       if (result.error) {
         toast.push(Object.values(result.error).flat().join(", "), "error");
         return;
       }
-      toast.push("Penggajian diposting", "success");
-      setFormOpen(false);
+      toast.push(
+        editingRun ? "Penggajian diperbarui" : "Penggajian diposting",
+        "success",
+      );
+      closeForm();
       router.refresh();
     });
   }
@@ -112,7 +151,7 @@ export function PayrollClient({
             </p>
           </div>
         </div>
-        <Button type="button" onClick={() => setFormOpen((open) => !open)}>
+        <Button type="button" onClick={openCreate}>
           <Plus size={16} />
           Proses Gaji
         </Button>
@@ -120,6 +159,16 @@ export function PayrollClient({
 
       {formOpen ? (
         <Card className="space-y-4 p-5">
+          <div>
+            <h2 className="text-base font-semibold text-white">
+              {editingRun ? `Edit Payroll ${editingRun.period_month}` : "Proses Payroll Baru"}
+            </h2>
+            {editingRun ? (
+              <p className="mt-1 text-xs text-white/45">
+                Perubahan akan membalik jurnal/saldo payroll lama lalu posting ulang payroll revisi.
+              </p>
+            ) : null}
+          </div>
           <div className="grid gap-3 md:grid-cols-4">
             <div><FieldLabel>Periode</FieldLabel><Input type="month" value={periodMonth} onChange={(e) => setPeriodMonth(e.target.value)} /></div>
             <div><FieldLabel>Tanggal Bayar</FieldLabel><Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} /></div>
@@ -144,23 +193,33 @@ export function PayrollClient({
           <div><FieldLabel>Catatan</FieldLabel><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
           <div className="flex items-center justify-between">
             <div className="text-sm text-white/60">Gaji net: <span className="font-semibold text-white">{formatRupiah(totals.net)}</span></div>
-            <div className="flex gap-2"><Button variant="secondary" onClick={() => setFormOpen(false)}>Batal</Button><Button disabled={pending || lines.length === 0 || totals.net < 0} onClick={save}>Posting Penggajian</Button></div>
+            <div className="flex gap-2"><Button variant="secondary" onClick={closeForm}>Batal</Button><Button disabled={pending || lines.length === 0 || totals.net < 0} onClick={save}>{editingRun ? "Simpan Revisi" : "Posting Penggajian"}</Button></div>
           </div>
         </Card>
       ) : null}
 
       <div className="overflow-hidden rounded-lg border border-white/[0.06] bg-[#262626]">
         <table className="w-full text-sm">
-          <thead className="text-left text-[11px] uppercase tracking-wider text-white/35"><tr><th className="px-4 py-3">Periode</th><th className="px-4 py-3">Tanggal Bayar</th><th className="px-4 py-3 text-right">Gross</th><th className="px-4 py-3 text-right">Potongan</th><th className="px-4 py-3 text-right">Net</th><th className="px-4 py-3 text-right">Slip Gaji</th></tr></thead>
+          <thead className="text-left text-[11px] uppercase tracking-wider text-white/35"><tr><th className="px-4 py-3">Periode</th><th className="px-4 py-3">Tanggal Bayar</th><th className="px-4 py-3">Akun Bayar</th><th className="px-4 py-3 text-right">Gross</th><th className="px-4 py-3 text-right">Potongan</th><th className="px-4 py-3 text-right">Net</th><th className="px-4 py-3 text-right">Aksi</th></tr></thead>
           <tbody className="divide-y divide-white/[0.04]">
             {runs.map((run) => (
               <tr key={run.id}>
                 <td className="px-4 py-3 font-mono text-white">{run.period_month}</td>
                 <td className="px-4 py-3 text-white/60">{formatDate(run.payment_date)}</td>
+                <td className="px-4 py-3 text-white/60">{run.bank_account_name ?? "Hutang Gaji"}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-white">{formatRupiah(run.gross_amount)}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-amber-300">{formatRupiah(run.deductions)}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-emerald-300">{formatRupiah(run.net_amount)}</td>
-                <td className="px-4 py-3 text-right"><Button size="sm" variant="secondary" onClick={() => exportPayslip(run)}><Download size={14} /> PDF</Button></td>
+                <td className="px-4 py-3 text-right">
+                  <div className="inline-flex items-center gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => openEdit(run)}>
+                      <Pencil size={14} /> Edit
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => exportPayslip(run)}>
+                      <Download size={14} /> PDF
+                    </Button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -168,4 +227,17 @@ export function PayrollClient({
       </div>
     </div>
   );
+}
+
+function activeEmployeeLines(employees: EmployeeRow[]): PayrollLineDraft[] {
+  return employees
+    .filter((employee) => employee.is_active)
+    .map((employee) => ({
+      employee_id: employee.id,
+      employee_name: employee.full_name,
+      base_salary: employee.base_salary,
+      allowances: 0,
+      deductions: 0,
+      notes: "",
+    }));
 }

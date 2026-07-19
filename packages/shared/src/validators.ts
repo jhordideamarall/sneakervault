@@ -652,6 +652,7 @@ export const fixedAssetInputSchema = z.object({
   salvage_value: z.coerce.number().nonnegative().default(0),
   useful_life_months: z.coerce.number().int().positive().default(48),
   method: fixedAssetMethodEnum.default("straight_line"),
+  asset_account_id: z.string().uuid().nullable().optional(),
   location: z.string().trim().optional(),
   department: z.string().trim().optional(),
   bank_account_id: z.string().uuid().nullable().optional(),

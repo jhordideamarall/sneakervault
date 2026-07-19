@@ -568,6 +568,9 @@ export type FixedAssetRow = {
   id: string;
   asset_code: string | null;
   name: string;
+  asset_account_id: string | null;
+  asset_account_code: string | null;
+  asset_account_name: string | null;
   acquisition_date: string;
   acquisition_cost: number;
   salvage_value: number;
@@ -587,13 +590,17 @@ export async function getFixedAssets(): Promise<FixedAssetRow[]> {
   const supabase = await createClient();
   const { data } = await (supabase as any)
     .from("fixed_assets")
-    .select("id, asset_code, name, acquisition_date, acquisition_cost, salvage_value, useful_life_months, method, accumulated_depreciation, location, department, status, notes, created_at")
+    .select("id, asset_code, name, asset_account_id, acquisition_date, acquisition_cost, salvage_value, useful_life_months, method, accumulated_depreciation, location, department, status, notes, created_at, asset_account:asset_account_id(code, name)")
     .order("acquisition_date", { ascending: false });
-  return ((data as FixedAssetRow[] | null) ?? []).map((row) => {
+  return ((data as Array<Omit<FixedAssetRow, "asset_account_code" | "asset_account_name"> & {
+    asset_account: { code: string; name: string } | null;
+  }> | null) ?? []).map((row) => {
     const cost = Number(row.acquisition_cost ?? 0);
     const depreciation = Number(row.accumulated_depreciation ?? 0);
     return {
       ...row,
+      asset_account_code: row.asset_account?.code ?? null,
+      asset_account_name: row.asset_account?.name ?? null,
       acquisition_cost: cost,
       salvage_value: Number(row.salvage_value ?? 0),
       useful_life_months: Number(row.useful_life_months ?? 0),
@@ -612,6 +619,7 @@ export type PayrollRunRow = {
   net_amount: number;
   status: string;
   notes: string | null;
+  bank_account_id: string | null;
   bank_account_name: string | null;
   created_at: string;
   lines: Array<{
@@ -631,7 +639,7 @@ export async function getPayrollRuns(): Promise<PayrollRunRow[]> {
   const supabase = await createClient();
   const { data } = await (supabase as any)
     .from("payroll_runs")
-    .select("id, period_month, payment_date, gross_amount, deductions, net_amount, status, notes, created_at, bank_accounts:bank_account_id(name), payroll_lines(id, employee_id, base_salary, allowances, deductions, net_salary, notes, employees:employee_id(full_name))")
+    .select("id, period_month, payment_date, bank_account_id, gross_amount, deductions, net_amount, status, notes, created_at, bank_accounts:bank_account_id(name), payroll_lines(id, employee_id, base_salary, allowances, deductions, net_salary, notes, employees:employee_id(full_name))")
     .order("period_month", { ascending: false });
   return ((data as Array<{
     id: string;
@@ -642,6 +650,7 @@ export async function getPayrollRuns(): Promise<PayrollRunRow[]> {
     net_amount: number;
     status: string;
     notes: string | null;
+    bank_account_id: string | null;
     created_at: string;
     bank_accounts: { name: string } | null;
     payroll_lines: Array<{
@@ -663,6 +672,7 @@ export async function getPayrollRuns(): Promise<PayrollRunRow[]> {
     net_amount: Number(run.net_amount ?? 0),
     status: run.status,
     notes: run.notes,
+    bank_account_id: run.bank_account_id,
     bank_account_name: run.bank_accounts?.name ?? null,
     created_at: run.created_at,
     lines: (run.payroll_lines ?? []).map((line) => ({
@@ -913,6 +923,15 @@ export async function getPurchaseOrderById(
 }
 
 // ─── Purchase Invoices (Phase 2 — Faktur Pembelian) ────────
+export type PurchaseInvoiceLineRow = {
+  id: string;
+  product_label: string;
+  qty: number;
+  unit_cost: number;
+  subtotal: number;
+  notes: string | null;
+};
+
 export type PurchaseInvoiceRow = {
   id: string;
   invoice_number: string;
@@ -930,6 +949,7 @@ export type PurchaseInvoiceRow = {
   notes: string | null;
   attachment_url: string | null;
   created_at: string;
+  lines: PurchaseInvoiceLineRow[];
 };
 
 export async function getPurchaseInvoices(opts?: {
@@ -939,7 +959,7 @@ export async function getPurchaseInvoices(opts?: {
   let query = supabase
     .from("purchase_invoices")
     .select(
-      "id, invoice_number, supplier_id, po_id, invoice_date, due_date, subtotal, tax, total, paid_amount, status, notes, attachment_url, created_at, suppliers:supplier_id(name), purchase_orders:po_id(po_number)",
+      "id, invoice_number, supplier_id, po_id, invoice_date, due_date, subtotal, tax, total, paid_amount, status, notes, attachment_url, created_at, suppliers:supplier_id(name), purchase_invoice_lines(id, product_label, qty, unit_cost, subtotal, notes), purchase_orders:po_id(po_number, purchase_order_lines(id, ordered_qty, received_qty, unit_cost, subtotal, notes, new_brand, new_model, new_size, new_size_label, new_color, new_sku, products:product_id(brand, model, sku, size, size_label, color)))",
     )
     .order("invoice_date", { ascending: false });
   if (opts?.status) query = query.eq("status", opts.status);
@@ -961,26 +981,104 @@ export async function getPurchaseInvoices(opts?: {
       attachment_url: string | null;
       created_at: string;
       suppliers: { name: string } | null;
-      purchase_orders: { po_number: string } | null;
+      purchase_invoice_lines:
+        | Array<{
+            id: string;
+            product_label: string | null;
+            qty: number;
+            unit_cost: number;
+            subtotal: number;
+            notes: string | null;
+          }>
+        | null;
+      purchase_orders: {
+        po_number: string;
+        purchase_order_lines:
+          | Array<{
+              id: string;
+              ordered_qty: number;
+              received_qty: number;
+              unit_cost: number;
+              subtotal: number;
+              notes: string | null;
+              new_brand: string | null;
+              new_model: string | null;
+              new_size: number | null;
+              new_size_label: string | null;
+              new_color: string | null;
+              new_sku: string | null;
+              products: {
+                brand: string;
+                model: string;
+                sku: string;
+                size: number | null;
+                size_label: string | null;
+                color: string | null;
+              } | null;
+            }>
+          | null;
+      } | null;
     }> | null) ?? []
-  ).map((r) => ({
-    id: r.id,
-    invoice_number: r.invoice_number,
-    supplier_id: r.supplier_id,
-    supplier_name: r.suppliers?.name ?? "—",
-    po_id: r.po_id,
-    po_number: r.purchase_orders?.po_number ?? null,
-    invoice_date: r.invoice_date,
-    due_date: r.due_date,
-    subtotal: Number(r.subtotal),
-    tax: Number(r.tax),
-    total: Number(r.total),
-    paid_amount: Number(r.paid_amount),
-    status: r.status,
-    notes: r.notes,
-    attachment_url: r.attachment_url,
-    created_at: r.created_at,
-  }));
+  ).map((r) => {
+    const manualLines =
+      r.purchase_invoice_lines?.map((line) => ({
+        id: line.id,
+        product_label: line.product_label ?? "Item faktur manual",
+        qty: Number(line.qty),
+        unit_cost: Number(line.unit_cost),
+        subtotal: Number(line.subtotal),
+        notes: line.notes,
+      })) ?? [];
+    const poLines =
+      r.purchase_orders?.purchase_order_lines?.map((line) => {
+        const p = line.products;
+        const productLabel = p
+          ? `${p.brand} ${p.model}${p.color ? ` ${p.color}` : ""} • Size ${
+              p.size_label ?? p.size ?? "-"
+            } • ${p.sku}`
+          : [
+              line.new_brand,
+              line.new_model,
+              line.new_color,
+              line.new_size_label ?? line.new_size,
+              line.new_sku,
+            ]
+              .filter(Boolean)
+              .join(" ");
+        const qty =
+          Number(line.received_qty) > 0
+            ? Number(line.received_qty)
+            : Number(line.ordered_qty);
+        return {
+          id: line.id,
+          product_label: productLabel || "Item PO",
+          qty,
+          unit_cost: Number(line.unit_cost),
+          subtotal: qty * Number(line.unit_cost),
+          notes: line.notes,
+        };
+      }) ?? [];
+
+    return {
+      id: r.id,
+      invoice_number: r.invoice_number,
+      supplier_id: r.supplier_id,
+      supplier_name: r.suppliers?.name ?? "—",
+      po_id: r.po_id,
+      po_number: r.purchase_orders?.po_number ?? null,
+      invoice_date: r.invoice_date,
+      due_date: r.due_date,
+      subtotal: Number(r.subtotal),
+      tax: Number(r.tax),
+      total: Number(r.total),
+      paid_amount: Number(r.paid_amount),
+      status: r.status,
+      notes: r.notes,
+      attachment_url: r.attachment_url,
+      created_at: r.created_at,
+      lines: manualLines.length > 0 ? manualLines : poLines,
+    };
+  });
 }
 
 // ─── Sales Invoices (Phase 3) ──────────────────────────────
@@ -2235,6 +2333,92 @@ export async function getCustomerPayments(): Promise<CustomerPaymentRow[]> {
   }));
 }
 
+export type PosSaleRow = {
+  id: string;
+  invoice_number: string;
+  customer_name: string;
+  invoice_date: string;
+  total: number;
+  status: "draft" | "issued" | "partial" | "paid" | "cancelled";
+  line_count: number;
+  payment_number: string | null;
+  bank_account_name: string | null;
+};
+
+export async function getRecentPosSales(limit = 20): Promise<PosSaleRow[]> {
+  const supabase = await createClient();
+  const { data: txs } = await supabase
+    .from("bank_transactions")
+    .select("related_entity_id, bank_accounts:bank_account_id(name)")
+    .eq("related_entity_type", "pos_checkout")
+    .not("related_entity_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  const transactionRows =
+    (txs as Array<{
+      related_entity_id: string | null;
+      bank_accounts: { name: string } | null;
+    }> | null) ?? [];
+  const ids = transactionRows
+    .map((tx) => tx.related_entity_id)
+    .filter((id): id is string => Boolean(id));
+  if (ids.length === 0) return [];
+
+  const bankByInvoice = new Map(
+    transactionRows
+      .filter(
+        (
+          tx,
+        ): tx is {
+          related_entity_id: string;
+          bank_accounts: { name: string } | null;
+        } => Boolean(tx.related_entity_id),
+      )
+      .map((tx) => [tx.related_entity_id, tx.bank_accounts?.name ?? null]),
+  );
+  const order = new Map(ids.map((id, index) => [id, index]));
+
+  const { data } = await supabase
+    .from("sales_invoices")
+    .select(
+      "id, invoice_number, customer_name, invoice_date, total, status, sales_invoice_lines(id), customer_payment_allocations(amount, customer_payments:payment_id(payment_number))",
+    )
+    .in("id", ids);
+
+  return (
+    (data as unknown as Array<{
+      id: string;
+      invoice_number: string;
+      customer_name: string;
+      invoice_date: string;
+      total: number;
+      status: PosSaleRow["status"];
+      sales_invoice_lines: Array<{ id: string }> | null;
+      customer_payment_allocations:
+        | Array<{
+            amount: number;
+            customer_payments: { payment_number: string } | null;
+          }>
+        | null;
+    }> | null) ?? []
+  )
+    .sort((a, b) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999))
+    .map((row) => ({
+      id: row.id,
+      invoice_number: row.invoice_number,
+      customer_name: row.customer_name,
+      invoice_date: row.invoice_date,
+      total: Number(row.total),
+      status: row.status,
+      line_count: row.sales_invoice_lines?.length ?? 0,
+      payment_number:
+        row.customer_payment_allocations?.[0]?.customer_payments
+          ?.payment_number ?? null,
+      bank_account_name: bankByInvoice.get(row.id) ?? null,
+    }));
+}
+
 export type InvoicablePoRow = {
   id: string;
   po_number: string;
@@ -3235,6 +3419,232 @@ export async function getAvailableMonths() {
 }
 
 // ─── Reports ───────────────────────────────────────────────
+export type GeneralLedgerReportRow = {
+  account_code: string;
+  account_name: string;
+  account_type: AccountBalance["type"];
+  total_debit: number;
+  total_credit: number;
+  balance: number;
+};
+
+export async function getGeneralLedgerReport(
+  from?: string,
+  to?: string,
+): Promise<GeneralLedgerReportRow[]> {
+  const rows = await getAccountBalances({ from: from?.slice(0, 10), to: to?.slice(0, 10) });
+  return rows
+    .filter((row) => row.total_debit > 0 || row.total_credit > 0 || row.balance !== 0)
+    .map((row) => ({
+      account_code: row.code,
+      account_name: row.name,
+      account_type: row.type,
+      total_debit: row.total_debit,
+      total_credit: row.total_credit,
+      balance: row.balance,
+    }));
+}
+
+export type JournalReportRow = {
+  entry_number: string;
+  entry_date: string;
+  description: string;
+  source_type: string;
+  total_debit: number;
+  total_credit: number;
+  status: string;
+  line_count: number;
+};
+
+export async function getJournalReport(
+  from?: string,
+  to?: string,
+): Promise<JournalReportRow[]> {
+  await requireOwnerOrFinance();
+  const supabase = await createClient();
+  let query = supabase
+    .from("journal_entries")
+    .select("entry_number, entry_date, description, source_type, total_debit, total_credit, status, journal_lines(id)")
+    .order("entry_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (from) query = query.gte("entry_date", from.slice(0, 10));
+  if (to) query = query.lte("entry_date", to.slice(0, 10));
+  const { data } = await query;
+  return ((data as unknown as Array<{
+    entry_number: string;
+    entry_date: string;
+    description: string;
+    source_type: string;
+    total_debit: number;
+    total_credit: number;
+    status: string;
+    journal_lines: Array<{ id: string }> | null;
+  }> | null) ?? []).map((row) => ({
+    entry_number: row.entry_number,
+    entry_date: row.entry_date,
+    description: row.description,
+    source_type: row.source_type,
+    total_debit: Number(row.total_debit),
+    total_credit: Number(row.total_credit),
+    status: row.status,
+    line_count: row.journal_lines?.length ?? 0,
+  }));
+}
+
+export type SalesReportRow = {
+  invoice_number: string;
+  customer_name: string;
+  channel: string;
+  invoice_date: string;
+  total: number;
+  paid_amount: number;
+  remaining: number;
+  status: string;
+  line_count: number;
+};
+
+export async function getSalesReport(
+  from?: string,
+  to?: string,
+): Promise<SalesReportRow[]> {
+  await requireOwnerOrFinance();
+  const supabase = await createClient();
+  let query = supabase
+    .from("sales_invoices")
+    .select("invoice_number, customer_name, channel, invoice_date, total, paid_amount, status, sales_invoice_lines(id)")
+    .order("invoice_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (from) query = query.gte("invoice_date", from.slice(0, 10));
+  if (to) query = query.lte("invoice_date", to.slice(0, 10));
+  const { data } = await query;
+  return ((data as unknown as Array<{
+    invoice_number: string;
+    customer_name: string;
+    channel: string;
+    invoice_date: string;
+    total: number;
+    paid_amount: number;
+    status: string;
+    sales_invoice_lines: Array<{ id: string }> | null;
+  }> | null) ?? []).map((row) => ({
+    invoice_number: row.invoice_number,
+    customer_name: row.customer_name,
+    channel: row.channel,
+    invoice_date: row.invoice_date,
+    total: Number(row.total),
+    paid_amount: Number(row.paid_amount),
+    remaining: Number(row.total) - Number(row.paid_amount),
+    status: row.status,
+    line_count: row.sales_invoice_lines?.length ?? 0,
+  }));
+}
+
+export type StockMovementReportRow = {
+  movement_date: string;
+  product_label: string;
+  sku: string;
+  type: string;
+  qty_in: number;
+  qty_out: number;
+  adjustment: number;
+  unit_cost: number;
+  reference_type: string | null;
+};
+
+export async function getStockMovementReport(
+  from?: string,
+  to?: string,
+): Promise<StockMovementReportRow[]> {
+  await requireOwnerOrFinance();
+  const supabase = await createClient();
+  let query = supabase
+    .from("stock_movements")
+    .select("created_at, type, quantity, unit_cost, reference_type, products:product_id(brand, model, color, size, sku)")
+    .order("created_at", { ascending: false })
+    .limit(800);
+  if (from) query = query.gte("created_at", from);
+  if (to) query = query.lte("created_at", to);
+  const { data } = await query;
+  return ((data as unknown as Array<{
+    created_at: string;
+    type: string;
+    quantity: number;
+    unit_cost: number;
+    reference_type: string | null;
+    products: {
+      brand: string;
+      model: string;
+      color: string | null;
+      size: number | null;
+      sku: string;
+    } | null;
+  }> | null) ?? []).map((row) => {
+    const qty = Number(row.quantity ?? 0);
+    const inbound = ["inbound", "return_in"].includes(row.type);
+    const outbound = ["outbound", "return_out"].includes(row.type);
+    const product = row.products;
+    return {
+      movement_date: row.created_at,
+      product_label: product
+        ? `${product.brand} ${product.model}${product.color ? ` ${product.color}` : ""} • Size ${product.size ?? "-"}`
+        : "Produk tidak ditemukan",
+      sku: product?.sku ?? "-",
+      type: row.type,
+      qty_in: inbound ? qty : 0,
+      qty_out: outbound ? qty : 0,
+      adjustment: !inbound && !outbound ? qty : 0,
+      unit_cost: Number(row.unit_cost ?? 0),
+      reference_type: row.reference_type,
+    };
+  });
+}
+
+export type ArApReportRow = {
+  type: "Piutang" | "Utang";
+  party_name: string;
+  document_number: string;
+  document_date: string;
+  due_date: string | null;
+  total: number;
+  paid_amount: number;
+  remaining: number;
+  status: string;
+};
+
+export async function getArApReport(): Promise<ArApReportRow[]> {
+  await requireOwnerOrFinance();
+  const [ar, ap] = await Promise.all([
+    getOutstandingSalesInvoices(),
+    getOutstandingPurchaseInvoices(),
+  ]);
+  return [
+    ...ar.map((row) => ({
+      type: "Piutang" as const,
+      party_name: row.customer_name,
+      document_number: row.invoice_number,
+      document_date: row.invoice_date,
+      due_date: row.due_date,
+      total: row.total,
+      paid_amount: row.paid_amount,
+      remaining: row.remaining,
+      status: "outstanding",
+    })),
+    ...ap.map((row) => ({
+      type: "Utang" as const,
+      party_name: row.supplier_name,
+      document_number: row.invoice_number,
+      document_date: row.invoice_date,
+      due_date: row.due_date,
+      total: row.total,
+      paid_amount: row.paid_amount,
+      remaining: row.remaining,
+      status: "outstanding",
+    })),
+  ].sort((a, b) => b.remaining - a.remaining);
+}
+
 export async function getStockValue(): Promise<{ items: number; cost: number; retail: number }> {
   await requireOwnerOrFinance();
   const supabase = await createClient();

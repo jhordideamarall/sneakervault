@@ -3,13 +3,19 @@ import {
   getAgingReport,
   getExpenseReport,
   getFinancialSummaryByModel,
+  getArApReport,
+  getGeneralLedgerReport,
+  getJournalReport,
   getMarketplaceCostReport,
   getProfitByChannelReport,
   getProfitReport,
+  getSalesReport,
   getStockCardReport,
+  getStockMovementReport,
   getStockValue,
 } from "@/lib/queries";
 import { ReportsExport } from "@/components/reports/reports-export";
+import { MandatoryReportsClient } from "@/components/reports/mandatory-reports-client";
 import {
   nowWIB,
   wibStartOfDay,
@@ -68,6 +74,10 @@ export default async function ReportsPage({
         <SummaryCards from={from} to={to} />
       </Suspense>
 
+      <Suspense key={`mandatory-${filterKey}`} fallback={<TableSkeleton />}>
+        <MandatoryReportsSection from={from} to={to} periodLabel={periodLabel} />
+      </Suspense>
+
       <Suspense key={`profit-${filterKey}`} fallback={<TableSkeleton />}>
         <ProfitByModelTable from={from} to={to} selectedDate={sp.date} selectedMonth={sp.month} />
       </Suspense>
@@ -84,6 +94,32 @@ export default async function ReportsPage({
         <StockCardTable />
       </Suspense>
     </div>
+  );
+}
+
+async function MandatoryReportsSection({
+  from,
+  to,
+  periodLabel,
+}: {
+  from: string;
+  to: string;
+  periodLabel: string;
+}) {
+  const [generalLedger, journals, sales, stockMovements, arAp] =
+    await Promise.all([
+      getGeneralLedgerReport(from, to),
+      getJournalReport(from, to),
+      getSalesReport(from, to),
+      getStockMovementReport(from, to),
+      getArApReport(),
+    ]);
+
+  return (
+    <MandatoryReportsClient
+      periodLabel={periodLabel}
+      data={{ generalLedger, journals, sales, stockMovements, arAp }}
+    />
   );
 }
 

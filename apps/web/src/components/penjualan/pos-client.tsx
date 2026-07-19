@@ -6,16 +6,19 @@ import {
   Minus,
   Package,
   Plus,
+  RotateCcw,
   ScanBarcode,
   Search,
   Settings2,
   ShoppingCart,
+  Trash2,
 } from "lucide-react";
 import { cn, NumberInput } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
-import { formatRupiah as rp } from "@/lib/format";
-import { posCheckout } from "@/lib/actions/pos";
-import type { BankAccountRow, CustomerRow } from "@/lib/queries";
+import { formatRupiah as rp, formatDate } from "@/lib/format";
+import { cancelPosCheckout, posCheckout } from "@/lib/actions/pos";
+import { SALES_INVOICE_STATUS_LABELS } from "@sneakervault/shared";
+import type { BankAccountRow, CustomerRow, PosSaleRow } from "@/lib/queries";
 import {
   PosProductCard,
   type PosGroup,
@@ -55,12 +58,14 @@ export function PosClient({
   products,
   bankAccounts,
   customers: initialCustomers,
+  recentSales,
   receiptSettings,
   cashierName,
 }: {
   products: PosProduct[];
   bankAccounts: BankAccountRow[];
   customers: CustomerRow[];
+  recentSales: PosSaleRow[];
   receiptSettings: ReceiptSettings;
   cashierName: string;
 }) {
@@ -239,6 +244,20 @@ export function PosClient({
     });
   }
 
+  function cancelSale(sale: PosSaleRow) {
+    const reason = prompt(
+      `Batalkan transaksi POS ${sale.invoice_number}?\nStok, pembayaran, saldo bank, dan jurnal akan dibalik.\n\nAlasan (opsional):`,
+    );
+    if (reason === null) return;
+    startTransition(async () => {
+      const result = await cancelPosCheckout(sale.id, reason || undefined);
+      const message = actionError(result);
+      if (message) return toast.push(message, "error");
+      router.refresh();
+      toast.push(`Transaksi ${sale.invoice_number} dibatalkan`, "success");
+    });
+  }
+
   return (
     <div className="flex h-full min-h-[640px] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1f1f1f] text-white shadow-xl">
       {/* LEFT — search + grid */}
@@ -292,6 +311,84 @@ export function PosClient({
                   {b === "all" ? "Semua" : b}
                 </button>
               ))}
+            </div>
+          </div>
+        ) : null}
+
+        {recentSales.length > 0 ? (
+          <div className="border-t border-white/[0.04] px-4 py-3">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/35">
+                Riwayat POS Terbaru
+              </div>
+              <div className="text-[10px] font-bold text-white/25">
+                {recentSales.length} transaksi
+              </div>
+            </div>
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {recentSales.slice(0, 6).map((sale) => {
+                const cancellable = sale.status === "paid";
+                return (
+                  <div
+                    key={sale.id}
+                    className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-mono text-[11px] font-black text-white/80">
+                          {sale.invoice_number}
+                        </div>
+                        <div className="mt-0.5 truncate text-xs text-white/45">
+                          {sale.customer_name}
+                        </div>
+                      </div>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-black",
+                          sale.status === "cancelled"
+                            ? "border-red-500/20 bg-red-500/10 text-red-300"
+                            : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+                        )}
+                      >
+                        {SALES_INVOICE_STATUS_LABELS[sale.status]}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-end justify-between gap-3">
+                      <div className="text-[10px] leading-relaxed text-white/35">
+                        {formatDate(sale.invoice_date)}
+                        <br />
+                        {sale.line_count} item
+                        {sale.bank_account_name
+                          ? ` · ${sale.bank_account_name}`
+                          : ""}
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-black tabular-nums text-white">
+                          {rp(sale.total)}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => cancelSale(sale)}
+                          disabled={pending || !cancellable}
+                          className="mt-1 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-wide text-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35"
+                          title={
+                            cancellable
+                              ? "Batalkan transaksi POS"
+                              : "Transaksi sudah tidak bisa dibatalkan dari POS"
+                          }
+                        >
+                          {cancellable ? (
+                            <Trash2 className="size-3" />
+                          ) : (
+                            <RotateCcw className="size-3" />
+                          )}
+                          {cancellable ? "Batalkan" : "Selesai"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : null}

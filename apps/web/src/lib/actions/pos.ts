@@ -79,3 +79,40 @@ export async function posCheckout(input: unknown) {
   revalidatePos();
   return { data: result };
 }
+
+export async function cancelPosCheckout(invoiceId: string, reason?: string) {
+  const profile = await requireRole([...POS_ROLES]);
+
+  const lock = await assertPeriodOpen(new Date().toISOString().slice(0, 10));
+  if (lock.error) return { error: { _form: [lock.error] } };
+
+  const supabase = await createClient();
+  const { data, error } = await (supabase as any).rpc("cancel_pos_checkout", {
+    p_invoice_id: invoiceId,
+    p_reason: reason ?? null,
+  });
+
+  if (error) return { error: { _form: [error.message] } };
+
+  const result = data as {
+    invoice_number?: string;
+    payment_number?: string;
+    amount?: number;
+  } | null;
+
+  await logActivity({
+    user_id: profile.id,
+    action: "pos_cancel",
+    entity_type: "sales_invoice",
+    entity_id: invoiceId,
+    new_data: {
+      invoice_number: result?.invoice_number,
+      payment_number: result?.payment_number,
+      amount: result?.amount,
+      reason,
+    },
+  });
+
+  revalidatePos();
+  return { data };
+}

@@ -998,6 +998,7 @@ export type Database = {
           accumulated_depreciation: number
           acquisition_cost: number
           acquisition_date: string
+          asset_account_id: string | null
           asset_code: string | null
           created_at: string
           created_by: string | null
@@ -1016,6 +1017,7 @@ export type Database = {
           accumulated_depreciation?: number
           acquisition_cost: number
           acquisition_date: string
+          asset_account_id?: string | null
           asset_code?: string | null
           created_at?: string
           created_by?: string | null
@@ -1034,6 +1036,7 @@ export type Database = {
           accumulated_depreciation?: number
           acquisition_cost?: number
           acquisition_date?: string
+          asset_account_id?: string | null
           asset_code?: string | null
           created_at?: string
           created_by?: string | null
@@ -1049,6 +1052,13 @@ export type Database = {
           useful_life_months?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "fixed_assets_asset_account_id_fkey"
+            columns: ["asset_account_id"]
+            isOneToOne: false
+            referencedRelation: "chart_of_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fixed_assets_created_by_fkey"
             columns: ["created_by"]
@@ -3317,12 +3327,20 @@ export type Database = {
         Args: { p_payload: Json }
         Returns: Json
       }
+      cancel_pos_checkout: {
+        Args: { p_invoice_id: string; p_reason?: string | null }
+        Returns: Json
+      }
       increment_product_quantity: {
         Args: { p_id: string; qty: number }
         Returns: undefined
       }
       parse_size_to_numeric: { Args: { p_label: string }; Returns: number }
       pos_checkout: { Args: { p_payload: Json }; Returns: Json }
+      update_payroll_run_atomic: {
+        Args: { p_run_id: string; p_payload: Json }
+        Returns: Json
+      }
       recalculate_hpp_by_model:
         | { Args: { p_brand: string; p_model: string }; Returns: undefined }
         | {
