@@ -6,13 +6,14 @@ import { Button, Card, FieldLabel, Input, NumberInput, Select, Textarea } from "
 import { createFixedAsset, disposeFixedAsset } from "@/lib/actions/fixed-assets";
 import { exportToExcel, exportToPDF } from "@/lib/export";
 import { useToast } from "@/components/toast";
-import type { BankAccountRow, FixedAssetRow } from "@/lib/queries";
+import type { BankAccountRow, CoaAccountOption, FixedAssetRow } from "@/lib/queries";
 import { formatDate, formatRupiah } from "@/lib/format";
 import { Archive, Building2, Download, Plus } from "lucide-react";
 
 const emptyForm = {
   asset_code: "",
   name: "",
+  asset_account_id: "",
   acquisition_date: new Date().toISOString().slice(0, 10),
   acquisition_cost: 0,
   salvage_value: 0,
@@ -28,9 +29,11 @@ const emptyForm = {
 export function FixedAssetsClient({
   assets,
   bankAccounts,
+  assetAccounts,
 }: {
   assets: FixedAssetRow[];
   bankAccounts: BankAccountRow[];
+  assetAccounts: CoaAccountOption[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -42,14 +45,15 @@ export function FixedAssetsClient({
     startTransition(async () => {
       const result = await createFixedAsset({
         ...form,
+        asset_account_id: form.asset_account_id || null,
         bank_account_id: form.bank_account_id || null,
       });
       if (result.error) {
         toast.push(Object.values(result.error).flat().join(", "), "error");
         return;
       }
-      toast.push("Aset tetap ditambahkan", "success");
-      setForm(emptyForm);
+        toast.push("Aset tetap ditambahkan", "success");
+        setForm(emptyForm);
       setFormOpen(false);
       router.refresh();
     });
@@ -88,6 +92,9 @@ export function FixedAssetsClient({
     const rows = assets.map((asset) => [
       asset.asset_code ?? "-",
       asset.name,
+      asset.asset_account_code
+        ? `${asset.asset_account_code} · ${asset.asset_account_name}`
+        : "1.2.01 · Aset Tetap Umum",
       formatDate(asset.acquisition_date),
       asset.acquisition_cost,
       asset.accumulated_depreciation,
@@ -104,6 +111,7 @@ export function FixedAssetsClient({
       columns: [
         "Kode",
         "Nama",
+        "Akun Debit",
         "Tanggal",
         "Nilai Perolehan",
         "Akumulasi Depresiasi",
@@ -144,7 +152,7 @@ export function FixedAssetsClient({
           <div>
             <h1 className="text-2xl font-semibold text-white">Aset Tetap</h1>
             <p className="text-sm text-white/45">
-              Register aset, nilai buku, dan depresiasi bulanan saat tutup buku.
+              Pembelian aset tetap, register aset, nilai buku, dan depresiasi bulanan.
             </p>
           </div>
         </div>
@@ -159,7 +167,7 @@ export function FixedAssetsClient({
           </Button>
           <Button type="button" onClick={() => setFormOpen((open) => !open)}>
             <Plus size={16} />
-            Aset Baru
+            Pembelian Aset
           </Button>
         </div>
       </div>
@@ -174,6 +182,20 @@ export function FixedAssetsClient({
         <Card className="grid gap-3 p-5 md:grid-cols-4">
           <div><FieldLabel>Kode Aset</FieldLabel><Input value={form.asset_code} onChange={(e) => setForm({ ...form, asset_code: e.target.value })} /></div>
           <div><FieldLabel>Nama *</FieldLabel><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+          <div>
+            <FieldLabel>Akun Aset Debit</FieldLabel>
+            <Select value={form.asset_account_id} onChange={(e) => setForm({ ...form, asset_account_id: e.target.value })}>
+              <option value="">1.2.01 · Aset Tetap Umum</option>
+              {assetAccounts
+                .filter((account) => account.code !== "1.2.01")
+                .filter((account) => account.code.startsWith("1.2") || /aset|kendaraan|peralatan|inventaris/i.test(account.name))
+                .map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.code} · {account.name}
+                  </option>
+                ))}
+            </Select>
+          </div>
           <div><FieldLabel>Tanggal Perolehan</FieldLabel><Input type="date" value={form.acquisition_date} onChange={(e) => setForm({ ...form, acquisition_date: e.target.value })} /></div>
           <div><FieldLabel>Metode</FieldLabel><Select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value as typeof form.method })}><option value="straight_line">Straight-line</option><option value="double_declining">Double-declining</option></Select></div>
           <div><FieldLabel>Nilai Perolehan</FieldLabel><NumberInput value={form.acquisition_cost} onValueChange={(value) => setForm({ ...form, acquisition_cost: value })} /></div>
@@ -189,13 +211,16 @@ export function FixedAssetsClient({
                 </option>
               ))}
             </Select>
+            <p className="mt-1 text-[11px] text-white/40">
+              Jika pilih bank/kas: Dr akun aset, Cr akun bank/kas. Jika kosong: Cr Hutang Usaha.
+            </p>
           </div>
           <div><FieldLabel>Lokasi</FieldLabel><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></div>
           <div><FieldLabel>Departemen</FieldLabel><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></div>
           <div className="md:col-span-4"><FieldLabel>Catatan</FieldLabel><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           <div className="md:col-span-4 flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setFormOpen(false)}>Batal</Button>
-            <Button type="button" disabled={pending || !form.name.trim() || form.acquisition_cost <= 0} onClick={save}>Simpan</Button>
+            <Button type="button" disabled={pending || !form.name.trim() || form.acquisition_cost <= 0} onClick={save}>Simpan Pembelian Aset</Button>
           </div>
         </Card>
       ) : null}
@@ -203,12 +228,15 @@ export function FixedAssetsClient({
       <div className="overflow-hidden rounded-lg border border-white/[0.06] bg-[#262626]">
         <table className="w-full text-sm">
           <thead className="text-left text-[11px] uppercase tracking-wider text-white/35">
-            <tr><th className="px-4 py-3">Aset</th><th className="px-4 py-3">Tanggal</th><th className="px-4 py-3 text-right">Perolehan</th><th className="px-4 py-3 text-right">Akum. Depresiasi</th><th className="px-4 py-3 text-right">Nilai Buku</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Aksi</th></tr>
+            <tr><th className="px-4 py-3">Aset</th><th className="px-4 py-3">Akun Debit</th><th className="px-4 py-3">Tanggal</th><th className="px-4 py-3 text-right">Perolehan</th><th className="px-4 py-3 text-right">Akum. Depresiasi</th><th className="px-4 py-3 text-right">Nilai Buku</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Aksi</th></tr>
           </thead>
           <tbody className="divide-y divide-white/[0.04]">
             {assets.map((asset) => (
               <tr key={asset.id}>
                 <td className="px-4 py-3 text-white">{asset.name}<div className="text-[11px] text-white/35">{asset.asset_code ?? "—"} · {asset.location ?? "Lokasi belum diisi"}</div></td>
+                <td className="px-4 py-3 text-white/60">
+                  {asset.asset_account_code ? `${asset.asset_account_code} · ${asset.asset_account_name}` : "1.2.01 · Aset Tetap Umum"}
+                </td>
                 <td className="px-4 py-3 text-white/60">{formatDate(asset.acquisition_date)}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-white">{formatRupiah(asset.acquisition_cost)}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-amber-300">{formatRupiah(asset.accumulated_depreciation)}</td>

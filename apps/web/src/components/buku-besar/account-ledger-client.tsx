@@ -3,10 +3,11 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Input, Select } from "@sneakervault/ui";
+import { Button, Input, Select } from "@sneakervault/ui";
 import { COA_TYPE_LABELS, COA_TYPE_TONES } from "@sneakervault/shared";
 import type { AccountLedgerResult } from "@/lib/queries";
 import { QuickTip } from "@/components/ui/quick-tip";
+import { exportToExcel, exportToPDF } from "@/lib/export";
 import { formatRupiahAccounting as fmtRupiah, formatDate as fmtDate } from "@/lib/format";
 import {
   ArrowLeft,
@@ -17,6 +18,8 @@ import {
   Search,
   TrendingUp,
   TrendingDown,
+  Download,
+  FileSpreadsheet,
 } from "lucide-react";
 
 const sourceLabel: Record<string, string> = {
@@ -71,6 +74,60 @@ export function AccountLedgerClient({
     router.push(url.pathname + "?" + url.searchParams.toString());
   }
 
+  async function exportLedger(format: "pdf" | "excel") {
+    if (!account) return;
+    const rows = filtered.map((entry) => [
+      fmtDate(entry.entry_date),
+      entry.entry_number,
+      entry.description,
+      sourceLabel[entry.source_type] ?? entry.source_type,
+      entry.debit,
+      entry.credit,
+      entry.running_balance,
+      entry.status,
+    ]);
+    const params = {
+      title: `Histori Buku Besar ${account.code} - ${account.name}`,
+      sheetName: "Histori Buku Besar",
+      filename:
+        format === "pdf"
+          ? `histori-buku-besar-${account.code}.pdf`
+          : `histori-buku-besar-${account.code}.xlsx`,
+      period: `${fmtDate(initialFrom)} - ${fmtDate(initialTo)}`,
+      sections: [
+        {
+          title: "Ringkasan Akun",
+          columns: ["Keterangan", "Nilai"],
+          rows: [
+            ["Kode Akun", account.code],
+            ["Nama Akun", account.name],
+            ["Tipe", COA_TYPE_LABELS[account.type]],
+            ["Saldo Awal", opening_balance],
+            ["Total Debit", total_debit],
+            ["Total Kredit", total_credit],
+            ["Saldo Akhir", closing_balance],
+          ],
+        },
+        {
+          title: "Mutasi Akun",
+          columns: [
+            "Tanggal",
+            "No Jurnal",
+            "Deskripsi",
+            "Sumber",
+            "Debit",
+            "Kredit",
+            "Saldo Berjalan",
+            "Status",
+          ],
+          rows,
+        },
+      ],
+    };
+    if (format === "pdf") await exportToPDF(params);
+    else await exportToExcel(params);
+  }
+
   if (!account) return null;
 
   return (
@@ -104,10 +161,10 @@ export function AccountLedgerClient({
               </span>
             </div>
             <h1 className="text-2xl font-semibold tracking-tight text-white">
-              {account.name}
+              Histori Buku Besar · {account.name}
             </h1>
             <p className="text-sm text-white/50">
-              Buku Besar Pembantu · Rincian semua transaksi yang menyentuh akun ini
+              Histori per akun COA, saldo berjalan, dan export laporan akun
             </p>
           </div>
         </div>
@@ -201,6 +258,24 @@ export function AccountLedgerClient({
             </option>
           ))}
         </Select>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => void exportLedger("pdf")}
+          className="gap-1.5"
+        >
+          <Download size={14} strokeWidth={1.8} />
+          PDF
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => void exportLedger("excel")}
+          className="gap-1.5"
+        >
+          <FileSpreadsheet size={14} strokeWidth={1.8} />
+          Excel
+        </Button>
       </div>
 
       {/* Ledger table */}

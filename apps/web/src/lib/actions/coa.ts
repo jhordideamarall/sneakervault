@@ -137,3 +137,71 @@ export async function deactivateChartOfAccount(id: string) {
   revalidateCoa();
   return { success: true };
 }
+
+export async function deleteChartOfAccount(id: string) {
+  const profile = await requireRole([...ROLES]);
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("chart_of_accounts")
+    .select("id, code, name, is_system")
+    .eq("id", id)
+    .single();
+  if (!existing) return { error: "Akun tidak ditemukan" };
+  if (existing.is_system) {
+    return { error: "Akun sistem tidak bisa dihapus. Nonaktifkan akun custom saja bila perlu." };
+  }
+
+  const usageChecks = [
+    supabase
+      .from("chart_of_accounts")
+      .select("id", { count: "exact", head: true })
+      .eq("parent_id", id)
+      .then(({ count }) => ({ label: "punya child/sub-akun", count: count ?? 0 })),
+    supabase
+      .from("journal_lines")
+      .select("id", { count: "exact", head: true })
+      .eq("account_id", id)
+      .then(({ count }) => ({ label: "sudah dipakai jurnal", count: count ?? 0 })),
+    supabase
+      .from("bank_accounts")
+      .select("id", { count: "exact", head: true })
+      .eq("coa_account_id", id)
+      .then(({ count }) => ({ label: "terhubung akun kas/bank", count: count ?? 0 })),
+    supabase
+      .from("bank_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("counterpart_account_id", id)
+      .then(({ count }) => ({ label: "dipakai mutasi kas/bank", count: count ?? 0 })),
+    supabase
+      .from("expense_categories")
+      .select("id", { count: "exact", head: true })
+      .eq("account_code", existing.code)
+      .then(({ count }) => ({ label: "dipakai kategori expense", count: count ?? 0 })),
+  ];
+
+  const usages = (await Promise.all(usageChecks)).filter((usage) => usage.count > 0);
+  if (usages.length > 0) {
+    return {
+      error: `Akun belum bisa dihapus karena ${usages
+        .map((usage) => `${usage.label} (${usage.count})`)
+        .join(", ")}. Nonaktifkan akun bila historinya perlu tetap utuh.`,
+    };
+  }
+
+  const { error } = await supabase
+    .from("chart_of_accounts")
+    .delete()
+    .eq("id", id);
+  if (error) return { error: error.message };
+
+  await logActivity({
+    user_id: profile.id,
+    action: "delete",
+    entity_type: "chart_of_account",
+    entity_id: id,
+    old_data: existing,
+  });
+  revalidateCoa();
+  return { success: true };
+}

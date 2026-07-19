@@ -24,6 +24,7 @@ function assetRowFromInput(input: ParsedFixedAssetInput, createdBy?: string) {
   return {
     asset_code: input.asset_code || null,
     name: input.name,
+    asset_account_id: input.asset_account_id ?? null,
     acquisition_date: input.acquisition_date,
     acquisition_cost: input.acquisition_cost,
     salvage_value: input.salvage_value,
@@ -48,6 +49,24 @@ export async function createFixedAsset(input: unknown) {
   const parsed = fixedAssetInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
   const supabase = await createClient();
+
+  let assetDebitRef: Pick<JournalLine, "account_code" | "account_id"> = {
+    account_code: "1.2.01",
+  };
+  if (parsed.data.asset_account_id) {
+    const { data: assetAccount, error: assetAccountError } = await supabase
+      .from("chart_of_accounts")
+      .select("id, type, is_active")
+      .eq("id", parsed.data.asset_account_id)
+      .single();
+    if (assetAccountError || !assetAccount) {
+      return { error: { _form: ["Akun aset tetap tidak ditemukan"] } };
+    }
+    if (assetAccount.type !== "asset" || !assetAccount.is_active) {
+      return { error: { _form: ["Akun aset tetap harus akun asset yang aktif"] } };
+    }
+    assetDebitRef = { account_id: assetAccount.id };
+  }
 
   const bankAccountId = parsed.data.bank_account_id ?? null;
   let bankCurrentBalance = 0;
@@ -148,7 +167,7 @@ export async function createFixedAsset(input: unknown) {
     source_id: data.id,
     user_id: profile.id,
     lines: [
-      { account_code: "1.2.01", debit: parsed.data.acquisition_cost, description: parsed.data.name },
+      { ...assetDebitRef, debit: parsed.data.acquisition_cost, description: parsed.data.name },
       creditLine,
     ],
   });
@@ -217,7 +236,7 @@ export async function disposeFixedAsset(id: string, input: unknown) {
   const supabase = await createClient();
   const { data: asset, error } = await (supabase as any)
     .from("fixed_assets")
-    .select("id, name, acquisition_cost, accumulated_depreciation, status, notes")
+    .select("id, name, asset_account_id, acquisition_cost, accumulated_depreciation, status, notes")
     .eq("id", id)
     .single();
   if (error || !asset) return { error: "Aset tidak ditemukan" };
@@ -242,7 +261,9 @@ export async function disposeFixedAsset(id: string, input: unknown) {
     });
   }
   lines.push({
-    account_code: "1.2.01",
+    ...(asset.asset_account_id
+      ? { account_id: asset.asset_account_id }
+      : { account_code: "1.2.01" }),
     credit: cost,
     description: `Hapus aset tetap ${asset.name}`,
   });

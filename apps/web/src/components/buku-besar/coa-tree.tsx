@@ -20,6 +20,7 @@ import type { CoaRow } from "@/lib/queries";
 import {
   createChartOfAccount,
   deactivateChartOfAccount,
+  deleteChartOfAccount,
   updateChartOfAccount,
 } from "@/lib/actions/coa";
 import { QuickTip } from "@/components/ui/quick-tip";
@@ -37,6 +38,7 @@ import {
   ExternalLink,
   Pencil,
   Plus,
+  Trash2,
 } from "lucide-react";
 
 type TreeNode = CoaRow & { children: TreeNode[] };
@@ -214,6 +216,18 @@ export function CoaTree({ accounts }: { accounts: CoaRow[] }) {
     });
   }
 
+  function deleteAccount(account: CoaRow) {
+    if (!confirm(`Hapus akun ${account.code} · ${account.name}?`)) return;
+    startTransition(async () => {
+      const result = await deleteChartOfAccount(account.id);
+      if (result?.error) {
+        toast.push(firstError(result.error), "error");
+        return;
+      }
+      toast.push("Akun COA dihapus", "success");
+    });
+  }
+
   const q = search.trim().toLowerCase();
   const matches = (n: TreeNode): boolean => {
     if (typeFilter !== "all" && n.type !== typeFilter) return false;
@@ -264,7 +278,7 @@ export function CoaTree({ accounts }: { accounts: CoaRow[] }) {
         title="Cara pakai Chart of Accounts"
         tone="info"
       >
-        Klik <strong>nama akun</strong> di tabel untuk lihat <strong>Buku Besar Pembantu</strong> —
+        Klik <strong>nama akun</strong> di tabel untuk lihat <strong>Histori Buku Besar</strong> —
         rincian setiap transaksi yang menyentuh akun tersebut, lengkap dengan saldo berjalan
         per posting. Akun bertanda <Lock size={10} strokeWidth={2} className="inline-block translate-y-[1px]" /> adalah
         standar SAK EMKM dan tidak dapat dihapus.
@@ -361,6 +375,7 @@ export function CoaTree({ accounts }: { accounts: CoaRow[] }) {
                   q.length > 0,
                   openEdit,
                   deactivateAccount,
+                  deleteAccount,
                   pending,
                 ),
               )
@@ -526,6 +541,7 @@ function renderNode(
   forceExpand: boolean,
   onEdit: (account: CoaRow) => void,
   onDeactivate: (account: CoaRow) => void,
+  onDelete: (account: CoaRow) => void,
   pending: boolean,
 ): React.ReactNode[] {
   const rows: React.ReactNode[] = [];
@@ -620,6 +636,19 @@ function renderNode(
               Nonaktif
             </Button>
           ) : null}
+          {!node.is_system ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={pending}
+              onClick={() => onDelete(node)}
+              className="text-red-300 hover:bg-red-500/10"
+            >
+              <Trash2 size={12} />
+              Hapus
+            </Button>
+          ) : null}
         </div>
       </td>
     </tr>,
@@ -636,6 +665,7 @@ function renderNode(
           forceExpand,
           onEdit,
           onDeactivate,
+          onDelete,
           pending,
         ),
       );

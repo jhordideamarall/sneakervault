@@ -12,7 +12,12 @@ import type { Role } from "@sneakervault/shared";
 
 export const dynamic = "force-dynamic";
 
-export default async function PenerimaanKasPage() {
+export default async function PenerimaanKasPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ invoice?: string }>;
+}) {
+  const sp = await searchParams;
   const profile = await getCurrentUser();
   if (!profile) redirect("/login");
 
@@ -33,6 +38,7 @@ export default async function PenerimaanKasPage() {
       bankAccounts={bankAccounts}
       customers={customers}
       roles={roles as string[]}
+      initialInvoiceId={sp.invoice}
     />
   );
 }
