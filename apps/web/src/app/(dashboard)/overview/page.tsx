@@ -1,7 +1,9 @@
 import { Suspense } from "react";
 import { SearchBar } from "@/components/dashboard/search-bar";
 import { OnlineUsers } from "@/components/dashboard/overview/online-users";
+import { ClientReviewWelcomeCard } from "@/components/dashboard/client-review-welcome-card";
 import { getCurrentUser } from "@/lib/actions/auth";
+import type { Role } from "@sneakervault/shared";
 import { 
   WarehouseConditionSection,
   ConditionSkeleton,
@@ -23,6 +25,7 @@ export default async function OverviewPage({
 }) {
   const sp = await searchParams;
   const profile = await getCurrentUser();
+  const roles = (profile?.roles ?? []) as Role[];
 
   // Derive selected month from params for chart/table filtering
   const selectedMonth = sp.date
@@ -48,6 +51,10 @@ export default async function OverviewPage({
           : "Ringkasan kondisi gudang dan penjualan"
         }
       </p>
+
+      {profile ? (
+        <ClientReviewWelcomeCard roles={roles} userId={profile.id} />
+      ) : null}
 
       {/* Warehouse Condition - Streamed */}
       <Suspense fallback={<ConditionSkeleton />}>
