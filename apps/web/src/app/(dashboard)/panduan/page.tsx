@@ -208,40 +208,41 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
       {
         menu: "Pembelian Barang",
         akses: "Owner, Finance",
-        fungsi: "Mencatat rencana pembelian dari vendor sebelum barang masuk.",
+        fungsi: "Mencatat Pembelian Barang supplier sebelum barang masuk. Ini berbeda dari Pre Order customer.",
         aturan: [
-          "Vendor wajib dipilih; kalau belum ada bisa dibuat dari modal PO atau Master Data.",
+          "Vendor wajib dipilih; kalau belum ada bisa dibuat dari modal Pembelian Barang atau Master Data.",
           "Item bisa dari produk lama atau tulis manual barang baru.",
           "Pajak diinput persen; contoh 11 berarti 11 persen dari subtotal.",
-          "Pembayaran PO bisa Kredit, Bayar Lunas, atau DP.",
+          "Pembayaran Pembelian Barang bisa Kredit, Bayar Lunas, atau DP.",
         ],
         efek: [
-          "Draft PO belum menambah stok.",
-          "Barang baru dari PO dibuat ke inventory saat Penerimaan Barang.",
-          "Jika pembayaran/dp dipilih, kas/bank dan hutang mengikuti status PO/faktur.",
+          "Draft Pembelian Barang belum menambah stok.",
+          "Barang baru dari Pembelian Barang dibuat ke inventory saat Penerimaan Barang.",
+          "Jika pembayaran/DP dipilih, kas/bank dan hutang mengikuti status Pembelian Barang dan faktur.",
         ],
         koreksi: [
-          "PO yang belum diterima bisa diedit atau dibatalkan.",
-          "Jika sudah ada penerimaan/faktur/pembayaran, koreksi lewat modul lanjutan agar audit tetap runtut.",
+          "Batalkan Pembelian Barang hanya jika supplier batal order dan belum ada Penerimaan Barang; alasan wajib diisi.",
+          "Untuk salah input, hapus berurutan: Pembayaran Vendor, Faktur Pembelian, Penerimaan Barang, lalu Pembelian Barang.",
+          "Menghapus Pembelian Barang yang berasal dari pengadaan Pre Order hanya melepas link; data Pre Order customer tetap ada.",
         ],
       },
       {
         menu: "Penerimaan Barang",
         akses: "Owner, Finance, Admin Gudang",
-        fungsi: "Mencatat barang fisik yang datang dari PO.",
+        fungsi: "Mencatat barang fisik yang datang dari Pembelian Barang supplier.",
         aturan: [
           "Terima hanya barang yang benar-benar sudah datang.",
-          "Boleh terima sebagian jika PO belum lengkap.",
+          "Boleh terima sebagian jika Pembelian Barang belum lengkap.",
           "Catatan wajib dipakai jika ada barang cacat, kurang, atau beda kondisi.",
         ],
         efek: [
           "Stok bertambah.",
-          "Produk baru dari PO masuk inventory.",
+          "Produk baru dari Pembelian Barang masuk inventory.",
           "HPP weighted average diperbarui dari harga beli.",
         ],
         koreksi: [
-          "Jika jumlah terima salah, lakukan koreksi stok melalui Stock Opname atau retur supplier sesuai kasus.",
-          "Jika harga modal salah, koreksi di dokumen pembelian sebelum laporan ditutup.",
+          "Jika salah input penerimaan, hapus Faktur Pembelian terkait lebih dulu, lalu hapus dokumen RCV dari Riwayat Penerimaan.",
+          "Penghapusan RCV membalik stok, mutasi, HPP, received qty, dan status Pembelian Barang; ditolak jika stok sudah terpakai.",
         ],
       },
       {
@@ -249,9 +250,9 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         akses: "Owner, Finance",
         fungsi: "Mencatat tagihan vendor sebagai hutang usaha.",
         aturan: [
-          "Faktur dibuat setelah PO/penerimaan jelas.",
+          "Faktur dibuat setelah Pembelian Barang dan Penerimaan Barang jelas.",
           "Nomor faktur vendor dan tanggal harus benar.",
-          "Faktur yang sudah dibayar tidak boleh dibatalkan sebelum pembayaran direverse.",
+          "Faktur yang sudah memiliki Pembayaran Vendor tidak dapat dihapus.",
         ],
         efek: [
           "Membentuk hutang/AP.",
@@ -260,7 +261,7 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         ],
         koreksi: [
           "Edit faktur sebelum pembayaran jika ada salah nilai.",
-          "Reverse pembayaran dulu sebelum membatalkan faktur yang sudah dibayar.",
+          "Untuk salah input, hapus Pembayaran Vendor lebih dulu, lalu Hapus Faktur Pembelian.",
         ],
       },
       {
@@ -278,8 +279,8 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
           "Jurnal pembayaran vendor terbentuk otomatis.",
         ],
         koreksi: [
-          "Gunakan reverse pembayaran jika salah bayar.",
-          "Setelah reverse, buat pembayaran baru dengan bank/nominal yang benar.",
+          "Gunakan Hapus Pembayaran jika salah bank, tanggal, alokasi, atau nominal.",
+          "Hapus menghilangkan payment, alokasi, mutasi kas/bank, dan jurnal asli; lalu buat pembayaran yang benar.",
         ],
       },
     ],
@@ -321,7 +322,8 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
           "Kas/bank bertambah dan jurnal otomatis terbentuk.",
         ],
         koreksi: [
-          "Jika salah transaksi, batalkan/reverse dari invoice/penerimaan terkait sesuai status.",
+          "Riwayat POS tetap tersedia dan tidak memiliki tombol pembatalan dari layar kasir.",
+          "Flow hapus accounting tidak mencakup invoice POS, marketplace, packing, retur, atau settlement.",
           "Jika stok salah karena POS dobel, audit dari Activity Log dan mutasi stok.",
         ],
       },
@@ -341,7 +343,8 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         ],
         koreksi: [
           "Edit selama masih draft atau sebelum pembayaran kompleks.",
-          "Invoice yang salah setelah pembayaran perlu cancel/reversal sesuai status agar AR dan bank tidak pecah.",
+          "Untuk salah input, hapus Penerimaan Customer lebih dulu, lalu Hapus Invoice Penjualan.",
+          "Invoice POS, marketplace, packing, retur, atau settlement tidak dapat dihapus dari flow accounting ini.",
         ],
       },
       {
@@ -359,8 +362,8 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
           "Jurnal penerimaan kas terbentuk.",
         ],
         koreksi: [
-          "Reverse penerimaan jika salah bank, tanggal, atau nominal.",
-          "Buat ulang penerimaan yang benar setelah reverse.",
+          "Hapus Penerimaan jika salah bank, tanggal, alokasi, atau nominal.",
+          "Hapus menghilangkan penerimaan, alokasi, mutasi kas/bank, dan jurnal asli; lalu buat penerimaan yang benar.",
         ],
       },
       {
@@ -382,7 +385,7 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         ],
         koreksi: [
           "Gunakan Petakan SKU untuk SKU asing.",
-          "Buat produk dari import produk/PO jika belum ada.",
+          "Buat produk dari import produk/Pembelian Barang jika belum ada.",
           "Jika file salah channel, batal review lalu upload ulang di tab yang benar.",
         ],
       },
@@ -466,7 +469,7 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         ],
         koreksi: [
           "Jika produk tidak terlihat, cari exact SKU/model dan cek pagination.",
-          "Jika HPP 0, isi lewat edit HPP, Barang Masuk, PO + Penerimaan, atau cutover.",
+          "Jika HPP 0, isi lewat edit HPP, Barang Masuk, Pembelian Barang + Penerimaan, atau cutover.",
           "Jika status fisik salah, ubah Normal/Defect/Lama Tidak Laku sesuai izin.",
         ],
       },
@@ -741,10 +744,10 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         fungsi: "Master vendor untuk pembelian dan barang masuk.",
         aturan: [
           "Nama supplier harus unik dan jelas.",
-          "Supplier bisa dibuat dari Master Data atau cepat dari modal PO.",
+          "Supplier bisa dibuat dari Master Data atau cepat dari modal Pembelian Barang.",
         ],
         efek: [
-          "Supplier muncul di PO, penerimaan, faktur pembelian, dan pembayaran vendor.",
+          "Supplier muncul di Pembelian Barang, penerimaan, faktur pembelian, dan pembayaran vendor.",
           "Nonaktifkan supplier jika tidak dipakai lagi.",
         ],
         koreksi: [
@@ -902,8 +905,8 @@ export default function PanduanPage() {
         subtitle="Modul saling terhubung. Database baru kosong — isi master data dulu, baru transaksi bisa jalan."
       >
         <Note tone="warn">
-          Kalau langsung buat PO / penjualan saat data kosong akan terasa buntu (dropdown vendor/produk kosong).
-          Lakukan 4 langkah ini sekali di awal. Khusus PO, kamu juga bisa <b>tulis barang baru manual</b> (lihat §5).
+          Kalau langsung buat Pembelian Barang / penjualan saat data kosong akan terasa buntu (dropdown vendor/produk kosong).
+          Lakukan 4 langkah ini sekali di awal. Khusus Pembelian Barang, kamu juga bisa <b>tulis barang baru manual</b> (lihat §5).
         </Note>
         <div className="mt-4">
           <Steps
@@ -911,7 +914,7 @@ export default function PanduanPage() {
               { title: "Akun Bank & Kas", desc: "Kas & Bank → Akun Bank. Tambah minimal 1 kas tunai + 1 rekening bank. Dipakai semua pembayaran." },
               { title: "Supplier (Vendor)", desc: "Master Data → Supplier. Vendor tempat kulakan barang. Dipakai di Pembelian." },
               { title: "Customer", desc: "Master Data → Customer. Boleh diisi sekarang atau dibuat sambil jalan (POS/Invoice bisa tambah on-the-fly)." },
-              { title: "Produk / Stok awal", desc: "Gudang → Barang Masuk (scan), atau Pengaturan → Sinkronisasi Data (import Excel massal), atau lewat PO + Penerimaan. Produk lahir dari sini." },
+              { title: "Produk / Stok awal", desc: "Gudang → Barang Masuk (scan), atau Pengaturan → Sinkronisasi Data (import Excel massal), atau lewat Pembelian Barang + Penerimaan. Produk lahir dari sini." },
               { title: "Mulai transaksi", desc: "Setelah itu Pembelian, Penjualan, Gudang, dan Keuangan jalan normal — jurnal & laporan terbentuk otomatis." },
             ]}
           />
@@ -955,7 +958,7 @@ export default function PanduanPage() {
             persis role itu tanpa logout. Klik <b>Reset (Owner)</b> untuk kembali penuh.
           </Sub>
           <Sub icon={<Bell size={15} />} title="Signal titik di menu">
-            Titik <span className="text-red-400">merah</span> = perlu tindakan (retur, order baru, PO approve, req hapus),
+            Titik <span className="text-red-400">merah</span> = perlu tindakan (retur, order baru, persetujuan Pembelian Barang, req hapus),
             titik <span className="text-amber-400">amber</span> = perlu dipantau (opname, AR/AP, settlement, rekonsiliasi).
             Signal tidak dipakai untuk stok rendah biasa supaya menu tidak terus menyala tanpa aksi jelas.
           </Sub>
@@ -988,7 +991,7 @@ export default function PanduanPage() {
               Fokus gudang: produk fisik, stok, barcode, penerimaan barang, packing, retur, dan opname.
             </p>
             <ol className="list-decimal space-y-1.5 pl-4">
-              <li>Kalau barang baru belum ada, buat dari <b>Inventori</b>, <b>Import Produk</b>, atau dari PO saat barang diterima.</li>
+              <li>Kalau barang baru belum ada, buat dari <b>Inventori</b>, <b>Import Produk</b>, atau dari Pembelian Barang saat barang diterima.</li>
               <li>Saat barang datang, buka <b>Barang Masuk</b>, scan/isi SKU, input qty, supplier, dan harga modal.</li>
               <li>Gunakan <b>Generate Barcode</b> untuk produk yang belum punya label internal.</li>
               <li>Untuk cek fisik berkala, buat sesi <b>Stock Opname</b>, input hasil hitung, lalu minta owner approve selisih.</li>
@@ -1029,7 +1032,8 @@ export default function PanduanPage() {
               <li>Pastikan <b>Akun Bank & Kas</b> sudah dibuat sebelum transaksi pembayaran/penerimaan.</li>
               <li>Untuk marketplace, tunggu file settlement saat dana dilepas, lalu import di <b>Rekonsiliasi Settlement</b>.</li>
               <li>Settlement membuat <b>Penerimaan Penjualan</b>, alokasi invoice, mutasi bank, dan jurnal biaya marketplace otomatis.</li>
-              <li>Untuk pembelian, jalankan alur PO → Penerimaan Barang → Faktur Pembelian → Bayar Vendor.</li>
+              <li>Untuk pembelian supplier, jalankan alur Pembelian Barang → Penerimaan Barang → Faktur Pembelian → Bayar Vendor.</li>
+              <li>Untuk koreksi salah input, hapus dari kanan ke kiri. Batalkan Pembelian Barang hanya untuk supplier batal order sebelum penerimaan.</li>
               <li>Cek <b>Buku Besar</b>, <b>Mutasi Bank</b>, <b>Rekonsiliasi</b>, dan <b>Laporan Keuangan</b> sebelum closing.</li>
             </ol>
           </Sub>
@@ -1039,7 +1043,7 @@ export default function PanduanPage() {
             <ol className="list-decimal space-y-1.5 pl-4">
               <li><b>Marketplace:</b> Admin Online import produk/pesanan → Finance import settlement saat dana cair.</li>
               <li><b>Offline:</b> Gudang pastikan stok tersedia → Shopkeeper POS checkout → Finance cek kas/bank dan laporan.</li>
-              <li><b>Pembelian:</b> Finance buat PO/faktur → Gudang terima fisik → Finance bayar vendor.</li>
+              <li><b>Pembelian supplier:</b> Finance buat Pembelian Barang → Gudang terima fisik → Finance cek faktur dan bayar vendor.</li>
               <li><b>Opname:</b> Gudang hitung fisik → Owner/Finance review dampak → Owner approve penyesuaian.</li>
             </ol>
           </Sub>
@@ -1097,21 +1101,26 @@ export default function PanduanPage() {
         id="pembelian"
         icon={<ClipboardList size={20} />}
         title="5 · Pembelian"
-        subtitle="Pembelian Barang → Penerimaan → Faktur → Bayar Vendor"
+        subtitle="Pembelian Barang supplier → Penerimaan Barang → Faktur Pembelian → Pembayaran Vendor"
       >
         <Steps
           steps={[
-            { title: "Pembelian Barang (PO)", desc: "Pilih vendor + tambah item. Pembayaran: Kredit / Bayar Lunas / DP (pilih akun bank). PO Draft → Disetujui." },
-            { title: "Terima Barang (Penerimaan)", desc: "Saat barang datang, terima PO (boleh sebagian). Stok bertambah + HPP dihitung ulang otomatis." },
+            { title: "Pembelian Barang Supplier", desc: "Pilih vendor + tambah item. Pembayaran: Kredit / Bayar Lunas / DP (pilih akun bank). Status Draft → Disetujui." },
+            { title: "Terima Barang (Penerimaan)", desc: "Saat barang datang, terima Pembelian Barang (boleh sebagian). Sistem membuat dokumen RCV; stok dan HPP diperbarui otomatis." },
             { title: "Faktur Pembelian", desc: "Catat tagihan vendor (hutang/AP). Status Belum Dibayar → Sebagian → Lunas. Jurnal otomatis." },
             { title: "Bayar Vendor", desc: "Lunasi faktur dari kas/bank. Saldo bank turun, hutang berkurang, jurnal pembayaran otomatis." },
           ]}
         />
-        <div className="mt-4">
+        <div className="mt-4 space-y-3">
           <Note>
-            <b>PO barang baru (manual):</b> di “Tambah Item” ada tab <b>Tulis Manual (barang baru)</b> — ketik brand/model/size/
+            <b>Pembelian Barang untuk barang baru:</b> di “Tambah Item” ada tab <b>Tulis Manual (barang baru)</b> — ketik brand/model/size/
             warna/SKU/harga/qty untuk barang yang <b>belum ada</b> di sistem. Produknya <b>dibuat otomatis &amp; masuk inventori
-            saat Penerimaan Barang</b>. Jadi PO tetap bisa jalan walau inventori masih kosong.
+            saat Penerimaan Barang</b>. Pembelian Barang tetap bisa jalan walau inventori masih kosong.
+          </Note>
+          <Note tone="warn">
+            <b>Pembelian Barang supplier bukan Pre Order customer.</b> Untuk koreksi salah input, hapus dari kanan ke kiri:
+            Pembayaran Vendor → Faktur Pembelian → Penerimaan RCV → Pembelian Barang. Data Pre Order customer tidak ikut
+            dihapus. Tombol <b>Batalkan Pembelian (Supplier)</b> hanya dipakai ketika supplier membatalkan order sebelum penerimaan.
           </Note>
         </div>
       </Section>
@@ -1130,9 +1139,12 @@ export default function PanduanPage() {
           </Sub>
           <Sub icon={<FileText size={15} />} title="Invoice Penjualan">
             Buat invoice (pilih customer + item) → terbit (piutang/AR). Status: Draft → Terbit → Sebagian → Lunas.
+            Dari baris atau detail invoice, klik <b>Terima Pembayaran</b> untuk langsung membuka Penerimaan Kas dengan
+            invoice otomatis terpilih.
           </Sub>
           <Sub icon={<Wallet size={15} />} title="Penerimaan Kas">
-            Saat customer bayar invoice → catat penerimaan ke akun bank → AR lunas, jurnal otomatis.
+            Saat customer bayar invoice → catat penerimaan ke akun bank → AR lunas, jurnal otomatis. Untuk salah input,
+            hapus Penerimaan Customer lebih dulu, lalu hapus Invoice Penjualan. Stok, kas/bank, dan jurnal dihitung ulang.
           </Sub>
           <Sub icon={<ShoppingCart size={15} />} title="Order Masuk & Terjual">
             <b>Order Masuk</b>: monitoring pesanan/packing. <b>Terjual</b>: riwayat barang yang sudah dikirim (jalur packing).
@@ -1205,7 +1217,7 @@ export default function PanduanPage() {
             { title: "Jurnal otomatis", desc: "Setiap penjualan, pembelian, pembayaran, settlement, opname, beban — langsung membentuk jurnal balanced." },
             { title: "Chart of Accounts (CoA)", desc: "37 akun standar sudah ter-seed (Kas, Bank, Piutang, Persediaan, Saldo Marketplace, Penjualan per channel, HPP, beban, dll)." },
             { title: "Jurnal Umum (manual)", desc: "Buku Besar → Jurnal Umum. Owner/Finance bisa buat, edit, dan hapus jurnal manual selama periode belum dikunci dan jurnal tetap balance." },
-            { title: "Jurnal otomatis tidak diedit langsung", desc: "Jurnal dari POS, invoice, settlement, pembelian, pembayaran, dan stok harus dikoreksi lewat modul asalnya, atau dibuat Jurnal Umum/reversal. Ini menjaga stok, piutang, hutang, bank, dan buku besar tetap sinkron." },
+            { title: "Jurnal otomatis tidak diedit langsung", desc: "Jurnal dari invoice accounting, pembelian, pembayaran, dan penerimaan ikut dihapus oleh flow Hapus pada modul asalnya. POS, settlement, packing, retur, dan transaksi lain mengikuti mekanisme koreksi khususnya. Ini menjaga stok, piutang, hutang, bank, dan buku besar tetap sinkron." },
             { title: "Tutup Buku (Periode)", desc: "Kunci periode (fiscal lock) agar transaksi periode lama tidak berubah." },
           ]}
         />
@@ -1265,12 +1277,12 @@ export default function PanduanPage() {
         <div className="grid gap-3 md:grid-cols-2">
           <Sub icon={<QrCode size={15} />} title="SKU tidak dikenali saat import pesanan">
             Klik <b>Petakan SKU</b> untuk menghubungkan SKU marketplace ke produk sistem. Jika produknya belum ada,
-            buat produk dulu lewat <b>Inventori → Import Produk</b>, <b>Tambah Produk</b>, atau PO + Penerimaan Barang.
+            buat produk dulu lewat <b>Inventori → Import Produk</b>, <b>Tambah Produk</b>, atau Pembelian Barang + Penerimaan Barang.
             Setelah dipetakan, sistem mengingat mapping untuk import berikutnya.
           </Sub>
           <Sub icon={<Package size={15} />} title="Database masih kosong">
             Urutan paling aman: buat akun bank → buat supplier/customer penting → import atau tambah produk → isi stok/HPP
-            lewat Barang Masuk/PO/cutover. File pesanan marketplace bisa membantu bootstrap produk, tetapi HPP perlu diisi
+            lewat Barang Masuk/Pembelian Barang/cutover. File pesanan marketplace bisa membantu bootstrap produk, tetapi HPP perlu diisi
             agar laba dan COGS akurat.
           </Sub>
           <Sub icon={<Banknote size={15} />} title="Settlement tidak match invoice">

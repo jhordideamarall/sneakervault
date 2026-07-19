@@ -15,10 +15,12 @@ import type { PaymentMethod } from "@sneakervault/shared";
 import { useToast } from "@/components/toast";
 import { formatRupiah as fmtRupiah, formatDate } from "@/lib/format";
 import { QuickTip } from "@/components/ui/quick-tip";
+import { TransactionDeleteDialog } from "@/components/transaction-delete-dialog";
 import {
   createCustomerPayment,
-  reverseCustomerPayment,
+  deleteCustomerPayment,
 } from "@/lib/actions/customer-payments";
+import type { TransactionDeleteResult } from "@/lib/actions/transaction-deletes";
 import type {
   CustomerPaymentRow,
   OutstandingSalesInvoiceRow,
@@ -37,7 +39,7 @@ import {
   Wallet,
   Smartphone,
   Banknote,
-  RotateCcw,
+  Trash2,
   AlertTriangle,
   Paperclip,
   ExternalLink,
@@ -110,6 +112,10 @@ export function PenerimaanKasClient({
     invoiceId?: string;
   } | null>(null);
   const [viewing, setViewing] = useState<CustomerPaymentRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    payment: CustomerPaymentRow;
+    blocker: TransactionDeleteResult | null;
+  } | null>(null);
   const initialInvoiceOpenedRef = useRef<string | null>(null);
 
   const canManage = roles.includes("owner") || roles.includes("finance");
@@ -174,18 +180,25 @@ export function PenerimaanKasClient({
     };
   }, [payments, outstanding]);
 
-  function handleReverse(p: CustomerPaymentRow) {
-    const reason = prompt(
-      `Reverse penerimaan ${p.payment_number}?\nInvoice akan kembali outstanding & saldo bank dikurangi.\n\nAlasan (opsional):`,
-    );
-    if (reason === null) return;
+  function openDelete(payment: CustomerPaymentRow) {
+    setDeleteTarget({ payment, blocker: null });
+  }
+
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
     startTransition(async () => {
-      const r = await reverseCustomerPayment(p.id, reason || undefined);
+      const r = await deleteCustomerPayment(target.payment.id);
       if ("error" in r && r.error) {
         toast.push(typeof r.error === "string" ? r.error : "Gagal", "error");
         return;
       }
-      toast.push("Penerimaan dibatalkan, invoice+saldo dikembalikan", "success");
+      if (r.data && !r.data.deleted) {
+        setDeleteTarget({ ...target, blocker: r.data });
+        return;
+      }
+      toast.push("Penerimaan Customer dihapus permanen", "success");
+      setDeleteTarget(null);
       setViewing(null);
       router.refresh();
     });
@@ -235,6 +248,8 @@ export function PenerimaanKasClient({
         nominal ke invoice <em>outstanding</em>. Saldo bank ter-update otomatis. Jurnal
         Dr <em>Kas-Bank</em> / Cr <em>Piutang Usaha</em> dibuat. Satu pembayaran bisa
         di-alokasi ke beberapa invoice sekaligus.
+        Untuk koreksi salah input, gunakan <strong>Hapus Penerimaan</strong>; mutasi
+        kas/bank dan jurnal asli ikut dihapus, lalu status invoice dihitung ulang.
       </QuickTip>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -336,13 +351,25 @@ export function PenerimaanKasClient({
                     +{fmtRupiah(p.amount)}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => setViewing(p)}
-                      className="rounded p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white"
-                      title="Detail"
-                    >
-                      <Eye size={14} strokeWidth={1.8} />
-                    </button>
+                    <div className="inline-flex items-center gap-1">
+                      <button
+                        onClick={() => setViewing(p)}
+                        className="rounded p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white"
+                        title="Detail"
+                      >
+                        <Eye size={14} strokeWidth={1.8} />
+                      </button>
+                      {canManage ? (
+                        <button
+                          onClick={() => openDelete(p)}
+                          disabled={pending}
+                          className="rounded p-1.5 text-white/40 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
+                          title="Hapus Penerimaan Customer"
+                        >
+                          <Trash2 size={14} strokeWidth={1.8} />
+                        </button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -370,9 +397,25 @@ export function PenerimaanKasClient({
         <ViewModal
           payment={viewing}
           onClose={() => setViewing(null)}
-          canReverse={canManage}
+          canDelete={canManage}
           pending={pending}
-          onReverse={() => handleReverse(viewing)}
+          onDelete={() => openDelete(viewing)}
+        />
+      ) : null}
+      {deleteTarget ? (
+        <TransactionDeleteDialog
+          open
+          title={`Hapus Penerimaan Customer ${deleteTarget.payment.payment_number}?`}
+          description="Penerimaan salah input akan dibuang permanen tanpa menyimpan transaksi reversal."
+          impacts={[
+            "Alokasi ke Invoice Penjualan ikut dihapus.",
+            "Mutasi kas/bank dan jurnal asli ikut dihapus.",
+            "Saldo kas/bank, paid amount, dan status invoice dihitung ulang.",
+          ]}
+          pending={pending}
+          blocker={deleteTarget.blocker}
+          onOpenChange={(open) => !open && setDeleteTarget(null)}
+          onConfirm={confirmDelete}
         />
       ) : null}
     </div>
@@ -857,15 +900,15 @@ function ReceiveModal({
 function ViewModal({
   payment,
   onClose,
-  canReverse,
+  canDelete,
   pending,
-  onReverse,
+  onDelete,
 }: {
   payment: CustomerPaymentRow;
   onClose: () => void;
-  canReverse: boolean;
+  canDelete: boolean;
   pending: boolean;
-  onReverse: () => void;
+  onDelete: () => void;
 }) {
   return (
     <div
@@ -987,15 +1030,15 @@ function ViewModal({
 
         <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-white/[0.06] px-6 py-4">
           <div>
-            {canReverse ? (
+            {canDelete ? (
               <button
-                onClick={onReverse}
+                onClick={onDelete}
                 disabled={pending}
                 className="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs text-white/60 hover:bg-red-500/10 hover:text-red-300"
-                title="Batalkan penerimaan ini & kembalikan invoice+saldo"
+                title="Hapus Penerimaan Customer beserta efeknya"
               >
-                <RotateCcw size={13} strokeWidth={1.8} />
-                Reverse Penerimaan
+                <Trash2 size={13} strokeWidth={1.8} />
+                Hapus Penerimaan
               </button>
             ) : null}
           </div>

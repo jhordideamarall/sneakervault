@@ -12,6 +12,7 @@ import {
   Alert,
 } from "@sneakervault/ui";
 import { QuickTip } from "@/components/ui/quick-tip";
+import { TransactionDeleteDialog } from "@/components/transaction-delete-dialog";
 import { exportToExcel, exportToPDF } from "@/lib/export";
 import { PO_STATUS_LABELS, PO_STATUS_TONES } from "@sneakervault/shared";
 import type { PoStatus } from "@sneakervault/shared";
@@ -25,6 +26,7 @@ import {
   updatePurchaseOrder,
   loadPoDetailAction,
 } from "@/lib/actions/purchase-orders";
+import type { TransactionDeleteResult } from "@/lib/actions/transaction-deletes";
 import { createSupplier } from "@/lib/actions/suppliers";
 import type {
   PoListRow,
@@ -145,6 +147,11 @@ export function PurchaseOrderClient({
   const [detailCache, setDetailCache] =
     useState<Record<string, PoDetail>>(detailById);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    referenceNumber: string;
+    blocker: TransactionDeleteResult | null;
+  } | null>(null);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -157,7 +164,7 @@ export function PurchaseOrderClient({
   }, [detailById]);
 
   const canManage = roles.includes("owner") || roles.includes("finance");
-  const canDelete = roles.includes("owner");
+  const canDelete = canManage;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -257,7 +264,7 @@ export function PurchaseOrderClient({
         error?: string;
       };
       if (result.error || !result.data) {
-        toast.push(result.error ?? "Detail PO tidak ditemukan", "error");
+        toast.push(result.error ?? "Detail Pembelian Barang tidak ditemukan", "error");
         return null;
       }
       setDetailCache((prev) => ({ ...prev, [id]: result.data! }));
@@ -352,7 +359,7 @@ export function PurchaseOrderClient({
   function handleSave() {
     if (!editing || editing.mode === "view") return;
     if (form.lines.length === 0) {
-      setFormError("Tambahkan minimal 1 item ke PO");
+      setFormError("Tambahkan minimal 1 item ke Pembelian Barang");
       return;
     }
     if (!form.supplier_id) {
@@ -373,7 +380,9 @@ export function PurchaseOrderClient({
         return;
       }
       if (computedDpAmount >= formTotal) {
-        setFormError("DP tidak boleh ≥ total PO. Pakai 'Bayar Lunas' jika ingin bayar penuh.");
+        setFormError(
+          "DP tidak boleh melebihi atau sama dengan total Pembelian Barang. Pakai 'Bayar Lunas' jika ingin bayar penuh.",
+        );
         return;
       }
     }
@@ -434,7 +443,9 @@ export function PurchaseOrderClient({
         return;
       }
       toast.push(
-        editing.mode === "new" ? "PO berhasil dibuat" : "PO diperbarui",
+        editing.mode === "new"
+          ? "Pembelian Barang berhasil dibuat"
+          : "Pembelian Barang diperbarui",
         "success",
       );
       close();
@@ -443,48 +454,64 @@ export function PurchaseOrderClient({
   }
 
   function handleApprove(id: string) {
-    if (!confirm("Setujui PO ini? Setelah disetujui, PO tidak bisa diedit.")) return;
+    if (
+      !confirm(
+        "Setujui Pembelian Barang ini? Setelah disetujui, transaksi tidak bisa diedit.",
+      )
+    )
+      return;
     startTransition(async () => {
       const r = await approvePurchaseOrder(id);
       if ("error" in r && r.error) {
         toast.push(typeof r.error === "string" ? r.error : "Gagal", "error");
         return;
       }
-      toast.push("PO disetujui — siap diterima gudang", "success");
+      toast.push("Pembelian Barang disetujui dan siap diterima gudang", "success");
       close();
       router.refresh();
     });
   }
 
   function handleCancel(id: string) {
-    const reason = prompt("Alasan pembatalan? (opsional)");
+    const reason = prompt(
+      "Alasan supplier membatalkan Pembelian Barang? Alasan wajib diisi.",
+    );
     if (reason === null) return;
+    if (!reason.trim()) {
+      toast.push("Alasan pembatalan supplier wajib diisi", "error");
+      return;
+    }
     startTransition(async () => {
-      const r = await cancelPurchaseOrder(id, reason || undefined);
+      const r = await cancelPurchaseOrder(id, reason.trim());
       if ("error" in r && r.error) {
         toast.push(typeof r.error === "string" ? r.error : "Gagal", "error");
         return;
       }
-      toast.push("PO dibatalkan", "success");
+      toast.push("Pembelian Barang dibatalkan oleh supplier", "success");
       close();
       router.refresh();
     });
   }
 
-  function handleDelete(id: string, poNumber: string) {
-    if (
-      !confirm(
-        `Hapus ${poNumber}? Sistem akan auto-reverse pembayaran/faktur yang hanya terkait PO ini. Jika sudah ada penerimaan stok atau pembayaran gabungan, hapus akan ditahan.`,
-      )
-    )
-      return;
+  function openDelete(id: string, referenceNumber: string) {
+    setDeleteTarget({ id, referenceNumber, blocker: null });
+  }
+
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
     startTransition(async () => {
-      const r = await deletePurchaseOrder(id);
+      const r = await deletePurchaseOrder(target.id);
       if ("error" in r && r.error) {
         toast.push(typeof r.error === "string" ? r.error : "Gagal", "error");
         return;
       }
-      toast.push("PO dihapus", "success");
+      if (r.data && !r.data.deleted) {
+        setDeleteTarget({ ...target, blocker: r.data });
+        return;
+      }
+      toast.push("Pembelian Barang dihapus", "success");
+      setDeleteTarget(null);
       close();
       router.refresh();
     });
@@ -501,8 +528,8 @@ export function PurchaseOrderClient({
       PO_STATUS_LABELS[order.status],
     ]);
     const params = {
-      title: "Daftar Purchase Order",
-      sheetName: "Purchase Order",
+      title: "Daftar Pembelian Barang Supplier",
+      sheetName: "Pembelian Barang",
       filename:
         format === "pdf"
           ? "purchase-order.pdf"
@@ -518,7 +545,7 @@ export function PurchaseOrderClient({
       ],
       rows,
       summary: [
-        { label: "Total PO", value: String(filtered.length) },
+        { label: "Total Pembelian Barang", value: String(filtered.length) },
         { label: "Outstanding", value: fmtRupiah(stats.open_value) },
       ],
     };
@@ -545,28 +572,29 @@ export function PurchaseOrderClient({
         {canManage ? (
           <Button onClick={openNew} className="gap-2">
             <Plus size={16} strokeWidth={2} />
-            PO Baru
+            Pembelian Barang Baru
           </Button>
         ) : null}
       </div>
 
       <QuickTip
-        id="pembelian-po-intro-v2"
-        title="Alur Pembelian — disederhanakan"
+        id="pembelian-po-intro-v3"
+        title="Alur Pembelian Barang dari supplier"
         tone="info"
       >
-        <strong>1. Buat PO</strong> → <strong>2. Approve</strong> → <strong>3. Penerimaan Barang</strong> (stok+HPP auto, dan{" "}
-        <strong>Faktur otomatis dibuat saat PO completed ✨</strong>) → <strong>4. Bayar Vendor</strong> (pilih metode tunai / transfer, jurnal otomatis).
+        <strong>1. Buat Pembelian Barang</strong> → <strong>2. Setujui</strong> → <strong>3. Penerimaan Barang</strong> (stok dan HPP otomatis, lalu{" "}
+        <strong>Faktur Pembelian dibuat saat Pembelian Barang selesai diterima</strong>) → <strong>4. Bayar Vendor</strong>.
         <br />
         <span className="mt-1 inline-block text-[12px] text-white/55">
-          💡 <strong>Tunai</strong>: di step Bayar Vendor pilih metode <em>Cash</em>, bayar penuh.{" "}
-          <strong>Uang muka / DP</strong>: di Bayar Vendor isi nominal partial dulu — sisa hutang tetap tercatat untuk dibayar berikutnya.
+          <strong>Pembelian Barang supplier berbeda dari Pre Order customer.</strong>{" "}
+          Hapus salah input dari tahap terakhir: Pembayaran Vendor → Faktur Pembelian → Penerimaan Barang → Pembelian Barang.{" "}
+          <strong>Batalkan Pembelian Barang</strong> hanya untuk supplier batal order sebelum ada penerimaan.
         </span>
       </QuickTip>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <StatTile label="Total PO" value={stats.total.toString()} />
+        <StatTile label="Total Pembelian Barang" value={stats.total.toString()} />
         <StatTile label="Draft" value={stats.draft.toString()} />
         <StatTile
           label="Disetujui"
@@ -710,6 +738,16 @@ export function PurchaseOrderClient({
                             <Receipt size={14} strokeWidth={1.8} />
                           </button>
                         ) : null}
+                        {canDelete ? (
+                          <button
+                            onClick={() => openDelete(o.id, o.po_number)}
+                            disabled={pending}
+                            className="rounded p-1.5 text-white/40 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
+                            title="Hapus Pembelian Barang"
+                          >
+                            <Trash2 size={14} strokeWidth={1.8} />
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -760,7 +798,30 @@ export function PurchaseOrderClient({
           pending={pending}
           onApprove={() => handleApprove(editing.po.id)}
           onCancel={() => handleCancel(editing.po.id)}
-          onDelete={() => handleDelete(editing.po.id, editing.po.po_number)}
+          onDelete={() => openDelete(editing.po.id, editing.po.po_number)}
+        />
+      ) : null}
+      {deleteTarget ? (
+        <TransactionDeleteDialog
+          open
+          title={`Hapus Pembelian Barang ${deleteTarget.referenceNumber}?`}
+          description="Tindakan ini membuang dokumen Purchase Order supplier secara permanen."
+          impacts={[
+            "Pembayaran Vendor, Faktur Pembelian, dan Penerimaan Barang harus sudah dihapus dari tahap terakhir.",
+            "Sistem tidak menghapus transaksi turunan secara otomatis.",
+            "Pre Order customer tetap ada; hanya tautan pengadaannya yang dilepas.",
+          ]}
+          pending={pending}
+          blocker={deleteTarget.blocker}
+          onOpenChange={(open) => !open && setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+          onOpenBlocker={() => {
+            const href = deleteTarget.blocker?.blocker_href;
+            if (!href) return;
+            setDeleteTarget(null);
+            close();
+            router.push(href);
+          }}
         />
       ) : null}
     </div>
@@ -1427,14 +1488,14 @@ function ViewModal({
 
         <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] px-6 py-4 flex-shrink-0">
           <div className="flex items-center gap-2">
-            {canDelete && po.status !== "completed" ? (
+            {canDelete ? (
               <button
                 onClick={onDelete}
                 disabled={pending}
                 className="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs text-white/60 hover:bg-red-500/10 hover:text-red-300"
               >
                 <Trash2 size={13} strokeWidth={1.8} />
-                Hapus PO
+                Hapus Pembelian Barang
               </button>
             ) : null}
           </div>
@@ -1443,9 +1504,7 @@ function ViewModal({
               Tutup
             </Button>
             {canManage &&
-            (po.status === "draft" ||
-              po.status === "approved" ||
-              po.status === "receiving") ? (
+            (po.status === "draft" || po.status === "approved") ? (
               <Button
                 variant="ghost"
                 onClick={onCancel}
@@ -1453,13 +1512,13 @@ function ViewModal({
                 className="gap-1.5 text-red-300 hover:bg-red-500/10"
               >
                 <XCircle size={14} strokeWidth={1.8} />
-                Batalkan
+                Batalkan Pembelian (Supplier)
               </Button>
             ) : null}
             {canManage && po.status === "draft" ? (
               <Button onClick={onApprove} disabled={pending} className="gap-1.5">
                 <CheckCircle2 size={14} strokeWidth={1.8} />
-                Setujui PO
+                Setujui Pembelian Barang
               </Button>
             ) : null}
           </div>
@@ -1520,17 +1579,19 @@ function EmptyState({
         className="mx-auto mb-4 text-white/30"
       />
       <h3 className="text-base font-medium text-white">
-        {hasFilter ? "Tidak ada PO yang cocok" : "Belum ada Pembelian Barang"}
+        {hasFilter
+          ? "Tidak ada Pembelian Barang yang cocok"
+          : "Belum ada Pembelian Barang"}
       </h3>
       <p className="mx-auto mt-1 max-w-md text-sm text-white/50">
         {hasFilter
           ? "Coba ubah filter pencarian."
-          : "PO adalah dokumen pendahulu dari finance ke vendor. Setelah disetujui, gudang akan menerima barang dan otomatis tertaut."}
+          : "Pembelian Barang adalah dokumen Purchase Order dari finance ke supplier. Setelah disetujui, gudang menerima barang dan transaksi tetap terhubung."}
       </p>
       {!hasFilter && onCreate ? (
         <Button onClick={onCreate} className="mt-5 gap-2">
           <Plus size={16} strokeWidth={2} />
-          PO Pertama
+          Pembelian Barang Pertama
         </Button>
       ) : null}
     </div>
@@ -1578,7 +1639,8 @@ function PaymentSection({
         <div>
           <h4 className="text-sm font-semibold text-white">Pembayaran ke Vendor</h4>
           <p className="text-[11px] text-white/40 mt-0.5">
-            Pilih cara bayar saat membuat PO. Saat barang diterima, sistem otomatis catat sesuai pilihan ini.
+            Pilih cara bayar saat membuat Pembelian Barang. Saat barang diterima,
+            sistem otomatis mencatat sesuai pilihan ini.
           </p>
         </div>
       </div>

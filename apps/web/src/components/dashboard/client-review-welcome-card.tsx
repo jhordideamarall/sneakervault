@@ -7,9 +7,9 @@ import {
   CheckCircle2,
   FileDown,
   Landmark,
+  ListChecks,
   ReceiptText,
   Sparkles,
-  WalletCards,
   X,
 } from "lucide-react";
 import { hasRouteAccess } from "@/config/permissions";
@@ -23,7 +23,8 @@ type WelcomeChange = {
   routes: { href: string; label: string }[];
 };
 
-const WELCOME_STORAGE_PREFIX = "sv:client-review-welcome:2026-07-19";
+const WELCOME_STORAGE_PREFIX =
+  "sv:client-review-welcome:2026-07-19-ordered-delete-v2";
 
 const CLIENT_REVIEW_CHANGES: WelcomeChange[] = [
   {
@@ -46,12 +47,19 @@ const CLIENT_REVIEW_CHANGES: WelcomeChange[] = [
     ],
   },
   {
-    id: "safe-pos-cancel",
-    title: "POS punya pembatalan aman",
+    id: "ordered-transaction-delete",
+    title: "Hapus transaksi berurutan",
     summary:
-      "Transaksi POS dapat dibatalkan lewat reversal stok, bank, pembayaran, dan jurnal.",
-    icon: WalletCards,
-    routes: [{ href: "/penjualan/pos", label: "Buka POS" }],
+      "Koreksi pembelian dan penjualan kini memakai hapus permanen dari tahap terakhir, dengan petunjuk transaksi penghambat.",
+    icon: ListChecks,
+    routes: [
+      { href: "/pembelian/pembayaran", label: "Pembayaran Vendor" },
+      { href: "/pembelian/faktur", label: "Faktur Pembelian" },
+      { href: "/pembelian/penerimaan", label: "Penerimaan Barang" },
+      { href: "/pembelian/purchase-order", label: "Pembelian Barang" },
+      { href: "/penjualan/penerimaan-kas", label: "Penerimaan Customer" },
+      { href: "/penjualan/invoice", label: "Invoice Penjualan" },
+    ],
   },
   {
     id: "ledger-payroll-asset",

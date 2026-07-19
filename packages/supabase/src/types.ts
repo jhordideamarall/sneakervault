@@ -2443,6 +2443,123 @@ export type Database = {
           },
         ]
       }
+      purchase_receipt_lines: {
+        Row: {
+          created_at: string
+          id: string
+          po_line_id: string
+          product_id: string
+          quantity: number
+          receipt_id: string
+          stock_movement_id: string
+          unit_cost: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          po_line_id: string
+          product_id: string
+          quantity: number
+          receipt_id: string
+          stock_movement_id: string
+          unit_cost?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          po_line_id?: string
+          product_id?: string
+          quantity?: number
+          receipt_id?: string
+          stock_movement_id?: string
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_receipt_lines_po_line_id_fkey"
+            columns: ["po_line_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_receipt_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_receipt_lines_receipt_id_fkey"
+            columns: ["receipt_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_receipts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_receipt_lines_stock_movement_id_fkey"
+            columns: ["stock_movement_id"]
+            isOneToOne: true
+            referencedRelation: "stock_movements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_receipts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          po_id: string
+          receipt_date: string
+          receipt_number: string
+          source_activity_log_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          po_id: string
+          receipt_date?: string
+          receipt_number: string
+          source_activity_log_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          po_id?: string
+          receipt_date?: string
+          receipt_number?: string
+          source_activity_log_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_receipts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_receipts_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_receipts_source_activity_log_id_fkey"
+            columns: ["source_activity_log_id"]
+            isOneToOne: true
+            referencedRelation: "activity_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       returns: {
         Row: {
           created_at: string
@@ -3159,6 +3276,30 @@ export type Database = {
         Args: { p_id: string; qty: number }
         Returns: boolean
       }
+      delete_customer_payment_atomic: {
+        Args: { p_payment_id: string }
+        Returns: Json
+      }
+      delete_purchase_invoice_atomic: {
+        Args: { p_invoice_id: string }
+        Returns: Json
+      }
+      delete_purchase_order_atomic: {
+        Args: { p_po_id: string }
+        Returns: Json
+      }
+      delete_purchase_receipt_atomic: {
+        Args: { p_receipt_id: string }
+        Returns: Json
+      }
+      delete_sales_invoice_atomic: {
+        Args: { p_invoice_id: string }
+        Returns: Json
+      }
+      delete_vendor_payment_atomic: {
+        Args: { p_payment_id: string }
+        Returns: Json
+      }
       generate_customer_payment_number: { Args: never; Returns: string }
       generate_expense_number: { Args: never; Returns: string }
       generate_feedback_number: { Args: never; Returns: string }
@@ -3166,6 +3307,7 @@ export type Database = {
       generate_opname_number: { Args: never; Returns: string }
       generate_po_number: { Args: never; Returns: string }
       generate_purchase_invoice_number: { Args: never; Returns: string }
+      generate_purchase_receipt_number: { Args: never; Returns: string }
       generate_sales_invoice_number: { Args: never; Returns: string }
       generate_vendor_payment_number: { Args: never; Returns: string }
       get_account_balances: {
@@ -3327,16 +3469,16 @@ export type Database = {
         Args: { p_payload: Json }
         Returns: Json
       }
-      cancel_pos_checkout: {
-        Args: { p_invoice_id: string; p_reason?: string | null }
-        Returns: Json
-      }
       increment_product_quantity: {
         Args: { p_id: string; qty: number }
         Returns: undefined
       }
       parse_size_to_numeric: { Args: { p_label: string }; Returns: number }
       pos_checkout: { Args: { p_payload: Json }; Returns: Json }
+      receive_purchase_order_atomic: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
       update_payroll_run_atomic: {
         Args: { p_run_id: string; p_payload: Json }
         Returns: Json

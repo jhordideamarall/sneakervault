@@ -5,8 +5,9 @@ import { vendorPaymentInputSchema } from "@sneakervault/shared";
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { revalidatePath } from "next/cache";
-import { journalForVendorPayment, reverseJournalBySource } from "../journal-engine";
+import { journalForVendorPayment } from "../journal-engine";
 import { assertPeriodOpen } from "@/lib/fiscal-periods";
+import { deleteVendorPaymentAtomic } from "./transaction-deletes";
 
 const ROLES = ["owner", "finance"] as const;
 
@@ -208,104 +209,6 @@ export async function createVendorPayment(input: unknown) {
   return { data: payment };
 }
 
-export async function reverseVendorPayment(id: string, reason?: string) {
-  const profile = await requireRole([...ROLES]);
-  const supabase = await createClient();
-  const today = new Date().toISOString().slice(0, 10);
-  const lock = await assertPeriodOpen(today);
-  if (lock.error) return { error: lock.error };
-
-  const { data: payment, error: paymentErr } = await supabase
-    .from("vendor_payments")
-    .select(
-      "id, payment_number, amount, bank_account_id, vendor_payment_allocations(invoice_id, amount)",
-    )
-    .eq("id", id)
-    .single();
-  if (paymentErr || !payment) return { error: "Pembayaran tidak ditemukan" };
-
-  const allocs = (payment.vendor_payment_allocations ?? []) as Array<{
-    invoice_id: string;
-    amount: number;
-  }>;
-
-  // Reverse each invoice
-  for (const a of allocs) {
-    const { data: inv, error: invErr } = await supabase
-      .from("purchase_invoices")
-      .select("paid_amount, total, status")
-      .eq("id", a.invoice_id)
-      .single();
-    if (invErr || !inv) {
-      return { error: invErr?.message ?? "Faktur tidak ditemukan" };
-    }
-    const newPaid = Math.max(0, Number(inv.paid_amount) - Number(a.amount));
-    const newStatus =
-      newPaid <= 0.001
-        ? "unpaid"
-        : newPaid >= Number(inv.total) - 0.001
-          ? "paid"
-          : "partial";
-    const { error: invoiceErr } = await supabase
-      .from("purchase_invoices")
-      .update({ paid_amount: newPaid, status: newStatus })
-      .eq("id", a.invoice_id);
-    if (invoiceErr) return { error: invoiceErr.message };
-  }
-
-  // Restore bank balance + insert reversing credit transaction
-  if (payment.bank_account_id) {
-    const { data: ba, error: bankErr } = await supabase
-      .from("bank_accounts")
-      .select("current_balance")
-      .eq("id", payment.bank_account_id)
-      .single();
-    if (bankErr || !ba) {
-      return { error: bankErr?.message ?? "Akun bank tidak ditemukan" };
-    }
-    const restored = Number(ba.current_balance) + Number(payment.amount);
-    const { error: bankUpdateErr } = await supabase
-      .from("bank_accounts")
-      .update({ current_balance: restored })
-      .eq("id", payment.bank_account_id);
-    if (bankUpdateErr) return { error: bankUpdateErr.message };
-
-    const { error: bankTxErr } = await supabase.from("bank_transactions").insert({
-      bank_account_id: payment.bank_account_id,
-      transaction_date: today,
-      type: "credit",
-      amount: Number(payment.amount),
-      balance_after: restored,
-      description: `Reverse pembayaran ${payment.payment_number}${reason ? ` - ${reason}` : ""}`,
-      related_entity_type: "vendor_payment_reversal",
-      related_entity_id: payment.id,
-      created_by: profile.id,
-    });
-    if (bankTxErr) return { error: bankTxErr.message };
-  }
-
-  // Reverse journal
-  const journal = await reverseJournalBySource("vendor_payment", id, reason);
-  if (journal.error) return { error: journal.error };
-
-  // Delete payment (cascade deletes allocations)
-  const { error: deleteErr } = await supabase
-    .from("vendor_payments")
-    .delete()
-    .eq("id", id);
-  if (deleteErr) return { error: deleteErr.message };
-
-  await logActivity({
-    user_id: profile.id,
-    action: "reverse",
-    entity_type: "vendor_payment",
-    entity_id: id,
-    new_data: { payment_number: payment.payment_number, reason },
-  });
-
-  revalidatePath("/pembelian/pembayaran");
-  revalidatePath("/pembelian/faktur");
-  revalidatePath("/kas-bank/akun");
-  revalidatePath("/kas-bank/mutasi");
-  return { success: true };
+export async function deleteVendorPayment(id: string) {
+  return deleteVendorPaymentAtomic(id);
 }

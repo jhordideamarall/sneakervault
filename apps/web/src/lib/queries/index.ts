@@ -2478,6 +2478,117 @@ export type ReceivablePoRow = {
   total_remaining: number;
 };
 
+export type PurchaseReceiptLineRow = {
+  id: string;
+  po_line_id: string;
+  product_id: string;
+  product_label: string;
+  quantity: number;
+  unit_cost: number;
+  stock_movement_id: string;
+};
+
+export type PurchaseReceiptRow = {
+  id: string;
+  receipt_number: string;
+  po_id: string;
+  po_number: string;
+  supplier_name: string;
+  receipt_date: string;
+  notes: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  total_quantity: number;
+  total_value: number;
+  lines: PurchaseReceiptLineRow[];
+};
+
+export type TransactionDeleteResult = {
+  deleted: boolean;
+  reference_number: string;
+  blocker_stage: string | null;
+  blocker_numbers: string[];
+};
+
+export async function getPurchaseReceipts(): Promise<PurchaseReceiptRow[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("purchase_receipts")
+    .select(`
+      id, receipt_number, po_id, receipt_date, notes, created_at,
+      purchase_orders:po_id(
+        po_number,
+        suppliers:supplier_id(name)
+      ),
+      profiles:created_by(full_name),
+      purchase_receipt_lines(
+        id, po_line_id, product_id, stock_movement_id, quantity, unit_cost,
+        products:product_id(brand, model, color, size_label, sku)
+      )
+    `)
+    .order("receipt_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1000);
+
+  return ((data ?? []) as unknown as Array<{
+    id: string;
+    receipt_number: string;
+    po_id: string;
+    receipt_date: string;
+    notes: string | null;
+    created_at: string;
+    purchase_orders: {
+      po_number: string;
+      suppliers: { name: string } | null;
+    } | null;
+    profiles: { full_name: string } | null;
+    purchase_receipt_lines: Array<{
+      id: string;
+      po_line_id: string;
+      product_id: string;
+      stock_movement_id: string;
+      quantity: number;
+      unit_cost: number;
+      products: {
+        brand: string;
+        model: string;
+        color: string | null;
+        size_label: string;
+        sku: string;
+      } | null;
+    }> | null;
+  }>).map((row) => {
+    const lines = (row.purchase_receipt_lines ?? []).map((line) => ({
+      id: line.id,
+      po_line_id: line.po_line_id,
+      product_id: line.product_id,
+      stock_movement_id: line.stock_movement_id,
+      product_label: line.products
+        ? `${line.products.brand} ${line.products.model}${line.products.color ? ` ${line.products.color}` : ""} - Size ${line.products.size_label} - ${line.products.sku}`
+        : "Produk tidak ditemukan",
+      quantity: Number(line.quantity),
+      unit_cost: Number(line.unit_cost),
+    }));
+    return {
+      id: row.id,
+      receipt_number: row.receipt_number,
+      po_id: row.po_id,
+      po_number: row.purchase_orders?.po_number ?? "-",
+      supplier_name: row.purchase_orders?.suppliers?.name ?? "-",
+      receipt_date: row.receipt_date,
+      notes: row.notes,
+      created_by_name: row.profiles?.full_name ?? null,
+      created_at: row.created_at,
+      total_quantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+      total_value: lines.reduce(
+        (sum, line) => sum + line.quantity * line.unit_cost,
+        0,
+      ),
+      lines,
+    };
+  });
+}
+
 export async function getPurchaseOrdersForReceiving(): Promise<
   ReceivablePoRow[]
 > {
