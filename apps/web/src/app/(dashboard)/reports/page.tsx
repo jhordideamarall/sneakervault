@@ -183,7 +183,7 @@ function SummaryCard({ label, value, sub, subColor }: { label: string; value: st
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
       <p className="text-[11px] text-white/60 uppercase tracking-wider">{label}</p>
-      <p className="text-xl font-bold text-white/90 mt-2">{value}</p>
+      <p className="mt-2 whitespace-nowrap text-[clamp(1rem,1.1vw,1.25rem)] font-bold text-white/90">{value}</p>
       {sub && <p className={`text-[11px] mt-1 ${subColor ?? "text-white/60"}`}>{sub}</p>}
     </div>
   );

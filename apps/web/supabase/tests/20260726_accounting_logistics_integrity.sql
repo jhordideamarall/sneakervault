@@ -8,6 +8,7 @@
 -- Run only against a disposable/test database after applying:
 --   20260726120234_logistics_reservation_size_integrity.sql
 --   20260726120800_bank_coa_posting_integrity.sql
+--   20260726123156_manual_bank_transaction_atomic.sql
 --
 -- Every fixture is rolled back.
 
@@ -16,7 +17,6 @@ BEGIN;
 DO $test$
 DECLARE
   v_user_id uuid := gen_random_uuid();
-  v_authorizing_owner_id uuid;
   v_supplier_id uuid;
   v_pre_order_id uuid;
   v_pre_order_line_id uuid;
@@ -54,27 +54,17 @@ BEGIN
     now()
   );
 
-  SELECT profile.id
-  INTO v_authorizing_owner_id
-  FROM public.profiles profile
-  WHERE profile.id <> v_user_id
-    AND profile.is_active = true
-    AND profile.roles && ARRAY['owner']::public.user_role[]
-  ORDER BY profile.created_at
-  LIMIT 1;
-
-  IF v_authorizing_owner_id IS NOT NULL THEN
-    PERFORM set_config(
-      'request.jwt.claim.sub',
-      v_authorizing_owner_id::text,
-      true
-    );
-  END IF;
-
-  UPDATE public.profiles
-  SET roles = ARRAY['owner']::public.user_role[],
-      is_active = true
-  WHERE id = v_user_id;
+  INSERT INTO public.profiles(id, full_name, email, roles, is_active)
+  VALUES (
+    v_user_id,
+    'Integrity Test Owner',
+    'integrity-test@example.invalid',
+    ARRAY['owner']::public.user_role[],
+    true
+  )
+  ON CONFLICT (id) DO UPDATE
+  SET roles = EXCLUDED.roles,
+      is_active = EXCLUDED.is_active;
 
   PERFORM set_config('request.jwt.claim.sub', v_user_id::text, true);
 

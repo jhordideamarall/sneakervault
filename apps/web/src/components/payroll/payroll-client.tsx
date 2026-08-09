@@ -541,7 +541,7 @@ export function PayrollClient({
       ) : null}
 
       <div className="overflow-x-auto rounded-lg border border-white/[0.06] bg-[#262626]">
-        <table className="w-full min-w-[980px] text-sm">
+        <table className="w-full min-w-[780px] text-sm">
           <thead className="text-left text-[11px] uppercase tracking-wider text-white/35">
             <tr><th className="px-4 py-3">Periode</th><th className="px-4 py-3">Tanggal</th><th className="px-4 py-3">Pembayaran</th><th className="px-4 py-3 text-right">Gross</th><th className="px-4 py-3 text-right">Potongan</th><th className="px-4 py-3 text-right">Net</th><th className="px-4 py-3 text-right">Aksi</th></tr>
           </thead>
