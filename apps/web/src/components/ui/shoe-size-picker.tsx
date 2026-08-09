@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { FieldLabel, Input, Select } from "@sneakervault/ui";
 import { SHOE_SIZE_OPTIONS } from "@sneakervault/shared";
 
@@ -29,13 +29,10 @@ export function ShoeSizePicker({
     () => new Set(SHOE_SIZE_OPTIONS.map((option) => option.value)),
     [],
   );
-  const [mode, setMode] = useState<"preset" | "custom">(
+  const [selectedMode, setSelectedMode] = useState<"preset" | "custom">(
     value && !optionValues.has(value) ? "custom" : "preset",
   );
-
-  useEffect(() => {
-    if (value && !optionValues.has(value)) setMode("custom");
-  }, [optionValues, value]);
+  const mode = value && !optionValues.has(value) ? "custom" : selectedMode;
 
   return (
     <div>
@@ -72,7 +69,7 @@ export function ShoeSizePicker({
           disabled={disabled}
           onChange={(event) => {
             const nextMode = event.target.value as "preset" | "custom";
-            setMode(nextMode);
+            setSelectedMode(nextMode);
             if (nextMode === "preset" && !optionValues.has(value)) onChange("");
           }}
         >

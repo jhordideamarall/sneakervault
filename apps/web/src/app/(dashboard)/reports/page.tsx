@@ -258,7 +258,7 @@ async function ProfitByModelTable({
 }
 
 async function AgingTable() {
-  const aging = await getAgingReport() as { id: string; brand: string; model: string; size: number; quantity: number; hpp: number; first_inbound_at: string | null }[];
+  const aging = await getAgingReport() as { id: string; brand: string; model: string; size: number; size_label: string | null; quantity: number; hpp: number; first_inbound_at: string | null }[];
   const nowMs = nowWIB().getTime();
 
   if (aging.length === 0) {
@@ -314,7 +314,7 @@ async function AgingTable() {
               <tr key={p.id} className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
                 <td className="px-6 py-3">
                   <span className="text-[13px] text-white/80">{p.brand} {p.model}</span>
-                  <span className="text-[11px] text-white/60 ml-2">({p.size})</span>
+                  <span className="text-[11px] text-white/60 ml-2">({p.size_label ?? p.size})</span>
                 </td>
                 <td className="px-6 py-3 text-right text-[12px] text-white/60">{p.quantity}</td>
                 <td className="px-6 py-3 text-right text-[12px] text-white/60">Rp {formatNum(p.quantity * p.hpp)}</td>

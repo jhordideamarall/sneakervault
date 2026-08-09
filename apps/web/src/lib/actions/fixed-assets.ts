@@ -72,7 +72,7 @@ export async function createFixedAsset(input: unknown) {
   let bankCurrentBalance = 0;
   let bankCreditRef: Pick<JournalLine, "account_code" | "account_id"> | null = null;
   if (bankAccountId) {
-    const { data: bank, error: bankError } = await (supabase as any)
+    const { data: bank, error: bankError } = await supabase
       .from("bank_accounts")
       .select("id, name, type, coa_account_id, current_balance, is_active")
       .eq("id", bankAccountId)
@@ -98,7 +98,7 @@ export async function createFixedAsset(input: unknown) {
       : fallbackBankAccountRef(bank.type);
   }
 
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("fixed_assets")
     .insert({
       ...assetRowFromInput(parsed.data, profile.id),
@@ -111,16 +111,16 @@ export async function createFixedAsset(input: unknown) {
   let bankTransactionId: string | null = null;
   if (bankAccountId) {
     const newBalance = bankCurrentBalance - parsed.data.acquisition_cost;
-    const { error: balanceError } = await (supabase as any)
+    const { error: balanceError } = await supabase
       .from("bank_accounts")
       .update({ current_balance: newBalance })
       .eq("id", bankAccountId);
     if (balanceError) {
-      await (supabase as any).from("fixed_assets").delete().eq("id", data.id);
+      await supabase.from("fixed_assets").delete().eq("id", data.id);
       return { error: { _form: [balanceError.message] } };
     }
 
-    const { data: bankTx, error: bankTxError } = await (supabase as any)
+    const { data: bankTx, error: bankTxError } = await supabase
       .from("bank_transactions")
       .insert({
         bank_account_id: bankAccountId,
@@ -137,11 +137,11 @@ export async function createFixedAsset(input: unknown) {
       .select("id")
       .single();
     if (bankTxError || !bankTx) {
-      await (supabase as any)
+      await supabase
         .from("bank_accounts")
         .update({ current_balance: bankCurrentBalance })
         .eq("id", bankAccountId);
-      await (supabase as any).from("fixed_assets").delete().eq("id", data.id);
+      await supabase.from("fixed_assets").delete().eq("id", data.id);
       return {
         error: { _form: [bankTxError?.message ?? "Mutasi kas/bank aset gagal dibuat"] },
       };
@@ -173,18 +173,18 @@ export async function createFixedAsset(input: unknown) {
   });
   if (journal.error) {
     if (bankAccountId) {
-      await (supabase as any)
+      await supabase
         .from("bank_accounts")
         .update({ current_balance: bankCurrentBalance })
         .eq("id", bankAccountId);
       if (bankTransactionId) {
-        await (supabase as any)
+        await supabase
           .from("bank_transactions")
           .delete()
           .eq("id", bankTransactionId);
       }
     }
-    await (supabase as any).from("fixed_assets").delete().eq("id", data.id);
+    await supabase.from("fixed_assets").delete().eq("id", data.id);
     return { error: { _form: [journal.error] } };
   }
 
@@ -204,7 +204,7 @@ export async function updateFixedAsset(id: string, input: unknown) {
   const parsed = fixedAssetInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
   const supabase = await createClient();
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .from("fixed_assets")
     .update({
       ...assetRowFromInput(parsed.data),
@@ -234,7 +234,7 @@ export async function disposeFixedAsset(id: string, input: unknown) {
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
   const supabase = await createClient();
-  const { data: asset, error } = await (supabase as any)
+  const { data: asset, error } = await supabase
     .from("fixed_assets")
     .select("id, name, asset_account_id, acquisition_cost, accumulated_depreciation, status, notes")
     .eq("id", id)
@@ -284,7 +284,7 @@ export async function disposeFixedAsset(id: string, input: unknown) {
   ]
     .filter(Boolean)
     .join("\n");
-  const { error: updateError } = await (supabase as any)
+  const { error: updateError } = await supabase
     .from("fixed_assets")
     .update({
       status: "disposed",
@@ -340,14 +340,14 @@ export async function runFixedAssetDepreciation(args: {
 }) {
   const supabase = await createClient();
   const period = `${args.year}-${String(args.month).padStart(2, "0")}`;
-  const { data: existing } = await (supabase as any)
+  const { data: existing } = await supabase
     .from("fixed_asset_depreciation_runs")
     .select("id")
     .eq("period_month", period)
     .maybeSingle();
   if (existing?.id) return { success: true, amount: 0, skipped: true };
 
-  const { data: assets, error } = await (supabase as any)
+  const { data: assets, error } = await supabase
     .from("fixed_assets")
     .select("id, name, acquisition_cost, salvage_value, useful_life_months, method, accumulated_depreciation, status")
     .eq("status", "active");
@@ -384,7 +384,7 @@ export async function runFixedAssetDepreciation(args: {
   });
   if (journal.error) return { error: journal.error };
 
-  const { data: run, error: runError } = await (supabase as any)
+  const { data: run, error: runError } = await supabase
     .from("fixed_asset_depreciation_runs")
     .insert({
       period_month: period,
@@ -396,7 +396,7 @@ export async function runFixedAssetDepreciation(args: {
     .single();
   if (runError || !run) return { error: runError?.message ?? "Run depresiasi gagal dicatat" };
 
-  await (supabase as any).from("fixed_asset_depreciation_lines").insert(
+  await supabase.from("fixed_asset_depreciation_lines").insert(
     lines.map((line) => ({
       run_id: run.id,
       asset_id: line.asset_id,
@@ -404,7 +404,7 @@ export async function runFixedAssetDepreciation(args: {
     })),
   );
   for (const line of lines) {
-    await (supabase as any).rpc("add_fixed_asset_depreciation", {
+    await supabase.rpc("add_fixed_asset_depreciation", {
       p_asset_id: line.asset_id,
       p_amount: line.amount,
     });

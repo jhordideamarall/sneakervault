@@ -44,7 +44,7 @@ Env (`apps/web/.env.local`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_A
 |---|---|---|
 | `owner` | Owner | Semua |
 | `admin_gudang` | Admin Gudang | Inventori, Barang Masuk, Stock Opname, Packing, Retur, Supplier |
-| `admin_online` | Admin Online | Order, Invoice, Import/Export Marketplace, Customer, Terjual |
+| `admin_online` | Admin Online | Order, Invoice, Export Stok Marketplace, Customer, Terjual |
 | `shopkeeper` | Shopkeeper (kasir) | POS Kasir, Order, **Inventori (cek stok)**, Packing |
 | `finance` | Finance | Buku Besar, Kas & Bank, Laporan Keuangan, Pembelian, Settlement, Overview |
 

@@ -436,7 +436,7 @@ export function PreOrderClient({
                 <div className="mt-1 text-xs text-white/40">
                   {formatDate(order.order_date)}
                   {order.marketplace_order_id
-                    ? ` • Order Marketplace ${order.marketplace_order_id}`
+                    ? ` • Ref. ${order.marketplace_order_id}`
                     : ""}
                 </div>
               </div>
@@ -612,7 +612,7 @@ function ProcurementModal({
             <p className="mt-1 text-xs text-white/45">
               Customer {order.customer_name}
               {order.marketplace_order_id
-                ? ` / Order Marketplace ${order.marketplace_order_id}`
+                ? ` / Ref. ${order.marketplace_order_id}`
                 : ""}
             </p>
           </div>
@@ -889,7 +889,7 @@ function PreOrderModal({
             </div>
             <div>
               <FieldLabel htmlFor="marketplace_order_id">
-                Nomor Order Marketplace
+                Nomor Order / Referensi
               </FieldLabel>
               <Input
                 id="marketplace_order_id"
@@ -897,7 +897,7 @@ function PreOrderModal({
                 onChange={(event) =>
                   setForm({ ...form, marketplace_order_id: event.target.value })
                 }
-                placeholder="Wajib untuk Pre Order Marketplace"
+                placeholder="Wajib untuk pesanan online, contoh WA-000123"
               />
             </div>
           </div>

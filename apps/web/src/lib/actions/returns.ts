@@ -5,7 +5,6 @@ import { initiateReturnSchema, processReturnSchema } from "@sneakervault/shared"
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { notifyEvent } from "./notify";
-import { createStockMovement } from "./stock-movements";
 
 export async function initiateReturn(input: unknown) {
   const profile = await requireRole(["owner", "admin_online"]);
@@ -17,7 +16,7 @@ export async function initiateReturn(input: unknown) {
   // Get packing item + session status + product info
   const { data: item } = await supabase
     .from("packing_items")
-    .select("*, products(id, size, brand, model), packing_sessions(id, status)")
+    .select("*, products(id, size, size_label, brand, model), packing_sessions(id, status)")
     .eq("id", parsed.data.packing_item_id)
     .maybeSingle();
   if (!item) return { error: { _form: ["Item tidak ditemukan"] } };
@@ -62,7 +61,7 @@ export async function initiateReturn(input: unknown) {
   await logActivity({ user_id: profile.id, action: "initiate_return", entity_type: "return", entity_id: data.id, new_data: { type: parsed.data.type, reason: parsed.data.reason, packing_item_id: parsed.data.packing_item_id } });
 
   const productLabel = item.products
-    ? `${item.products.brand} ${item.products.model} size ${item.products.size}`
+    ? `${item.products.brand} ${item.products.model} size ${item.products.size_label ?? item.products.size}`
     : "Produk";
   await notifyEvent(
     {
@@ -102,10 +101,10 @@ export async function verifyReturn(returnId: string) {
   if (retRow?.original_product_id) {
     const { data: p } = await supabase
       .from("products")
-      .select("brand, model, size")
+      .select("brand, model, size, size_label")
       .eq("id", retRow.original_product_id)
       .maybeSingle();
-    if (p) productLabel = `${p.brand} ${p.model} size ${p.size}`;
+    if (p) productLabel = `${p.brand} ${p.model} size ${p.size_label ?? p.size}`;
   }
   await notifyEvent(
     { type: "return.verified", returnId, productLabel },
@@ -121,99 +120,47 @@ export async function processReturn(input: unknown) {
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
   const supabase = await createClient();
-  const { data: ret } = await supabase
+  const { data: retBefore } = await supabase
     .from("returns")
-    .select("*, packing_items(product_id)")
+    .select("type, original_product_id")
     .eq("id", parsed.data.return_id)
     .maybeSingle();
-  if (!ret) return { error: { _form: ["Return tidak ditemukan"] } };
-  if (ret.status !== "verified") return { error: { _form: ["Return belum diverifikasi"] } };
+  if (!retBefore) return { error: { _form: ["Return tidak ditemukan"] } };
 
-  const originalProductId = ret.original_product_id;
-  const isExchange = ret.type === "exchange_size";
-
-  if (ret.type === "refund") {
-    const { error: rpcErr } = await supabase.rpc("increment_product_quantity", { p_id: originalProductId, qty: 1 });
-    if (rpcErr) return { error: { _form: [rpcErr.message] } };
-
-    const movement = await createStockMovement(supabase, {
-      product_id: originalProductId, type: "return_in", quantity: 1, unit_cost: 0,
-      reference_type: "return", reference_id: ret.id,
-    });
-    if (movement.error) return { error: { _form: [movement.error] } };
-  } else if (isExchange) {
-    const newProductId = parsed.data.new_product_id;
-    if (!newProductId) return { error: { _form: ["Produk pengganti wajib dipilih"] } };
-
-    // Reserve replacement first so an out-of-stock exchange does not add back
-    // the original item while the return is still unresolved.
-    const { data: decOk, error: decErr } = await supabase.rpc("decrement_product_quantity", { p_id: newProductId, qty: 1 });
-    if (decErr) return { error: { _form: [decErr.message] } };
-    if (!decOk) return { error: { _form: ["Stok produk pengganti habis"] } };
-
-    // Return in original
-    const { error: incErr } = await supabase.rpc("increment_product_quantity", { p_id: originalProductId, qty: 1 });
-    if (incErr) {
-      await supabase.rpc("increment_product_quantity", { p_id: newProductId, qty: 1 });
-      return { error: { _form: [incErr.message] } };
-    }
-    const returnIn = await createStockMovement(supabase, {
-      product_id: originalProductId, type: "return_in", quantity: 1, unit_cost: 0,
-      reference_type: "return", reference_id: ret.id,
-    });
-    if (returnIn.error) {
-      await supabase.rpc("decrement_product_quantity", { p_id: originalProductId, qty: 1 });
-      await supabase.rpc("increment_product_quantity", { p_id: newProductId, qty: 1 });
-      return { error: { _form: [returnIn.error] } };
-    }
-
-    // Send out new product
-    const returnOut = await createStockMovement(supabase, {
-      product_id: newProductId, type: "return_out", quantity: 1, unit_cost: 0,
-      reference_type: "return", reference_id: ret.id,
-    });
-    if (returnOut.error) {
-      await supabase.rpc("decrement_product_quantity", { p_id: originalProductId, qty: 1 });
-      await supabase.rpc("increment_product_quantity", { p_id: newProductId, qty: 1 });
-      return { error: { _form: [returnOut.error] } };
-    }
-  } else {
-    return { error: { _form: ["Tipe return tidak didukung"] } };
-  }
-
-  const { error: updateErr } = await supabase
-    .from("returns")
-    .update({
-      status: "processed",
-      processed_by: profile.id,
-      processed_at: new Date().toISOString(),
-      new_product_id: isExchange ? parsed.data.new_product_id || null : null,
-      new_size: isExchange ? parsed.data.new_size || null : null,
-    })
-    .eq("id", parsed.data.return_id);
-  if (updateErr) return { error: { _form: [updateErr.message] } };
+  const { data: result, error: processError } = await supabase.rpc(
+    "process_return_atomic",
+    {
+      p_return_id: parsed.data.return_id,
+      p_new_product_id: parsed.data.new_product_id ?? null,
+    },
+  );
+  if (processError) return { error: { _form: [processError.message] } };
 
   await logActivity({
     user_id: profile.id,
     action: "process_return",
     entity_type: "return",
     entity_id: parsed.data.return_id,
-    new_data: { type: ret.type, new_product_id: parsed.data.new_product_id },
+    new_data: {
+      type: retBefore.type,
+      new_product_id: parsed.data.new_product_id,
+      atomic_result: result,
+    },
   });
 
   const { data: prodOriginal } = await supabase
     .from("products")
-    .select("brand, model, size")
-    .eq("id", ret.original_product_id)
+    .select("brand, model, size, size_label")
+    .eq("id", retBefore.original_product_id)
     .maybeSingle();
   const processedLabel = prodOriginal
-    ? `${prodOriginal.brand} ${prodOriginal.model} size ${prodOriginal.size}`
+    ? `${prodOriginal.brand} ${prodOriginal.model} size ${prodOriginal.size_label ?? prodOriginal.size}`
     : "Produk";
   await notifyEvent(
     {
       type: "return.processed",
       returnId: parsed.data.return_id,
-      returnType: ret.type,
+      returnType: retBefore.type,
       productLabel: processedLabel,
     },
     { actorId: profile.id }

@@ -227,6 +227,7 @@ function ReportBlock({
         <div className="flex items-center gap-2">
           <Button
             type="button"
+            aria-label={`${title} PDF`}
             size="sm"
             variant="secondary"
             disabled={rows.length === 0}
@@ -237,6 +238,7 @@ function ReportBlock({
           </Button>
           <Button
             type="button"
+            aria-label={`${title} Excel`}
             size="sm"
             variant="secondary"
             disabled={rows.length === 0}

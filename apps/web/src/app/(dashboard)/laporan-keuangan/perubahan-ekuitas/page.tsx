@@ -5,6 +5,7 @@ import { canSeeFinancialDashboard } from "@/config/permissions";
 import type { Role } from "@sneakervault/shared";
 import { FileBarChart } from "lucide-react";
 import { formatRupiahAccounting as fmtRupiah } from "@/lib/format";
+import { ExportButtons } from "@/components/export-buttons";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,14 @@ export default async function PerubahanEkuitasPage({
     );
     return filtered
       .filter((a) => !idsWithChildren.has(a.account_id))
-      .reduce((s, a) => s + a.balance, 0);
+      .reduce((sum, account) => {
+        const expectedNormal = account.type === "asset" ? "debit" : "credit";
+        const statementValue =
+          account.normal_balance === expectedNormal
+            ? account.balance
+            : -account.balance;
+        return sum + statementValue;
+      }, 0);
   };
 
   const openingEquity = sumLeaves(openingBalances, ["equity"]);
@@ -51,8 +59,12 @@ export default async function PerubahanEkuitasPage({
     sumLeaves(periodBalances, ["revenue"]) -
     sumLeaves(periodBalances, ["cogs"]) -
     sumLeaves(periodBalances, ["expense"]);
-  const capitalContributions =
-    periodBalances.find((account) => account.code === "3.1")?.balance ?? 0;
+  const capitalAccount = periodBalances.find((account) => account.code === "3.1");
+  const capitalContributions = capitalAccount
+    ? capitalAccount.normal_balance === "credit"
+      ? capitalAccount.balance
+      : -capitalAccount.balance
+    : 0;
   const prive = Math.abs(
     periodBalances.find((account) => account.code === "3.4")?.balance ?? 0,
   );
@@ -86,11 +98,28 @@ export default async function PerubahanEkuitasPage({
             </p>
           </div>
         </div>
-        <form method="get" className="flex flex-wrap items-end gap-2">
-          <label className="text-xs text-white/45">Dari<input className="mt-1 block h-9 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white" type="date" name="from" defaultValue={from} /></label>
-          <label className="text-xs text-white/45">Sampai<input className="mt-1 block h-9 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white" type="date" name="to" defaultValue={to} /></label>
-          <button type="submit" className="h-9 rounded-md bg-white px-4 text-sm font-medium text-black">Terapkan</button>
-        </form>
+        <div className="flex flex-col items-end gap-2">
+          <ExportButtons
+            title="Laporan Perubahan Ekuitas"
+            sheetName="Perubahan Ekuitas"
+            columns={["Komponen", "Nilai (Rp)"]}
+            rows={[
+              ["Saldo Ekuitas Awal Periode", openingEquity],
+              ["Laba/Rugi Periode Berjalan", periodNetIncome],
+              ["Setoran Modal Pemilik", capitalContributions],
+              ["Prive", -prive],
+              ["Saldo Ekuitas Akhir Periode", closingEquity],
+            ]}
+            subtitle={`Periode ${from} sampai ${to}`}
+            pdfLabel="Ekuitas PDF"
+            excelLabel="Ekuitas Excel"
+          />
+          <form method="get" className="flex flex-wrap items-end gap-2">
+            <label className="text-xs text-white/45">Dari<input className="mt-1 block h-9 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white" type="date" name="from" defaultValue={from} /></label>
+            <label className="text-xs text-white/45">Sampai<input className="mt-1 block h-9 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white" type="date" name="to" defaultValue={to} /></label>
+            <button type="submit" className="h-9 rounded-md bg-white px-4 text-sm font-medium text-black">Terapkan</button>
+          </form>
+        </div>
       </div>
 
       <div className="rounded-lg border border-white/[0.06] bg-[#262626]">

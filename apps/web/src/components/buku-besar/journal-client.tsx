@@ -114,13 +114,13 @@ export function JournalClient({
   }, [entries, search, statusFilter, sourceFilter]);
 
   const stats = useMemo(() => {
-    const posted = entries.filter((e) => e.status === "posted");
-    const totalDebit = posted.reduce((a, e) => a + e.total_debit, 0);
-    const totalCredit = posted.reduce((a, e) => a + e.total_credit, 0);
+    const effective = entries.filter((e) => e.status !== "draft");
+    const totalDebit = effective.reduce((a, e) => a + e.total_debit, 0);
+    const totalCredit = effective.reduce((a, e) => a + e.total_credit, 0);
     const sources = new Set(entries.map((e) => e.source_type));
     return {
       total: entries.length,
-      posted: posted.length,
+      posted: entries.filter((e) => e.status === "posted").length,
       reversed: entries.filter((e) => e.status === "reversed").length,
       balanced: Math.abs(totalDebit - totalCredit) < 0.01,
       totalAmount: totalDebit,
@@ -131,7 +131,7 @@ export function JournalClient({
   const manualTotals = useMemo(() => {
     const dr = manualLines.reduce((s, l) => s + (l.debit || 0), 0);
     const cr = manualLines.reduce((s, l) => s + (l.credit || 0), 0);
-    return { dr, cr, balanced: Math.abs(dr - cr) < 0.01 };
+    return { dr, cr, balanced: dr > 0 && Math.abs(dr - cr) < 0.01 };
   }, [manualLines]);
 
   function toggle(id: string) {
@@ -357,16 +357,18 @@ export function JournalClient({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-white/60">Tanggal</label>
+                  <label htmlFor="manual-journal-date" className="text-xs font-medium text-white/60">Tanggal</label>
                   <Input
+                    id="manual-journal-date"
                     type="date"
                     value={manualDate}
                     onChange={(e) => setManualDate(e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-white/60">Deskripsi Jurnal</label>
+                  <label htmlFor="manual-journal-description" className="text-xs font-medium text-white/60">Deskripsi Jurnal</label>
                   <Input
+                    id="manual-journal-description"
                     placeholder="Cth: Koreksi beban penyusutan Mei 2026"
                     value={manualDesc}
                     onChange={(e) => setManualDesc(e.target.value)}
@@ -389,6 +391,7 @@ export function JournalClient({
                     className="grid grid-cols-[1fr_110px_110px_140px_32px] items-center gap-2"
                   >
                     <Select
+                      aria-label={`Akun baris ${idx + 1}`}
                       value={line.account_code}
                       onChange={(e) => updateLine(idx, "account_code", e.target.value)}
                     >
@@ -400,6 +403,7 @@ export function JournalClient({
                       ))}
                     </Select>
                     <NumberInput
+                      aria-label={`Debit baris ${idx + 1}`}
                       min={0}
                       placeholder="0"
                       value={line.debit || ""}
@@ -407,6 +411,7 @@ export function JournalClient({
                       className="h-9 w-full rounded-md border border-white/[0.08] bg-white/[0.03] px-2 text-right text-sm text-white placeholder-white/20 focus:border-white/20 focus:outline-none"
                     />
                     <NumberInput
+                      aria-label={`Kredit baris ${idx + 1}`}
                       min={0}
                       placeholder="0"
                       value={line.credit || ""}
@@ -415,12 +420,15 @@ export function JournalClient({
                     />
                     <input
                       type="text"
+                      aria-label={`Keterangan baris ${idx + 1}`}
                       placeholder="Opsional"
                       value={line.description}
                       onChange={(e) => updateLine(idx, "description", e.target.value)}
                       className="h-9 w-full rounded-md border border-white/[0.08] bg-white/[0.03] px-2 text-sm text-white placeholder-white/20 focus:border-white/20 focus:outline-none"
                     />
                     <button
+                      type="button"
+                      aria-label={`Hapus baris ${idx + 1}`}
                       onClick={() => removeLine(idx)}
                       disabled={manualLines.length <= 2}
                       className="flex items-center justify-center text-white/30 hover:text-red-400 disabled:opacity-20 transition-colors"
@@ -431,6 +439,7 @@ export function JournalClient({
                 ))}
 
                 <button
+                  type="button"
                   onClick={addLine}
                   className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors py-1"
                 >
@@ -459,8 +468,9 @@ export function JournalClient({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-white/60">Catatan (opsional)</label>
+                <label htmlFor="manual-journal-notes" className="text-xs font-medium text-white/60">Catatan (opsional)</label>
                 <textarea
+                  id="manual-journal-notes"
                   rows={2}
                   placeholder="Alasan penyesuaian, referensi dokumen, dll."
                   value={manualNotes}

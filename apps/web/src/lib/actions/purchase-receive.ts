@@ -38,7 +38,7 @@ export async function receivePurchaseOrder(input: unknown) {
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
   const supabase = await createClient();
-  const { data, error } = await (supabase as any).rpc(
+  const { data, error } = await supabase.rpc(
     "receive_purchase_order_with_advance_atomic",
     {
       p_payload: {

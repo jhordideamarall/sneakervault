@@ -37,7 +37,7 @@ async function resolveInvoiceCustomer(
   if (input.customer_id) return { customerId: input.customer_id };
 
   const customerName = input.customer_name.trim();
-  const { data, error } = await (supabase as any).rpc(
+  const { data, error } = await supabase.rpc(
     "resolve_customer_for_invoice",
     {
       p_name: customerName,
@@ -82,7 +82,7 @@ export async function createSalesInvoice(
   const productIds = parsed.data.lines.map((l) => l.product_id);
   const { data: products, error: prodErr } = await supabase
     .from("products")
-    .select("id, brand, model, color, size, sku, hpp, quantity")
+    .select("id, brand, model, color, size, size_label, sku, hpp, quantity")
     .in("id", productIds);
   if (prodErr) return { error: { _form: [prodErr.message] } };
   if (!products || products.length !== productIds.length)
@@ -105,7 +105,7 @@ export async function createSalesInvoice(
         return {
           error: {
             _form: [
-              `Stok ${p.brand} ${p.model} size ${p.size} tidak cukup (${p.quantity} < ${need})`,
+              `Stok ${p.brand} ${p.model} size ${p.size_label ?? p.size} tidak cukup (${p.quantity} < ${need})`,
             ],
           },
         };
@@ -264,13 +264,13 @@ export async function issueSalesInvoice(id: string) {
   }
   const { data: products } = await supabase
     .from("products")
-    .select("id, brand, model, size, quantity")
+    .select("id, brand, model, size, size_label, quantity")
     .in("id", Array.from(qtyByProduct.keys()));
   for (const p of products ?? []) {
     const need = qtyByProduct.get(p.id) ?? 0;
     if (need > Number(p.quantity))
       return {
-        error: `Stok ${p.brand} ${p.model} size ${p.size} tidak cukup (${p.quantity} < ${need})`,
+        error: `Stok ${p.brand} ${p.model} size ${p.size_label ?? p.size} tidak cukup (${p.quantity} < ${need})`,
       };
   }
 

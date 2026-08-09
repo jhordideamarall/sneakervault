@@ -52,7 +52,7 @@ async function productIdForManualInvoiceLine(
   } as Record<string, unknown>;
   if (line.new_size != null) productPayload.size = line.new_size;
 
-  const { data: created, error } = await (supabase as any)
+  const { data: created, error } = await supabase
     .from("products")
     .insert(productPayload)
     .select("id")
@@ -82,7 +82,7 @@ async function receiveManualInvoiceLines(
       ]
         .filter(Boolean)
         .join(" ");
-    const { data: invoiceLine, error: lineError } = await (supabase as any)
+    const { data: invoiceLine, error: lineError } = await supabase
       .from("purchase_invoice_lines")
       .insert({
         invoice_id: invoiceId,

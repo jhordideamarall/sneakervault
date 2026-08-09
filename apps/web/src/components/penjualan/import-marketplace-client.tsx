@@ -138,7 +138,13 @@ export function ImportMarketplaceClient() {
       try {
         const XLSX = await import("xlsx");
         const isCsv = file.name.toLowerCase().endsWith(".csv");
-        const wb = XLSX.read(data, { type: isCsv ? "string" : "array" });
+        // SheetJS otherwise auto-converts free-text Adidas sizes such as
+        // "42 2/3" into a date-like cell (rendered as "2/3/42"). Keep CSV
+        // cells raw so SKU + size matching cannot silently select size 42.
+        const wb = XLSX.read(data, {
+          type: isCsv ? "string" : "array",
+          ...(isCsv ? { raw: true } : {}),
+        });
         const sheetName = wb.SheetNames[0];
         const sheet = sheetName ? wb.Sheets[sheetName] : undefined;
         if (!sheet) {

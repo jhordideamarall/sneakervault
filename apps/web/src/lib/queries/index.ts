@@ -187,12 +187,17 @@ async function getInventoryProductsLegacy(filters?: {
   let totalCount: number | null = null;
   let error: unknown = null;
   const chunkSize = 1000;
+  type InventoryLegacyResult = {
+    data: unknown[] | null;
+    count: number | null;
+    error: unknown;
+  };
+  type InventoryLegacyQuery = PromiseLike<InventoryLegacyResult> & {
+    or: (filter: string) => InventoryLegacyQuery;
+  };
 
   while (true) {
-    // Supabase query-builder generics become self-referential across conditional chaining here.
-    // Keep this typed locally and validate the returned shape below.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query: any = supabase
+    let query = supabase
       .from("products")
       .select(
         `${PRODUCT_FIELDS}, suppliers:default_supplier_id(name)`,
@@ -202,7 +207,7 @@ async function getInventoryProductsLegacy(filters?: {
       .order("brand", { ascending: true })
       .order("model", { ascending: true })
       .order("size", { ascending: true })
-      .range(offset, offset + chunkSize - 1);
+      .range(offset, offset + chunkSize - 1) as unknown as InventoryLegacyQuery;
 
     if (search) {
       query = query.or(
@@ -210,8 +215,7 @@ async function getInventoryProductsLegacy(filters?: {
       );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await query;
+    const result: InventoryLegacyResult = await query;
     if (result.error) {
       error = result.error;
       break;
@@ -323,6 +327,20 @@ export async function getSessionWithItems(sessionId: string): Promise<unknown> {
     .eq("id", sessionId)
     .maybeSingle();
   return data;
+}
+
+export async function getUnfinishedPackingSessions(): Promise<unknown[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("packing_sessions")
+    .select(
+      "id, status, platform, courier, platform_order_id, created_at, packing_items(id, product_id, barcode_scanned, products(id, brand, model, size, size_label, barcode))",
+    )
+    .eq("status", "packing")
+    .is("packed_at", null)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  return data ?? [];
 }
 
 export async function getPackingSessionsToday(userId?: string): Promise<unknown[]> {
@@ -552,7 +570,7 @@ export async function getEmployees(opts?: {
 }): Promise<EmployeeRow[]> {
   await requireOwnerOrFinance();
   const supabase = await createClient();
-  let query = (supabase as any)
+  let query = supabase
     .from("employees")
     .select("id, employee_code, full_name, job_title, department, base_salary, bank_account_name, bank_account_number, tax_id, hire_date, is_active, created_at")
     .order("full_name");
@@ -588,7 +606,7 @@ export type FixedAssetRow = {
 export async function getFixedAssets(): Promise<FixedAssetRow[]> {
   await requireOwnerOrFinance();
   const supabase = await createClient();
-  const { data } = await (supabase as any)
+  const { data } = await supabase
     .from("fixed_assets")
     .select("id, asset_code, name, asset_account_id, acquisition_date, acquisition_cost, salvage_value, useful_life_months, method, accumulated_depreciation, location, department, status, notes, created_at, asset_account:asset_account_id(code, name)")
     .order("acquisition_date", { ascending: false });
@@ -646,7 +664,7 @@ export type PayrollRunRow = {
 export async function getPayrollRuns(): Promise<PayrollRunRow[]> {
   await requireOwnerOrFinance();
   const supabase = await createClient();
-  const { data } = await (supabase as any)
+  const { data } = await supabase
     .from("payroll_runs")
     .select("id, period_month, payment_date, bank_account_id, gross_amount, deductions, net_amount, status, payment_status, liability_settled_at, notes, created_at, bank_accounts:bank_account_id(name), payroll_lines(id, employee_id, base_salary, allowances, deductions, net_salary, notes, employees:employee_id(full_name), payroll_line_components(id, name, kind, amount, sort_order))")
     .order("period_month", { ascending: false });
@@ -1512,7 +1530,7 @@ function summarizePreOrderStatus(
 
 export async function getPreOrders(): Promise<PreOrderRow[]> {
   const supabase = await createClient();
-  const { data } = await (supabase as any)
+  const { data } = await supabase
     .from("pre_orders")
     .select(`
       id, source, channel, marketplace_order_id, customer_id, customer_name,
@@ -1547,7 +1565,7 @@ export async function getPreOrders(): Promise<PreOrderRow[]> {
 
   const reservedByProduct = new Map<string, number>();
   if (productIds.length > 0) {
-    const { data: reservations } = await (supabase as any)
+    const { data: reservations } = await supabase
       .from("stock_reservations")
       .select("product_id, quantity, status")
       .in("product_id", productIds)
@@ -2112,7 +2130,7 @@ export async function getStockOpnameDetail(
   const { data } = await supabase
     .from("stock_opname_sessions")
     .select(
-      "id, opname_number, opname_date, status, scope, notes, approved_at, created_at, starter:started_by(full_name), reviewer:reviewed_by(full_name), approver:approved_by(full_name), stock_opname_lines(id, product_id, system_qty, physical_qty, variance, unit_cost, reason, products:product_id(brand, model, color, size, sku, barcode))",
+      "id, opname_number, opname_date, status, scope, notes, approved_at, created_at, starter:started_by(full_name), reviewer:reviewed_by(full_name), approver:approved_by(full_name), stock_opname_lines(id, product_id, system_qty, physical_qty, variance, unit_cost, reason, products:product_id(brand, model, color, size, size_label, sku, barcode))",
     )
     .eq("id", id)
     .single();
@@ -2143,6 +2161,7 @@ export async function getStockOpnameDetail(
         model: string;
         color: string | null;
         size: number;
+        size_label: string | null;
         sku: string;
         barcode: string;
       } | null;
@@ -2153,7 +2172,7 @@ export async function getStockOpnameDetail(
       id: line.id,
       product_id: line.product_id,
       product_label: line.products
-        ? `${line.products.brand} ${line.products.model} ${line.products.color ?? ""} • Size ${Number(line.products.size)}`
+        ? `${line.products.brand} ${line.products.model} ${line.products.color ?? ""} • Size ${line.products.size_label ?? Number(line.products.size)}`
         : "(produk dihapus)",
       sku: line.products?.sku ?? "—",
       barcode: line.products?.barcode ?? "—",
@@ -2702,6 +2721,7 @@ export type ProductPickerRow = {
   model: string;
   sku: string;
   size: number;
+  size_label: string;
   color: string;
   barcode: string;
   hpp: number;
@@ -2712,7 +2732,7 @@ export async function getProductsForPicker(): Promise<ProductPickerRow[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("products")
-    .select("id, brand, model, sku, size, color, barcode, hpp, quantity")
+    .select("id, brand, model, sku, size, size_label, color, barcode, hpp, quantity")
     .eq("is_active", true)
     .order("brand")
     .order("model")
@@ -2876,7 +2896,7 @@ async function getAccountBalancesLegacy(opts?: {
     .select(
       "account_id, debit, credit, journal_entries!inner(entry_date, status)",
     )
-    .eq("journal_entries.status", "posted");
+    .in("journal_entries.status", ["posted", "reversed"]);
   if (opts?.from) lineQuery = lineQuery.gte("journal_entries.entry_date", opts.from);
   if (opts?.to) lineQuery = lineQuery.lte("journal_entries.entry_date", opts.to);
   const { data: lines } = await lineQuery;
@@ -3087,7 +3107,7 @@ async function getAccountLedgerLegacy(args: {
         "debit, credit, journal_entries!inner(entry_date, status)",
       )
       .eq("account_id", args.account_id)
-      .eq("journal_entries.status", "posted")
+      .in("journal_entries.status", ["posted", "reversed"])
       .lt("journal_entries.entry_date", args.from);
     for (const r of (openRows ?? []) as Array<{ debit: number; credit: number }>) {
       openingDebit += Number(r.debit);
@@ -3106,6 +3126,7 @@ async function getAccountLedgerLegacy(args: {
       "id, debit, credit, description, journal_entries!inner(id, entry_number, entry_date, description, source_type, source_id, status)",
     )
     .eq("account_id", args.account_id)
+    .in("journal_entries.status", ["posted", "reversed"])
     .order("entry_date", { referencedTable: "journal_entries", ascending: true })
     .order("created_at", { referencedTable: "journal_entries", ascending: true });
   if (args.from) q = q.gte("journal_entries.entry_date", args.from);
@@ -3140,9 +3161,7 @@ async function getAccountLedgerLegacy(args: {
     const c = Number(r.credit);
     totalDebit += d;
     totalCredit += c;
-    if (r.journal_entries.status === "posted") {
-      running += acc.normal_balance === "debit" ? d - c : c - d;
-    }
+    running += acc.normal_balance === "debit" ? d - c : c - d;
     return {
       line_id: r.id,
       entry_id: r.journal_entries.id,
@@ -3199,6 +3218,17 @@ export async function getActivityLogs(filters?: {
 
   const { data, count } = await query;
   return { data: data ?? [], total: count ?? 0 };
+}
+
+export async function getActivityLogActors() {
+  await requireOwner();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, full_name, email")
+    .order("full_name", { ascending: true });
+
+  return data ?? [];
 }
 
 // ─── Delete Requests ───────────────────────────────────────
@@ -3596,7 +3626,10 @@ export async function getGeneralLedgerReport(
   );
 
   const flattened = entries
-    .filter((entry) => entry.status === "posted")
+    // A reversed journal remains part of the audit trail; its separately
+    // posted reversal entry neutralizes it. Excluding the original would
+    // apply the reversal twice and corrupt every downstream balance.
+    .filter((entry) => entry.status !== "draft")
     .flatMap((entry) =>
       entry.lines.map((line) => ({ entry, line })),
     )
@@ -3757,7 +3790,7 @@ export async function getStockMovementReport(
   const [{ data: products }, { data: movements }] = await Promise.all([
     supabase
       .from("products")
-      .select("id, brand, model, color, size, sku, quantity")
+      .select("id, brand, model, color, size, size_label, sku, quantity")
       .eq("is_active", true)
       .order("brand")
       .order("model")
@@ -3776,6 +3809,7 @@ export async function getStockMovementReport(
     model: string;
     color: string | null;
     size: number | null;
+    size_label: string | null;
     sku: string;
     quantity: number;
   };
@@ -3808,7 +3842,7 @@ export async function getStockMovementReport(
       opening + periodMovements.reduce((sum, movement) => sum + delta(movement), 0);
     const productLabel = `${product.brand} ${product.model}${
       product.color ? ` ${product.color}` : ""
-    } • Size ${product.size ?? "-"}`;
+    } • Size ${product.size_label ?? product.size ?? "-"}`;
     let running = opening;
 
     if (periodMovements.length === 0) {
@@ -4081,7 +4115,7 @@ export async function getAgingReport(): Promise<unknown[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("products")
-    .select("id, brand, model, size, quantity, hpp, first_inbound_at")
+    .select("id, brand, model, size, size_label, quantity, hpp, first_inbound_at")
     .eq("is_active", true)
     .gt("quantity", 0)
     .order("first_inbound_at", { ascending: true, nullsFirst: true })
@@ -4351,10 +4385,10 @@ export async function getReturns(status?: string): Promise<unknown[]> {
       packing_items(
         id, barcode_scanned,
         packing_sessions(id, platform_order_id, platform),
-        products(id, brand, model, size, sku)
+        products(id, brand, model, size, size_label, sku)
       ),
-      original:original_product_id(brand, model, size),
-      new:new_product_id(brand, model, size)
+      original:original_product_id(brand, model, size, size_label),
+      new:new_product_id(brand, model, size, size_label)
     `)
     .order("created_at", { ascending: false });
 
@@ -4382,7 +4416,7 @@ export async function getReturnableItems(): Promise<unknown[]> {
     .from("packing_items")
     .select(`
       id, barcode_scanned, created_at,
-      products(id, brand, model, size, sku),
+      products(id, brand, model, size, size_label, sku),
       packing_sessions(id, platform, platform_order_id, status),
       returns(id, status)
     `)
@@ -4402,7 +4436,7 @@ export async function getActiveProductsByModel(brand: string, model: string): Pr
   const supabase = await createClient();
   const { data } = await supabase
     .from("products")
-    .select("id, brand, model, size, sku, quantity")
+    .select("id, brand, model, size, size_label, sku, quantity")
     .eq("brand", brand)
     .eq("model", model)
     .eq("is_active", true)

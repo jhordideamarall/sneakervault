@@ -339,7 +339,7 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         ],
         efek: [
           "Invoice terbit membentuk piutang/AR.",
-          "Stok turun saat invoice diterbitkan atau order marketplace dikonfirmasi.",
+          "Invoice manual/offline menurunkan stok saat diterbitkan; invoice marketplace menunggu Packing / Outbound agar stok dan HPP turun saat barang fisik keluar.",
           "Status berubah menjadi belum bayar, sebagian, atau lunas.",
         ],
         koreksi: [
@@ -369,7 +369,7 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
       },
       {
         menu: "Import Pesanan",
-        akses: "Owner, Finance, Admin Online",
+        akses: "Owner, Finance",
         fungsi: "Mengubah file pesanan Shopee, TikTok, atau Tokopedia menjadi invoice belum terbayar.",
         aturan: [
           "Pilih channel eksplisit sebelum upload.",
@@ -963,8 +963,8 @@ export default function PanduanPage() {
             <tbody className="text-white/65">
               {[
                 ["Owner", "Semua modul + Pengaturan + Panduan + chip “Lihat sebagai” role lain"],
-                ["Admin Gudang", "Inventori, Barang Masuk, Generate Barcode, Stock Opname, Packing, Retur, Supplier"],
-                ["Admin Online", "Order Masuk, Invoice, Import Pesanan, Update Stok Marketplace, Customer, Terjual, Retur"],
+                ["Admin Gudang", "Inventori, Barang Masuk, Generate Barcode, Stock Opname, Retur, Supplier"],
+                ["Admin Online", "Order Masuk, Invoice, Update Stok Marketplace, Customer, Terjual, Retur"],
                 ["Shopkeeper (Kasir)", "POS Kasir, Order Masuk, Inventori (cek stok), Packing"],
                 ["Finance", "Buku Besar, Kas & Bank, Pembelian, Rekonsiliasi Settlement, Laporan Keuangan, Overview"],
               ].map(([r, a]) => (
@@ -1005,7 +1005,7 @@ export default function PanduanPage() {
               <li>Buka <b>Workspace</b> untuk melihat ringkasan dan signal menu yang perlu ditindak.</li>
               <li>Pakai chip <b>Lihat sebagai</b> untuk cek tampilan Admin Gudang, Admin Online, Shopkeeper, dan Finance.</li>
               <li>Cek <b>Overview</b> untuk stok, revenue, laba, bestseller, dan nilai HPP.</li>
-              <li>Approve request hapus, stock opname final, koreksi data besar, dan perubahan user/role.</li>
+              <li>Approve request hapus, kunci hasil stock opname final, koreksi data besar, dan perubahan user/role.</li>
               <li>Gunakan <b>Activity Log</b> saat ada selisih data untuk melihat siapa melakukan apa dan kapan.</li>
             </ol>
           </Sub>
@@ -1018,7 +1018,7 @@ export default function PanduanPage() {
               <li>Kalau barang baru belum ada, buat dari <b>Inventori</b>, <b>Import Produk</b>, atau dari Pembelian Barang saat barang diterima.</li>
               <li>Saat barang datang, buka <b>Barang Masuk</b>, scan/isi SKU, input qty, supplier, dan harga modal.</li>
               <li>Gunakan <b>Generate Barcode</b> untuk produk yang belum punya label internal.</li>
-              <li>Untuk cek fisik berkala, buat sesi <b>Stock Opname</b>, input hasil hitung, lalu minta owner approve selisih.</li>
+              <li>Untuk cek fisik berkala, buat sesi <b>Stock Opname</b>, input hasil hitung dan alasan selisih, lalu minta owner mengunci hasil. Opname tidak otomatis mengubah stok.</li>
               <li>Untuk retur, verifikasi barang fisik dulu sebelum stok dikembalikan atau ditandai defect.</li>
             </ol>
           </Sub>
@@ -1029,9 +1029,9 @@ export default function PanduanPage() {
             </p>
             <ol className="list-decimal space-y-1.5 pl-4">
               <li>Kalau database kosong, bootstrap produk dulu dari <b>Inventori → Import Produk</b> memakai file produk/listing marketplace.</li>
-              <li>Buka <b>Penjualan → Import Pesanan</b>, pilih channel yang benar, lalu upload file pesanan resmi.</li>
-              <li>Jika SKU belum dikenali, klik <b>Petakan SKU</b> ke produk sistem. Mapping ini disimpan untuk import berikutnya.</li>
-              <li>Konfirmasi hanya baris yang siap. Hasilnya menjadi <b>Invoice Penjualan belum terbayar</b>; stok sistem belum berkurang.</li>
+              <li>Pastikan master produk/listing dan mapping SKU sudah siap; minta Finance menjalankan <b>Import Pesanan</b> karena proses itu membentuk invoice dan jurnal.</li>
+              <li>Pantau hasil import di <b>Order Masuk</b> dan <b>Invoice Penjualan</b>; cek customer, nomor order, channel, dan statusnya.</li>
+              <li>Koordinasikan order siap proses ke Shopkeeper untuk <b>Packing / Outbound</b>; stok sistem baru turun saat barang benar-benar dipacking.</li>
               <li>Buka <b>Update Stok Marketplace</b>, upload template resmi, generate file, lalu upload balik ke seller center.</li>
             </ol>
           </Sub>
@@ -1054,6 +1054,7 @@ export default function PanduanPage() {
             </p>
             <ol className="list-decimal space-y-1.5 pl-4">
               <li>Pastikan <b>Akun Bank & Kas</b> sudah dibuat sebelum transaksi pembayaran/penerimaan.</li>
+              <li>Untuk pesanan marketplace, buka <b>Import Pesanan</b>, pilih channel, review mapping SKU/size, lalu konfirmasi invoice yang siap.</li>
               <li>Untuk marketplace, tunggu file settlement saat dana dilepas, lalu import di <b>Rekonsiliasi Settlement</b>.</li>
               <li>Settlement membuat <b>Penerimaan Penjualan</b>, alokasi invoice, mutasi bank, dan jurnal biaya marketplace otomatis.</li>
               <li>Untuk pembelian supplier, jalankan alur Pembelian Barang → Penerimaan Barang → Faktur Pembelian → Bayar Vendor.</li>
@@ -1065,10 +1066,10 @@ export default function PanduanPage() {
           <Sub icon={<ArrowLeftRight size={15} />} title="Flow Lintas Divisi">
             <p className="mb-2 text-white/65">Flow normal agar stok dan finance tidak saling tabrak:</p>
             <ol className="list-decimal space-y-1.5 pl-4">
-              <li><b>Marketplace:</b> Admin Online import produk/pesanan → Finance import settlement saat dana cair.</li>
+              <li><b>Marketplace:</b> Finance import pesanan → Admin Online cek order/invoice → Shopkeeper packing → Finance import settlement saat dana cair.</li>
               <li><b>Offline:</b> Gudang pastikan stok tersedia → Shopkeeper POS checkout → Finance cek kas/bank dan laporan.</li>
               <li><b>Pembelian supplier:</b> Finance buat Pembelian Barang → Gudang terima fisik → Finance cek faktur dan bayar vendor.</li>
-              <li><b>Opname:</b> Gudang hitung fisik → Owner/Finance review dampak → Owner approve penyesuaian.</li>
+              <li><b>Opname:</b> Gudang hitung fisik dan isi alasan → Owner mengunci hasil perbandingan → koreksi stok dibuat terpisah hanya jika investigasi menyatakan perlu.</li>
             </ol>
           </Sub>
         </div>
@@ -1109,7 +1110,7 @@ export default function PanduanPage() {
           </Sub>
           <Sub icon={<ClipboardList size={15} />} title="Stock Opname">
             Hitung fisik berkala. Buat sesi → input jumlah fisik → sistem hitung <b>selisih (variance)</b> vs sistem →
-            status Review → <b>Owner</b> menyetujui adjustment. Finance dapat memulai, menghitung, dan submit review dari tombol Stock Opname di Inventory.
+            status Review → <b>Owner</b> mengunci hasil compare-only. Proses ini tidak otomatis mengubah stok/jurnal; Finance dapat memulai, menghitung, dan submit review dari tombol Stock Opname di Inventory.
           </Sub>
           <Sub icon={<PackageMinus size={15} />} title="Packing / Outbound">
             Scan barang yang dikirim untuk pesanan → stok turun → masuk halaman <b>Terjual</b>. Status: Packing → Dikirim → Selesai.

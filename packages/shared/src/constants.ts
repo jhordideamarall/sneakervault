@@ -27,6 +27,8 @@ export const PLATFORMS: { value: Platform; label: string }[] = [
   { value: "shopee", label: "Shopee" },
   { value: "tiktok", label: "TikTok Shop" },
   { value: "tokopedia", label: "Tokopedia" },
+  { value: "wa", label: "WhatsApp" },
+  { value: "website", label: "Website" },
   { value: "offline", label: "Offline / Toko Fisik" },
   { value: "other", label: "Lainnya" },
 ];
@@ -244,6 +246,8 @@ export const PLATFORM_PRICE_CHANNEL: Record<Platform, PriceChannel> = {
   shopee: "online",
   tiktok: "online",
   tokopedia: "online",
+  wa: "online",
+  website: "online",
   offline: "offline",
   other: "online", // default ke online untuk platform lain-lain
 };

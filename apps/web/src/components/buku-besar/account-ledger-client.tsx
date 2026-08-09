@@ -183,8 +183,9 @@ export function AccountLedgerClient({
       {/* Date filter */}
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-white/[0.06] bg-[#262626] p-3">
         <div className="space-y-1">
-          <label className="text-[11px] uppercase tracking-wider text-white/40">Dari</label>
+          <label htmlFor="ledger-from" className="text-[11px] uppercase tracking-wider text-white/40">Dari</label>
           <Input
+            id="ledger-from"
             type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
@@ -192,8 +193,9 @@ export function AccountLedgerClient({
           />
         </div>
         <div className="space-y-1">
-          <label className="text-[11px] uppercase tracking-wider text-white/40">Sampai</label>
+          <label htmlFor="ledger-to" className="text-[11px] uppercase tracking-wider text-white/40">Sampai</label>
           <Input
+            id="ledger-to"
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}

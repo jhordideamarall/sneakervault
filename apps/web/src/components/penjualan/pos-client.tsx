@@ -145,6 +145,14 @@ export function PosClient({
   }, [cart, discount]);
 
   function addProduct(product: PosProduct) {
+    const existing = cart.find((line) => line.product.id === product.id);
+    if (existing && existing.qty >= product.quantity) {
+      toast.push(
+        `Jumlah maksimal sesuai stok tersedia: ${product.quantity}`,
+        "error",
+      );
+      return;
+    }
     setCart((current) => {
       const found = current.find((l) => l.product.id === product.id);
       if (found) {
@@ -456,8 +464,14 @@ export function PosClient({
                     <button
                       type="button"
                       onClick={() => setQty(l.product.id, l.qty + 1)}
-                      aria-label={`Tambah jumlah ${l.product.brand} ${posModelLabel(l.product.brand, l.product.model)}`}
-                      className="grid size-6 place-items-center rounded-lg text-white/35 hover:bg-white/[0.08] hover:text-white"
+                      disabled={l.qty >= l.product.quantity}
+                      aria-label={`Tambah jumlah ${l.product.brand} ${posModelLabel(l.product.brand, l.product.model)}${l.qty >= l.product.quantity ? ` — batas stok ${l.product.quantity}` : ""}`}
+                      title={
+                        l.qty >= l.product.quantity
+                          ? `Batas stok tersedia: ${l.product.quantity}`
+                          : "Tambah jumlah"
+                      }
+                      className="grid size-6 place-items-center rounded-lg text-white/35 hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-white/35"
                     >
                       <Plus className="size-3" />
                     </button>

@@ -148,6 +148,20 @@ export function StockOpnameClient({
       toast.push("Semua item harus dihitung sebelum dikirim review", "error");
       return;
     }
+    const missingReason = detail.lines.find((line) => {
+      const physical = Number(counts[line.id]?.qty ?? line.physical_qty ?? 0);
+      return (
+        physical !== line.system_qty &&
+        !(counts[line.id]?.reason ?? line.reason ?? "").trim()
+      );
+    });
+    if (missingReason) {
+      toast.push(
+        `Alasan selisih wajib diisi untuk ${missingReason.product_label}`,
+        "error",
+      );
+      return;
+    }
     startTransition(async () => {
       const saveResult = await saveStockOpnameCounts({
         session_id: detail.id,
@@ -300,16 +314,18 @@ export function StockOpnameClient({
             </p>
           </div>
           <div>
-            <FieldLabel>Tanggal</FieldLabel>
+            <FieldLabel htmlFor="opname-date">Tanggal</FieldLabel>
             <Input
+              id="opname-date"
               type="date"
               value={opnameDate}
               onChange={(event) => setOpnameDate(event.target.value)}
             />
           </div>
           <div>
-            <FieldLabel>Catatan</FieldLabel>
+            <FieldLabel htmlFor="opname-notes">Catatan</FieldLabel>
             <Textarea
+              id="opname-notes"
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               placeholder="Area gudang, PIC, atau catatan scope"
@@ -416,9 +432,10 @@ export function StockOpnameClient({
               </div>
               {["open", "counting"].includes(detail.status) ? (
                 <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
-                  <FieldLabel>Scan Barcode/SKU Fisik</FieldLabel>
+                  <FieldLabel htmlFor="opname-scan">Scan Barcode/SKU Fisik</FieldLabel>
                   <div className="mt-2 flex gap-2">
                     <Input
+                      id="opname-scan"
                       value={scanCode}
                       onChange={(event) => setScanCode(event.target.value)}
                       onKeyDown={(event) => {
@@ -490,6 +507,7 @@ export function StockOpnameClient({
                           </td>
                           <td className="px-4 py-3 text-right">
                             <Input
+                              aria-label={`Jumlah fisik ${line.product_label}`}
                               type="number"
                               min={0}
                               disabled={!["open", "counting"].includes(detail.status)}
@@ -524,6 +542,7 @@ export function StockOpnameClient({
                           </td>
                           <td className="px-4 py-3">
                             <Input
+                              aria-label={`Alasan selisih ${line.product_label}`}
                               disabled={!["open", "counting"].includes(detail.status)}
                               value={counts[line.id]?.reason ?? ""}
                               onChange={(event) =>

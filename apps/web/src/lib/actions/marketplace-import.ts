@@ -368,7 +368,7 @@ async function resolveOrders(
       });
     }
 
-    const { data: existingPreOrders } = await (supabase as any)
+    const { data: existingPreOrders } = await supabase
       .from("pre_orders")
       .select("id, marketplace_order_id, status")
       .eq("channel", channel)

@@ -454,7 +454,7 @@ export function InventoryClient({
                 expanded={expandedGroups.has(group.key)}
                 onToggle={() => toggleGroup(group.key)}
                 showHpp={showHpp}
-                canEdit={canEditInventory}
+                canEdit={canEditInventory || canEditPrice}
                 canChangeCondition={canChangeCondition}
                 onEdit={setEditing}
                 onChangeCondition={setConditionEditing}
@@ -497,6 +497,7 @@ export function InventoryClient({
           onOpenChange={(o) => !o && setEditing(null)}
           product={editing}
           canEditPrice={canEditPrice}
+          canEditIdentity={canEditInventory}
           canEditImage={canEditInventory}
         />
       )}

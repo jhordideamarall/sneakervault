@@ -5,7 +5,14 @@ export type Role =
   | "shopkeeper"
   | "finance";
 
-export type Platform = "shopee" | "tiktok" | "tokopedia" | "offline" | "other";
+export type Platform =
+  | "shopee"
+  | "tiktok"
+  | "tokopedia"
+  | "wa"
+  | "website"
+  | "offline"
+  | "other";
 
 export type Courier =
   | "jne"

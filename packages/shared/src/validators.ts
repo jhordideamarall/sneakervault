@@ -42,7 +42,11 @@ export type ProductConditionInput = z.infer<typeof productConditionInputSchema>;
 // ─── Product Update (now includes price_offline, condition, image) ──────────
 export const productUpdateSchema = z.object({
   id: z.string().uuid(),
+  brand: z.string().trim().min(1).optional(),
+  model: z.string().trim().min(1).optional(),
+  sku: z.string().trim().min(1).optional(),
   size_label: z.string().trim().min(1).optional(),
+  barcode: z.string().trim().min(1).optional(),
   hpp: z.coerce.number().nonnegative().optional(),
   sell_price: z.coerce.number().nonnegative().optional(),
   price_offline: z.coerce.number().nonnegative().optional(),
@@ -79,7 +83,15 @@ export type PurchaseBatchInput = z.infer<typeof purchaseBatchInputSchema>;
 export const packingSessionInputSchema = z
   .object({
     packed_by: z.string().uuid().optional(),
-    platform: z.enum(["shopee", "tiktok", "tokopedia", "offline", "other"]),
+    platform: z.enum([
+      "shopee",
+      "tiktok",
+      "tokopedia",
+      "wa",
+      "website",
+      "offline",
+      "other",
+    ]),
     platform_order_id: z.string().optional(),
     courier: z.enum([
       "jne",
@@ -96,7 +108,7 @@ export const packingSessionInputSchema = z
   .refine(
     (d) => d.platform === "offline" || !!d.platform_order_id?.trim(),
     {
-      message: "Nomor order marketplace wajib diisi untuk Shopee/TikTok/Tokopedia/platform online",
+      message: "Nomor order atau referensi wajib diisi untuk pesanan online",
       path: ["platform_order_id"],
     },
   )
@@ -412,6 +424,16 @@ export const preOrderInputSchema = z
     (d) => d.source !== "marketplace" || !!d.marketplace_order_id?.trim(),
     {
       message: "Nomor order marketplace wajib diisi untuk Pre Order Marketplace",
+      path: ["marketplace_order_id"],
+    },
+  )
+  .refine(
+    (d) =>
+      ["offline", "manual"].includes(d.channel) ||
+      !!d.marketplace_order_id?.trim(),
+    {
+      message:
+        "Nomor order atau referensi wajib diisi agar preorder bisa dicocokkan saat packing",
       path: ["marketplace_order_id"],
     },
   )

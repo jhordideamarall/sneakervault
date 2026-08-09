@@ -200,12 +200,14 @@ export function LabaRugiClient({
         </div>
         <div className="flex items-center gap-2">
           <Input
+            aria-label="Tanggal mulai laporan laba rugi"
             type="date"
             value={fromDate}
             onChange={(e) => setFromDate(e.target.value)}
           />
           <span className="text-white/40">→</span>
           <Input
+            aria-label="Tanggal selesai laporan laba rugi"
             type="date"
             value={toDate}
             onChange={(e) => setToDate(e.target.value)}

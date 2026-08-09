@@ -18,7 +18,7 @@ export async function createEmployee(input: unknown) {
   const parsed = employeeInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
   const supabase = await createClient();
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("employees")
     .insert({
       ...parsed.data,
@@ -51,7 +51,7 @@ export async function updateEmployee(id: string, input: unknown) {
   const parsed = employeeInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
   const supabase = await createClient();
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .from("employees")
     .update({
       ...parsed.data,
@@ -81,7 +81,7 @@ export async function updateEmployee(id: string, input: unknown) {
 export async function deactivateEmployee(id: string) {
   const profile = await requireRole([...ROLES]);
   const supabase = await createClient();
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .from("employees")
     .update({ is_active: false, updated_at: new Date().toISOString() })
     .eq("id", id);
@@ -99,7 +99,7 @@ export async function deactivateEmployee(id: string) {
 export async function reactivateEmployee(id: string) {
   const profile = await requireRole([...ROLES]);
   const supabase = await createClient();
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .from("employees")
     .update({ is_active: true, updated_at: new Date().toISOString() })
     .eq("id", id);

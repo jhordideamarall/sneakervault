@@ -348,7 +348,7 @@ export function ExpensesClient({
         </div>
         <Button onClick={() => setActiveTab("input")} className="gap-2">
           <Plus size={16} />
-          Input Beban
+          Buat Beban Baru
         </Button>
       </div>
 

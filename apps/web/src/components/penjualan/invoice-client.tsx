@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -172,18 +172,19 @@ export function SalesInvoiceClient({
   const [channelFilter, setChannelFilter] = useState<CustomerChannel | "all">(
     "all",
   );
-  const [detailCache, setDetailCache] =
-    useState<Record<string, SalesInvoiceDetail>>(detailById);
+  const [loadedDetails, setLoadedDetails] = useState<
+    Record<string, SalesInvoiceDetail>
+  >({});
+  const detailCache = useMemo(
+    () => ({ ...detailById, ...loadedDetails }),
+    [detailById, loadedDetails],
+  );
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     referenceNumber: string;
     blocker: TransactionDeleteResult | null;
   } | null>(null);
-
-  useEffect(() => {
-    setDetailCache(detailById);
-  }, [detailById]);
 
   const canManage =
     roles.includes("owner") ||
@@ -216,7 +217,7 @@ export function SalesInvoiceClient({
     const today = new Date();
     for (const i of invoices) {
       if (i.status === "cancelled" || i.status === "draft") continue;
-      if (i.status === "issued") s.issued++;
+      if (i.status === "issued" || i.status === "partial") s.issued++;
       if (i.status === "paid") s.paid++;
       if (i.status === "issued" || i.status === "partial") {
         s.outstanding += i.total - i.paid_amount;
@@ -287,7 +288,7 @@ export function SalesInvoiceClient({
         toast.push(result.error ?? "Detail invoice tidak ditemukan", "error");
         return null;
       }
-      setDetailCache((prev) => ({ ...prev, [id]: result.data! }));
+      setLoadedDetails((prev) => ({ ...prev, [id]: result.data! }));
       return result.data;
     } finally {
       setDetailLoadingId((current) => (current === id ? null : current));
@@ -356,7 +357,7 @@ export function SalesInvoiceClient({
         ...form.lines,
         {
           product_id: product.id,
-          product_label: `${product.brand} ${product.model} ${product.color} • Size ${product.size} • ${product.sku}`,
+          product_label: `${product.brand} ${product.model} ${product.color} • Size ${product.size_label ?? product.size} • ${product.sku}`,
           qty: 1,
           unit_price: priceForChannel(
             form.channel,
@@ -547,7 +548,7 @@ export function SalesInvoiceClient({
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <StatTile label="Total Invoice" value={stats.total.toString()} />
         <StatTile
-          label="Terbit (Belum Lunas)"
+          label="Belum Lunas"
           value={stats.issued.toString()}
           tone="amber"
         />
@@ -625,7 +626,7 @@ export function SalesInvoiceClient({
       ) : (
         <div className="overflow-hidden rounded-lg border border-white/[0.06] bg-[#262626]">
           <div className="overflow-x-auto">
-          <table className="min-w-[1120px] w-full text-sm">
+          <table className="min-w-[1000px] w-full text-sm">
             <thead>
               <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wider text-white/40">
                 <th className="px-4 py-3 font-medium">No Invoice</th>
@@ -637,7 +638,7 @@ export function SalesInvoiceClient({
                 <th className="px-4 py-3 text-right font-medium">Total</th>
                 <th className="px-4 py-3 text-right font-medium">Sisa</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 text-right font-medium">Aksi</th>
+                <th className="sticky right-0 bg-[#262626] px-4 py-3 text-right font-medium shadow-[-8px_0_12px_rgba(0,0,0,0.18)]">Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -715,7 +716,7 @@ export function SalesInvoiceClient({
                         {SALES_INVOICE_STATUS_LABELS[i.status]}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="sticky right-0 bg-[#262626] px-4 py-3 text-right shadow-[-8px_0_12px_rgba(0,0,0,0.18)]">
                       <div className="inline-flex items-center gap-1">
                         <button
                           onClick={() => void openViewById(i.id)}
@@ -875,7 +876,7 @@ function FormModal({
     if (!q) return products.slice(0, 30);
     return products
       .filter((p) =>
-        `${p.brand} ${p.model} ${p.color} ${p.sku} ${p.barcode}`
+        `${p.brand} ${p.model} ${p.color} ${p.sku} ${p.barcode} ${p.size_label ?? p.size}`
           .toLowerCase()
           .includes(q),
       )
@@ -1062,7 +1063,7 @@ function FormModal({
                             <div className="text-white">
                               {p.brand} {p.model}{" "}
                               <span className="text-white/50">
-                                · {p.color} · Size {p.size}
+                                · {p.color} · Size {p.size_label ?? p.size}
                               </span>
                             </div>
                             <div className="text-[11px] text-white/40">

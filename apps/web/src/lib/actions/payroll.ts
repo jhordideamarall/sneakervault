@@ -60,7 +60,7 @@ export async function createPayrollRun(input: unknown) {
 
   const supabase = await createClient();
   const payrollLines = normalizePayrollLines(parsed.data.lines);
-  const { data, error } = await (supabase as any).rpc(
+  const { data, error } = await supabase.rpc(
     "create_payroll_run_atomic",
     {
       p_payload: {
@@ -85,7 +85,7 @@ export async function updatePayrollRun(id: string, input: unknown) {
 
   const supabase = await createClient();
   const payrollLines = normalizePayrollLines(parsed.data.lines);
-  const { data, error } = await (supabase as any).rpc(
+  const { data, error } = await supabase.rpc(
     "update_payroll_run_with_components_atomic",
     {
       p_run_id: id,
@@ -125,7 +125,7 @@ export async function settlePayrollLiability(input: {
   }
 
   const supabase = await createClient();
-  const { data, error } = await (supabase as any).rpc(
+  const { data, error } = await supabase.rpc(
     "settle_payroll_liability_atomic",
     {
       p_run_id: input.run_id,
