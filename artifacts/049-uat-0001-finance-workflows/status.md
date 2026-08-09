@@ -1,12 +1,12 @@
 # UAT-0001 Finance & Operational Workflows
 
-**Status:** [x] In Progress | [ ] Done | [ ] Blocked
+**Status:** [ ] In Progress | [x] Done | [ ] Blocked
 **Sprint:** Client UAT Correction
 **Tanggal Mulai:** 2026-08-09
-**Tanggal Selesai:** -
+**Tanggal Selesai:** 2026-08-09
 
 ## Source of Truth
-- Supabase project: `jogqvffdjtjqdnflvubi` (read-only audit).
+- Supabase project: `jogqvffdjtjqdnflvubi` (verified via SneakerVault MCP and CLI).
 - Feedback: `UAT-0001` — **Review Web Terbaru**.
 - Reporter role: `finance`.
 - Reported production version: `9682c14`.
@@ -31,7 +31,7 @@
 - [x] Split accounts payable and accounts receivable into separate reports.
 - [x] Make Balance Sheet current-year income agree with Profit & Loss.
 - [x] Make Equity Changes derive profit from P&L and withdrawals from the Prive account.
-- [ ] Run authenticated browser UAT after the migration is available in a non-production environment.
+- [x] Run authenticated browser UAT against the deployed production application.
 - [x] Run database regression, type-check, lint/build, and PDF render inspection.
 - [x] Write an operator checklist that the owner can repeat without developer assistance.
 
@@ -57,13 +57,24 @@
 - `pnpm build`: passed, including all affected dynamic routes.
 - Individual A4 payslip: 1 page, rendered to PNG and visually inspected;
   component labels, values, status, and take-home pay are legible and aligned.
+- Production migrations `20260809084700` and `20260809091500` applied to the
+  linked SneakerVault project and verified through MCP without clearing
+  protected configuration or accounts.
+- Production browser UAT: 63 sequential application screenshots plus one final
+  completion screenshot; all role permission checks and form previews passed,
+  with 0 console errors, 0 page errors, and 0 unexpected redirects.
+- Production interaction UAT: POS account routing, report period filter, four
+  report exports, one individual payslip export, feedback detail, and seven
+  1280 px responsive routes passed with 0 HTTP/console/page errors and 0
+  document-level horizontal overflow.
+- Production accessibility audit: 10 key pages, 0 serious/critical nodes.
+- UAT-0001 received one evidence comment and was changed to `selesai` through
+  the owner UI; MCP verified `resolved_by` and `resolved_at`.
+- Production releases merged through PRs #18, #19, and #20. Vercel reported
+  the final merge commit `1f2440c` as successfully deployed.
 
 ## Blockers
-- Production deployment is intentionally not started. The existing remote/local
-  migration history is divergent; production migration repair or push requires
-  explicit confirmation after local verification.
-- Authenticated browser UAT is pending because the current linked production
-  schema intentionally does not contain the new additive migration.
+- None.
 
 ## Files Modified
 - `artifacts/049-uat-0001-finance-workflows/status.md`
