@@ -1,8 +1,10 @@
 # Panduan Operator UAT-0001
 
-Panduan ini dipakai oleh Owner dan Finance setelah migration serta aplikasi versi
-UAT-0001 sudah terpasang. Jangan memakai panduan ini pada production yang masih
-menampilkan versi `9682c14`, karena workflow barunya belum tersedia di versi itu.
+Panduan ini dipakai oleh Owner dan Finance. Workflow UAT-0001, migration, dan
+aplikasi production telah diverifikasi pada 9 Agustus 2026. Untuk latihan awal,
+buka form sampai tahap review tanpa menekan tombol posting/bayar; lakukan
+transaksi nyata hanya setelah supplier, customer, produk, nominal, dan akun
+kas/bank sudah diperiksa operator kedua atau owner.
 
 ## 1. Pembelian tunai atau DP
 
