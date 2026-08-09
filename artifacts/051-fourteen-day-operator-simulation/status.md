@@ -1,9 +1,9 @@
 # Simulasi Operasional Operator 14 Hari
 
-**Status:** [x] In Progress | [ ] Done | [ ] Blocked
+**Status:** [ ] In Progress | [x] Done | [ ] Blocked
 **Sprint:** Post-UAT Operational Endurance
 **Tanggal Mulai:** 2026-08-09
-**Tanggal Selesai:** -
+**Tanggal Selesai:** 2026-08-09
 
 ## Tujuan
 
@@ -49,7 +49,7 @@ di lingkungan disposable; production dibatasi pada pemeriksaan read-only.
 - [x] Neraca seimbang dan laba berjalan cocok dengan laporan laba rugi.
 - [x] Screenshot dan tutorial bergambar 14 hari tersedia di Downloads.
 - [x] Lint, type-check, build, serta regression terkait lulus setelah audit akhir.
-- [ ] Production smoke read-only lulus setelah perubahan terdeploy (jika ada).
+- [x] Production smoke read-only lulus setelah perubahan terdeploy.
 
 ## Temuan
 
@@ -86,11 +86,15 @@ di lingkungan disposable; production dibatasi pada pemeriksaan read-only.
   spoof dan tabel mendapat grant mutasi berlebih. Migration hardening membatasi
   insert ke `user_id = auth.uid()`, Owner-only read, serta grant SELECT/INSERT;
   UI mendapat filter operator/aksi lengkap, pagination, dan waktu WIB eksplisit.
+- Smoke production menemukan sapaan Workspace dirender UTC di Vercel tetapi WIB
+  di browser sehingga terjadi hydration mismatch. Sapaan kini server-rendered
+  dengan timezone `Asia/Jakarta`; smoke ulang production menghasilkan 0 error.
 
 ## Bukti
 
 - Lingkungan disposable Supabase: API `56321`, database `56322`; 53 tabel dan
-  92 fungsi dari schema production, tanpa mutasi ke production.
+  92 fungsi dari schema production. Seluruh transaksi simulasi tetap terisolasi;
+  production hanya menerima migration additive yang sudah disetujui.
 - Hari 01: 5 role sintetis, 2 akun kas/bank, supplier, customer, employee, dan
   tiga varian `(SIM-SAMBA-WHT, 40/42/42 2/3)` dibuat lewat UI.
 - Hari 02: PO tunai Rp5.300.000, kredit Rp3.825.000, dan DP 50% Rp3.650.000;
@@ -131,26 +135,41 @@ di lingkungan disposable; production dibatasi pada pemeriksaan read-only.
   read-only via MCP berisi 38 event dengan 0 actor/action/entity kosong. Probe RLS
   membuktikan self-insert diterima, actor palsu ditolak, Finance 0 row, Owner bisa
   membaca, dan tidak meninggalkan fixture karena rollback.
+- Enam migration `20260809154500` sampai `20260809164000` diterapkan melalui
+  Supabase CLI ke project `jogqvffdjtjqdnflvubi`; dry-run sesudahnya melaporkan
+  database up to date. MCP membuktikan 8 RPC tersedia, policy Activity Log actor
+  terkunci ke `auth.uid()`, dan grant authenticated hanya SELECT/INSERT.
 - Laporan production `UAT-0001` dibaca read-only melalui Supabase MCP pada
   project `jogqvffdjtjqdnflvubi`; status `selesai` dan daftar permintaan client
   dijadikan acceptance criteria lanjutan Hari 07–14.
 - Screenshot tutorial privat sementara tersimpan di
   `/private/tmp/dewinst-14-day-operator-2026-08-09/` dengan nama bersih `00`–`87`.
 - Modul lengkap 117 halaman, Modul Gudang 43 halaman, Modul Kasir 23 halaman,
-  dan Modul Finance 55 halaman tersedia di
+  Modul Finance 55 halaman, serta Modul Verifikasi Production 55 halaman tersedia di
   `/Users/jhordideamarall/Downloads/Dewinst-Modul-Operasional-14-Hari-2026-08-09/`;
-  seluruh PDF A4 landscape sudah dirender-sampling dan ZIP 47 MB lulus integrity
+  seluruh PDF A4 landscape sudah dirender-sampling dan ZIP 62 MB lulus integrity
   check tanpa `__MACOSX`/`.DS_Store`.
+- PR #22 di-merge sebagai `aa59ef2`; hotfix hydration PR #23 di-merge sebagai
+  `bbdac3b`. Vercel production Ready dan alias `https://dewinst.vercel.app`
+  menunjuk release final.
 - Gate final: TypeScript lulus, ESLint 0 error/0 warning, production build lulus,
-  serta smoke ulang 51 route dan Activity Log lulus pada build terakhir.
+  serta smoke production ulang 51/51 route HTTP 200 dengan 0 application console
+  error dan 0 page error. Ada 53 screenshot production bernama bersih dan berurutan.
 
 ## Blockers
 
-- Penerapan migration RLS Activity Log ke production menunggu konfirmasi
-  eksplisit sesuai klasifikasi high-risk di `CLAUDE.md`.
+- Tidak ada blocker release tersisa.
+
+## Known Limitations
+
 - Bootstrap database kosong memang belum didukung migration history aktif dan
   sudah dipisahkan sebagai Phase C pada dokumen rekonsiliasi 2026-07-26; release
   ini diverifikasi pada clone schema production, bukan `db reset` kosong.
+- Supabase Advisor masih memuat warning historis/generik (SECURITY DEFINER,
+  index/policy, dan leaked-password protection). RPC baru yang memakai definer
+  sudah memiliki role gate, actor, search path, serta grant minimal; warning lama
+  tetap perlu ditangani sebagai backlog terpisah agar tidak mengubah izin bisnis
+  secara otomatis saat release operasional ini.
 
 ## Files Modified
 
@@ -163,6 +182,7 @@ di lingkungan disposable; production dibatasi pada pemeriksaan read-only.
 - `apps/web/src/app/(dashboard)/reports/page.tsx`
 - `apps/web/src/components/buku-besar/*`
 - `apps/web/src/components/dashboard/*`
+- `apps/web/src/components/dashboard/greeting.tsx`
 - `apps/web/src/components/employees/*`
 - `apps/web/src/components/inventory/*`
 - `apps/web/src/components/kas-bank/*`
