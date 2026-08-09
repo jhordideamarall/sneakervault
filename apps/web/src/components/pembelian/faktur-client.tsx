@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -159,15 +166,6 @@ export function FakturPembelianClient({
   const canManage = roles.includes("owner") || roles.includes("finance");
   const canDelete = canManage;
 
-  useEffect(() => {
-    if (!initialPoId || editing || initialPoOpenedRef.current === initialPoId) {
-      return;
-    }
-    initialPoOpenedRef.current = initialPoId;
-    setEditing({ mode: "new" });
-    pickPo(initialPoId);
-  }, [initialPoId, editing]);
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return invoices.filter((i) => {
@@ -244,21 +242,32 @@ export function FakturPembelianClient({
     setEditing(null);
   }
 
-  function pickPo(poId: string) {
+  const pickPo = useCallback((poId: string) => {
     const po = invoicablePos.find((p) => p.id === poId);
     if (!po) {
-      setForm({ ...form, po_id: poId });
+      setForm((current) => ({ ...current, po_id: poId }));
       return;
     }
-    setForm({
-      ...form,
+    setForm((current) => ({
+      ...current,
       po_id: poId,
       supplier_id: po.supplier_id,
       subtotal: po.subtotal,
       tax: po.tax,
       total: po.total,
+    }));
+  }, [invoicablePos]);
+
+  useEffect(() => {
+    if (!initialPoId || editing || initialPoOpenedRef.current === initialPoId) {
+      return;
+    }
+    initialPoOpenedRef.current = initialPoId;
+    queueMicrotask(() => {
+      setEditing({ mode: "new" });
+      pickPo(initialPoId);
     });
-  }
+  }, [initialPoId, editing, pickPo]);
 
   function handleSourceChange(source: "manual" | "po") {
     if (source === "manual") {

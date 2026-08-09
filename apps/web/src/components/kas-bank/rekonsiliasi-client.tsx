@@ -276,8 +276,9 @@ export function RekonsiliasiClient({ bankAccounts }: Props) {
 
            <div className="space-y-4 text-left">
               <div className="space-y-2">
-                 <label className="text-xs font-semibold text-white/40 uppercase">Pilih Akun Bank</label>
-                 <select 
+                 <label htmlFor="reconciliation-bank-account" className="text-xs font-semibold text-white/40 uppercase">Pilih Akun Bank</label>
+                 <select
+                    id="reconciliation-bank-account"
                     value={selectedBankId}
                     onChange={(e) => setSelectedBankId(e.target.value)}
                     className="w-full bg-[#1F1F1E] border border-white/[0.08] rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-1 focus:ring-white/20 appearance-none"
@@ -289,7 +290,7 @@ export function RekonsiliasiClient({ bankAccounts }: Props) {
                  </select>
               </div>
 
-              <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all cursor-pointer ${selectedBankId ? 'border-white/10 hover:border-white/20 bg-white/[0.02]' : 'border-white/5 opacity-50 cursor-not-allowed'}`}>
+              <label htmlFor="reconciliation-statement-file" className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all cursor-pointer ${selectedBankId ? 'border-white/10 hover:border-white/20 bg-white/[0.02]' : 'border-white/5 opacity-50 cursor-not-allowed'}`}>
                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
                     <Upload className="w-8 h-8 mb-3 text-white/30" />
                     <p className="text-sm text-white/50">
@@ -297,7 +298,8 @@ export function RekonsiliasiClient({ bankAccounts }: Props) {
                     </p>
                     <p className="text-xs text-white/30 mt-1">XLSX, XLS, atau CSV</p>
                  </div>
-                 <input 
+                 <input
+                    id="reconciliation-statement-file"
                     type="file" 
                     className="hidden" 
                     accept=".xlsx,.xls,.csv" 

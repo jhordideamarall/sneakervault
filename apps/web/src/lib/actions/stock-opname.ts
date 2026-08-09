@@ -155,14 +155,20 @@ export async function submitStockOpnameForReview(sessionId: string) {
   const profile = await requireRole([...WAREHOUSE_ROLES]);
   const supabase = await createClient();
 
-  const { data: missing } = await supabase
+  const { data: reviewLines, error: reviewError } = await supabase
     .from("stock_opname_lines")
-    .select("id")
-    .eq("session_id", sessionId)
-    .is("physical_qty", null)
-    .limit(1);
-  if (missing && missing.length > 0) {
+    .select("id, physical_qty, variance, reason")
+    .eq("session_id", sessionId);
+  if (reviewError) return { error: reviewError.message };
+  if ((reviewLines ?? []).some((line) => line.physical_qty === null)) {
     return { error: "Masih ada item yang belum dihitung" };
+  }
+  if (
+    (reviewLines ?? []).some(
+      (line) => Number(line.variance ?? 0) !== 0 && !line.reason?.trim(),
+    )
+  ) {
+    return { error: "Setiap item berselisih wajib memiliki alasan" };
   }
 
   const { error } = await supabase

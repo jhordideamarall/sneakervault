@@ -94,7 +94,7 @@ export async function createPurchaseOrder(input: unknown) {
     new_sku: l.product_id ? null : l.new_sku ?? null,
   }));
 
-  const { error: linesErr } = await (supabase as any)
+  const { error: linesErr } = await supabase
     .from("purchase_order_lines")
     .insert(lineRows);
 
@@ -118,7 +118,7 @@ export async function createPurchaseOrder(input: unknown) {
 export async function approvePurchaseOrder(id: string) {
   await requireRole([...ROLES]);
   const supabase = await createClient();
-  const { data, error } = await (supabase as any).rpc(
+  const { data, error } = await supabase.rpc(
     "approve_purchase_order_atomic",
     { p_po_id: id },
   );
@@ -283,7 +283,7 @@ export async function updatePurchaseOrder(id: string, input: unknown) {
     new_color: l.product_id ? null : l.new_color ?? null,
     new_sku: l.product_id ? null : l.new_sku ?? null,
   }));
-  const { error: linesErr } = await (supabase as any)
+  const { error: linesErr } = await supabase
     .from("purchase_order_lines")
     .insert(lineRows);
   if (linesErr) return { error: { _form: [linesErr.message] } };
@@ -351,7 +351,7 @@ export async function createPurchaseOrderFromPreOrder(input: unknown) {
   if (lock.error) return { error: { _form: [lock.error] } };
 
   const supabase = await createClient();
-  const { data: preOrder, error: preOrderErr } = await (supabase as any)
+  const { data: preOrder, error: preOrderErr } = await supabase
     .from("pre_orders")
     .select(`
       id, customer_name, marketplace_order_id, channel, status, notes,
@@ -445,7 +445,7 @@ export async function createPurchaseOrderFromPreOrder(input: unknown) {
 
   for (const line of lines) {
     const manualName = splitManualProductName(line.product_name);
-    const { data: poLine, error: lineErr } = await (supabase as any)
+    const { data: poLine, error: lineErr } = await supabase
       .from("purchase_order_lines")
       .insert({
         po_id: po.id,
@@ -482,7 +482,7 @@ export async function createPurchaseOrderFromPreOrder(input: unknown) {
     });
   }
 
-  const { error: linkErr } = await (supabase as any)
+  const { error: linkErr } = await supabase
     .from("pre_order_procurement_links")
     .insert(createdLinks);
   if (linkErr) {
@@ -490,11 +490,11 @@ export async function createPurchaseOrderFromPreOrder(input: unknown) {
     return { error: { _form: [linkErr.message] } };
   }
 
-  await (supabase as any)
+  await supabase
     .from("pre_order_lines")
     .update({ status: "purchase_created" })
     .in("id", lines.map((line) => line.id));
-  await (supabase as any)
+  await supabase
     .from("pre_orders")
     .update({ status: "purchase_created" })
     .eq("id", preOrder.id);

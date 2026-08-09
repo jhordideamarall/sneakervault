@@ -30,9 +30,18 @@ export default async function InventoryPage({
     }),
   ]);
   const roles = (profile?.roles ?? []) as string[];
+  const canViewHpp = roles.includes("owner") || roles.includes("finance");
+  const inventoryProducts = productsRes.data as Parameters<
+    typeof InventoryClient
+  >[0]["products"];
+  // InventoryClient is a client component. Remove HPP from its serialized
+  // payload for operational roles instead of merely hiding the table column.
+  const visibleProducts = canViewHpp
+    ? inventoryProducts
+    : inventoryProducts.map((product) => ({ ...product, hpp: 0 }));
   return (
     <InventoryClient
-      products={productsRes.data as Parameters<typeof InventoryClient>[0]["products"]}
+      products={visibleProducts}
       total={productsRes.totalSku}
       totalModels={productsRes.totalModels}
       page={productsRes.page}

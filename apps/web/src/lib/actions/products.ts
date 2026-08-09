@@ -605,9 +605,9 @@ export async function updateProduct(input: unknown) {
   const supabase = await createClient();
 
   // Role-based field gating:
-  //  - owner:        can edit everything (price, color, image, supplier)
+  //  - owner:        can edit everything (identity, price, color, image, supplier)
   //  - finance:      can edit prices only (role is finance-focused)
-  //  - admin_gudang: can edit color, image, supplier (operational data)
+  //  - admin_gudang: can edit identity, color, and image (operational data)
   const isOwner = profile.roles?.includes("owner");
   const isFinance = profile.roles?.includes("finance");
   const isAdminGudang = profile.roles?.includes("admin_gudang");
@@ -622,15 +622,21 @@ export async function updateProduct(input: unknown) {
     delete (patch as { price_tiktok?: number | null }).price_tiktok;
     delete (patch as { price_tokopedia?: number | null }).price_tokopedia;
   }
-  // Admin gudang cannot edit supplier (locked to owner/finance)
+  // Admin gudang cannot edit supplier (locked to owner/finance).
   if (!isOwner && !isFinance) {
     delete (patch as { default_supplier_id?: string | null }).default_supplier_id;
   }
 
-  // Size (size_label) hanya boleh diubah owner / admin_gudang (data operasional),
-  // bukan finance — selaras dengan komentar "finance can edit prices only".
+  // Identitas produk hanya boleh diubah owner / admin_gudang. Ini penting
+  // agar finance tetap fokus pada harga dan tidak bisa mengubah SKU/barcode.
   if (!isOwner && !isAdminGudang) {
+    delete (patch as { brand?: string }).brand;
+    delete (patch as { model?: string }).model;
+    delete (patch as { sku?: string }).sku;
     delete (patch as { size_label?: string }).size_label;
+    delete (patch as { barcode?: string }).barcode;
+    delete (patch as { color?: string }).color;
+    delete (patch as { image_url?: string | null }).image_url;
   }
 
   // Normalize image_url: empty string → null (DB constraint-friendly)
@@ -639,7 +645,15 @@ export async function updateProduct(input: unknown) {
   }
 
   const { error } = await supabase.from("products").update(patch).eq("id", id);
-  if (error) return { error: { _form: [error.message] } };
+  if (error) {
+    if (error.code === "23505" && error.message.includes("idx_products_barcode")) {
+      return { error: { barcode: ["Barcode sudah dipakai produk lain"] } };
+    }
+    if (error.code === "23505" && error.message.includes("idx_products_sku_sizenum")) {
+      return { error: { size_label: ["Kombinasi SKU dan size sudah terdaftar"] } };
+    }
+    return { error: { _form: [error.message] } };
+  }
 
   await logActivity({
     user_id: profile.id,

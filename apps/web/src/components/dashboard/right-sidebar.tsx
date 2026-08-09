@@ -44,6 +44,19 @@ const actionLabels: Record<string, string> = {
   notification_sent: "Kirim Notifikasi",
   review_dashboard: "Review Dashboard",
   approve_delete: "Approve Hapus",
+  create_manual_journal: "Buat Jurnal Manual",
+  update_manual_journal: "Perbarui Jurnal Manual",
+  remove_item: "Hapus Item Packing",
+  pay: "Bayar",
+  void: "Batalkan",
+  transfer: "Transfer Dana",
+  settlement: "Settlement Marketplace",
+  settle_liability: "Lunasi Hutang",
+  reconcile: "Rekonsiliasi",
+  start: "Mulai",
+  count: "Catat Hasil Hitung",
+  pos_checkout: "Checkout POS",
+  recognize_inventory: "Akui Persediaan",
 };
 
 const actionDots: Record<string, string> = {

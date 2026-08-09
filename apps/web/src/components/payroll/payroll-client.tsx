@@ -411,16 +411,16 @@ export function PayrollClient({
 
           <div className="grid gap-3 md:grid-cols-4">
             <div>
-              <FieldLabel>Periode</FieldLabel>
-              <Input type="month" value={periodMonth} onChange={(event) => setPeriodMonth(event.target.value)} />
+              <FieldLabel htmlFor="payroll-period">Periode</FieldLabel>
+              <Input id="payroll-period" type="month" value={periodMonth} onChange={(event) => setPeriodMonth(event.target.value)} />
             </div>
             <div>
-              <FieldLabel>Tanggal Posting/Bayar</FieldLabel>
-              <Input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} />
+              <FieldLabel htmlFor="payroll-payment-date">Tanggal Posting/Bayar</FieldLabel>
+              <Input id="payroll-payment-date" type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} />
             </div>
             <div className="md:col-span-2">
-              <FieldLabel>Akun Bayar</FieldLabel>
-              <Select value={bankAccountId} onChange={(event) => setBankAccountId(event.target.value)}>
+              <FieldLabel htmlFor="payroll-bank-account">Akun Bayar</FieldLabel>
+              <Select id="payroll-bank-account" value={bankAccountId} onChange={(event) => setBankAccountId(event.target.value)}>
                 <option value="">— Catat sebagai Hutang Gaji —</option>
                 {bankAccounts.filter((account) => account.is_active).map((account) => (
                   <option key={account.id} value={account.id}>{account.name}</option>
@@ -430,7 +430,7 @@ export function PayrollClient({
           </div>
 
           <div className="flex flex-col gap-2 rounded-lg border border-white/[0.06] bg-black/10 p-3 md:flex-row">
-            <Select value={employeeIdToAdd} onChange={(event) => setEmployeeIdToAdd(event.target.value)}>
+            <Select aria-label="Pilih karyawan aktif" value={employeeIdToAdd} onChange={(event) => setEmployeeIdToAdd(event.target.value)}>
               <option value="">Pilih karyawan aktif…</option>
               {availableEmployees.map((employee) => (
                 <option key={employee.id} value={employee.id}>{employee.full_name}</option>
@@ -456,7 +456,7 @@ export function PayrollClient({
                         <div className="font-medium text-white">{line.employee_name}</div>
                         <div className="text-xs text-white/40">Net {formatRupiah(current.net)}</div>
                       </div>
-                      <Button type="button" size="sm" variant="ghost" onClick={() => setLines((items) => items.filter((_, index) => index !== lineIndex))}>
+                      <Button type="button" size="sm" variant="ghost" aria-label={`Hapus ${line.employee_name} dari payroll`} onClick={() => setLines((items) => items.filter((_, index) => index !== lineIndex))}>
                         <Trash2 size={14} /> Hapus
                       </Button>
                     </div>
@@ -465,20 +465,20 @@ export function PayrollClient({
                         <div key={`${line.employee_id}-${componentIndex}`} className="grid gap-2 md:grid-cols-[1fr_150px_220px_44px]">
                           <Input
                             list="payroll-component-suggestions"
-                            aria-label="Nama komponen payroll"
+                            aria-label={`Nama komponen ${componentIndex + 1} ${line.employee_name}`}
                             value={component.name}
                             onChange={(event) => updateComponent(lineIndex, componentIndex, { name: event.target.value })}
                           />
                           <Select
-                            aria-label="Jenis komponen payroll"
+                            aria-label={`Jenis komponen ${componentIndex + 1} ${line.employee_name}`}
                             value={component.kind}
                             onChange={(event) => updateComponent(lineIndex, componentIndex, { kind: event.target.value as PayrollComponentDraft["kind"] })}
                           >
                             <option value="earning">Pendapatan</option>
                             <option value="deduction">Potongan</option>
                           </Select>
-                          <NumberInput value={component.amount} onValueChange={(amount) => updateComponent(lineIndex, componentIndex, { amount })} />
-                          <Button type="button" size="sm" variant="ghost" aria-label="Hapus komponen" onClick={() => removeComponent(lineIndex, componentIndex)}>
+                          <NumberInput aria-label={`Nominal komponen ${componentIndex + 1} ${line.employee_name}`} value={component.amount} onValueChange={(amount) => updateComponent(lineIndex, componentIndex, { amount })} />
+                          <Button type="button" size="sm" variant="ghost" aria-label={`Hapus komponen ${componentIndex + 1} ${line.employee_name}`} onClick={() => removeComponent(lineIndex, componentIndex)}>
                             <Trash2 size={14} />
                           </Button>
                         </div>
@@ -497,7 +497,7 @@ export function PayrollClient({
             </div>
           )}
 
-          <div><FieldLabel>Catatan</FieldLabel><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></div>
+          <div><FieldLabel htmlFor="payroll-notes">Catatan</FieldLabel><Textarea id="payroll-notes" value={notes} onChange={(event) => setNotes(event.target.value)} /></div>
           <div className="flex flex-col justify-between gap-3 border-t border-white/[0.06] pt-4 md:flex-row md:items-center">
             <div className="text-sm text-white/60">
               {lines.length} karyawan · Net <span className="font-semibold text-white">{formatRupiah(totals.net)}</span>
@@ -520,8 +520,8 @@ export function PayrollClient({
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="md:col-span-2">
-              <FieldLabel>Akun Kas/Bank *</FieldLabel>
-              <Select value={settlementBankId} onChange={(event) => setSettlementBankId(event.target.value)}>
+              <FieldLabel htmlFor="payroll-settlement-bank">Akun Kas/Bank *</FieldLabel>
+              <Select id="payroll-settlement-bank" value={settlementBankId} onChange={(event) => setSettlementBankId(event.target.value)}>
                 <option value="">Pilih akun pembayaran…</option>
                 {bankAccounts.filter((account) => account.is_active).map((account) => (
                   <option key={account.id} value={account.id}>{account.name}</option>
@@ -529,8 +529,8 @@ export function PayrollClient({
               </Select>
             </div>
             <div>
-              <FieldLabel>Tanggal Bayar *</FieldLabel>
-              <Input type="date" value={settlementDate} onChange={(event) => setSettlementDate(event.target.value)} />
+              <FieldLabel htmlFor="payroll-settlement-date">Tanggal Bayar *</FieldLabel>
+              <Input id="payroll-settlement-date" type="date" value={settlementDate} onChange={(event) => setSettlementDate(event.target.value)} />
             </div>
           </div>
           <div className="flex justify-end gap-2">

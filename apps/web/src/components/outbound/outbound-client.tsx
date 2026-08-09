@@ -26,7 +26,8 @@ import {
   XCircle, 
   CheckCircle2, 
   Trash2,
-  Search
+  Search,
+  RotateCcw,
 } from "lucide-react";
 
 type SessionRow = {
@@ -62,7 +63,28 @@ type PackingProduct = {
   image_url?: string | null;
 };
 
-export function OutboundClient() {
+type UnfinishedPackingSession = SessionRow & {
+  created_at: string;
+  packing_items: Array<{
+    id: string;
+    product_id: string;
+    barcode_scanned: string;
+    products: {
+      id: string;
+      brand: string;
+      model: string;
+      size: number | null;
+      size_label?: string | null;
+      barcode?: string | null;
+    } | null;
+  }>;
+};
+
+export function OutboundClient({
+  unfinishedSessions = [],
+}: {
+  unfinishedSessions?: UnfinishedPackingSession[];
+}) {
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -73,6 +95,8 @@ export function OutboundClient() {
   const [showCamera, setShowCamera] = useState(false);
   const [manualQuery, setManualQuery] = useState("");
   const [manualResults, setManualResults] = useState<PackingProduct[]>([]);
+  const [recoverableSessions, setRecoverableSessions] =
+    useState<UnfinishedPackingSession[]>(unfinishedSessions);
 
   const [form, setForm] = useState({
     platform: "shopee",
@@ -139,7 +163,7 @@ export function OutboundClient() {
       }
     });
     setShowCamera(false);
-  }, [appendPackingResult, session]);
+  }, [appendPackingResult, session, toast]);
 
   function handleManualSearch() {
     startTransition(async () => {
@@ -209,6 +233,36 @@ export function OutboundClient() {
     });
   }
 
+  function handleResume(activeSession: UnfinishedPackingSession) {
+    setSession({
+      id: activeSession.id,
+      status: activeSession.status,
+      platform: activeSession.platform,
+      courier: activeSession.courier,
+      platform_order_id: activeSession.platform_order_id,
+    });
+    setItems(
+      activeSession.packing_items.flatMap((packingItem) => {
+        const product = packingItem.products;
+        if (!product) return [];
+        return [
+          {
+            id: packingItem.id,
+            product_id: packingItem.product_id,
+            barcode: product.barcode ?? packingItem.barcode_scanned,
+            brand: product.brand,
+            model: product.model,
+            size: product.size,
+            size_label: product.size_label,
+          },
+        ];
+      }),
+    );
+    setManualQuery("");
+    setManualResults([]);
+    toast.push("Sesi packing dilanjutkan", "info");
+  }
+
   function handleRemoveItem(itemId: string) {
     startTransition(async () => {
       const result = await removePackingItem(itemId);
@@ -231,6 +285,9 @@ export function OutboundClient() {
         return;
       }
       toast.push("Sesi dibatalkan, stok dikembalikan", "info");
+      setRecoverableSessions((current) =>
+        current.filter((activeSession) => activeSession.id !== session.id),
+      );
       resetSession();
     });
   }
@@ -274,39 +331,68 @@ export function OutboundClient() {
         {/* Left: Form / Info */}
         <div className="lg:col-span-1 space-y-6">
           {!session ? (
-            <Card className="border-white/[0.06] bg-[#262626] p-6 shadow-xl animate-in fade-in duration-300">
+            <div className="space-y-6">
+              {recoverableSessions.length > 0 ? (
+                <Card className="border-amber-400/20 bg-amber-400/[0.03] p-5 shadow-xl">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-amber-200/80">
+                    <RotateCcw size={16} /> Sesi Belum Selesai
+                  </h3>
+                  <p className="mt-2 text-xs leading-relaxed text-white/45">
+                    Lanjutkan sesi yang terputus agar stok tidak menggantung, atau batalkan dari dalam sesi untuk mengembalikan seluruh item.
+                  </p>
+                  <div className="mt-4 space-y-2">
+                    {recoverableSessions.map((activeSession) => (
+                      <button
+                        key={activeSession.id}
+                        type="button"
+                        onClick={() => handleResume(activeSession)}
+                        className="w-full rounded-xl border border-white/[0.06] bg-white/[0.025] p-3 text-left transition-colors hover:bg-white/[0.05]"
+                      >
+                        <span className="block font-mono text-xs font-semibold text-white/90">
+                          {activeSession.platform_order_id ?? "Tanpa nomor order"}
+                        </span>
+                        <span className="mt-1 block text-[11px] text-white/40">
+                          {activeSession.platform.toUpperCase()} • {activeSession.packing_items.length} item sudah masuk • klik untuk lanjut
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </Card>
+              ) : null}
+
+              <Card className="border-white/[0.06] bg-[#262626] p-6 shadow-xl animate-in fade-in duration-300">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-white/40 flex items-center gap-2 mb-6">
                 <ShoppingCart size={16} /> Buka Sesi Baru
               </h3>
               
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <FieldLabel required>Platform</FieldLabel>
-                  <Select value={form.platform} onChange={(e) => setForm({ ...form, platform: e.target.value })}>
+                  <FieldLabel htmlFor="packing-platform" required>Platform</FieldLabel>
+                  <Select id="packing-platform" value={form.platform} onChange={(e) => setForm({ ...form, platform: e.target.value })}>
                     {PLATFORMS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <FieldLabel required>Kurir</FieldLabel>
-                  <Select value={form.courier} onChange={(e) => setForm({ ...form, courier: e.target.value })}>
+                  <FieldLabel htmlFor="packing-courier" required>Kurir</FieldLabel>
+                  <Select id="packing-courier" value={form.courier} onChange={(e) => setForm({ ...form, courier: e.target.value })}>
                     {COURIERS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </Select>
                   <FieldError message={fieldErrors.courier} />
                 </div>
                 {form.courier === "other" && (
                   <div className="space-y-2 animate-in slide-in-from-top-2">
-                    <FieldLabel required>Nama Kurir</FieldLabel>
-                    <Input value={form.courier_custom} onChange={(e) => setForm({ ...form, courier_custom: e.target.value })} placeholder="Masukkan nama kurir" />
+                    <FieldLabel htmlFor="packing-custom-courier" required>Nama Kurir</FieldLabel>
+                    <Input id="packing-custom-courier" value={form.courier_custom} onChange={(e) => setForm({ ...form, courier_custom: e.target.value })} placeholder="Masukkan nama kurir" />
                   </div>
                 )}
                 <div className="space-y-2 pt-2">
-                  <FieldLabel required={form.platform !== "offline"}>
-                    Nomor Order Marketplace
+                  <FieldLabel htmlFor="packing-order-id" required={form.platform !== "offline"}>
+                    Nomor Order / Referensi
                   </FieldLabel>
-                  <Input value={form.platform_order_id} onChange={(e) => setForm({ ...form, platform_order_id: e.target.value })} placeholder="Contoh: 260621N06KGD52" />
+                  <Input id="packing-order-id" value={form.platform_order_id} onChange={(e) => setForm({ ...form, platform_order_id: e.target.value })} placeholder="Contoh: SHP-260621 atau WA-000123" />
                   <FieldError message={fieldErrors.platform_order_id} />
                   <p className="text-[11px] leading-relaxed text-white/35">
-                    Wajib untuk Shopee/TikTok/Tokopedia supaya gudang bisa cocokan label packing dengan order marketplace.
+                    Wajib untuk pesanan online supaya gudang bisa mencocokkan sesi packing dengan order atau preorder yang benar.
                   </p>
                 </div>
               </div>
@@ -316,7 +402,8 @@ export function OutboundClient() {
               <Button onClick={handleCreate} disabled={pending} className="w-full mt-8 bg-white text-black font-bold h-12 shadow-lg shadow-white/5">
                 {pending ? "Memproses..." : "Mulai Sesi Packing"}
               </Button>
-            </Card>
+              </Card>
+            </div>
           ) : (
             <Card className="border-emerald-500/20 bg-emerald-500/[0.02] p-6 shadow-xl animate-in zoom-in-95 duration-300">
                <div className="flex items-center justify-between mb-6">
@@ -336,7 +423,7 @@ export function OutboundClient() {
                      <span className="text-sm font-bold text-white uppercase">{session.courier}</span>
                   </div>
                   <div className="flex justify-between">
-                     <span className="text-xs text-white/40 font-medium">Order Marketplace</span>
+                     <span className="text-xs text-white/40 font-medium">Order / Referensi</span>
                      <span className="text-sm font-mono font-bold text-white">{session.platform_order_id ?? "N/A"}</span>
                   </div>
                </div>
@@ -379,6 +466,7 @@ export function OutboundClient() {
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={16} />
                       <Input
+                        aria-label="Cari Produk untuk Packing"
                         value={manualQuery}
                         onChange={(e) => setManualQuery(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && handleManualSearch()}
@@ -445,6 +533,7 @@ export function OutboundClient() {
                     <div className="relative flex-1">
                       <QrCode className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={16} />
                       <Input
+                        aria-label="Scan Barcode Opsional"
                         value={scanBarcode}
                         onChange={(e) => setScanBarcode(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && doScanItem(scanBarcode)}
@@ -456,7 +545,7 @@ export function OutboundClient() {
                     <Button onClick={() => doScanItem(scanBarcode)} disabled={pending || !scanBarcode} className="h-11 bg-white text-black font-bold px-5 rounded-xl">
                        Scan
                     </Button>
-                    <Button variant="secondary" onClick={() => setShowCamera(!showCamera)} className="h-11 w-11 rounded-xl border-white/10">
+                    <Button aria-label="Buka Scanner Kamera" variant="secondary" onClick={() => setShowCamera(!showCamera)} className="h-11 w-11 rounded-xl border-white/10">
                        <Camera size={20} />
                     </Button>
                   </div>

@@ -26,7 +26,9 @@ export function ExportButtons({
       <Button
         size="sm"
         variant="secondary"
-        onClick={() => exportToPDF({ title, columns, rows, subtitle })}
+        onClick={() =>
+          exportToPDF({ title, columns, rows, subtitle, period: subtitle })
+        }
       >
         <FileText size={14} className="mr-1.5" />
         {pdfLabel}
@@ -34,7 +36,15 @@ export function ExportButtons({
       <Button
         size="sm"
         variant="secondary"
-        onClick={() => exportToExcel({ title: sheetName, sheetName, columns, rows })}
+        onClick={() =>
+          exportToExcel({
+            title: sheetName,
+            sheetName,
+            columns,
+            rows,
+            period: subtitle,
+          })
+        }
       >
         <FileSpreadsheet size={14} className="mr-1.5" />
         {excelLabel}

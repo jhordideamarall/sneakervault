@@ -30,7 +30,7 @@ export async function updateSessionStatus(input: unknown) {
   const supabase = await createClient();
   const { data: session } = await supabase
     .from("packing_sessions")
-    .select("status")
+    .select("status, packed_at")
     .eq("id", session_id)
     .maybeSingle();
   if (!session) return { error: { _form: ["Sesi tidak ditemukan"] } };
@@ -38,6 +38,25 @@ export async function updateSessionStatus(input: unknown) {
   // Validate transition
   if (!transition.from.includes(session.status)) {
     return { error: { _form: [`Tidak bisa ubah dari "${session.status}" ke "${status}"`] } };
+  }
+  if (status === "shipped") {
+    if (!session.packed_at) {
+      return {
+        error: {
+          _form: [
+            "Scan packing belum diselesaikan. Buka Packing / Outbound, lengkapi item, lalu klik Selesai Scan Item.",
+          ],
+        },
+      };
+    }
+    const { count, error: itemError } = await supabase
+      .from("packing_items")
+      .select("id", { count: "exact", head: true })
+      .eq("packing_session_id", session_id);
+    if (itemError) return { error: { _form: [itemError.message] } };
+    if (!count) {
+      return { error: { _form: ["Order belum memiliki item packing."] } };
+    }
   }
 
   const updateData: Record<string, unknown> = {

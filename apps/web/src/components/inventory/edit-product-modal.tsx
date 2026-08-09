@@ -27,8 +27,10 @@ type Props = {
     id: string;
     brand: string;
     model: string;
+    sku: string;
     size: number;
     size_label: string;
+    barcode: string;
     color: string | null;
     hpp: number;
     sell_price: number;
@@ -40,6 +42,7 @@ type Props = {
     image_url: string | null;
   };
   canEditPrice: boolean;
+  canEditIdentity: boolean;
   canEditImage: boolean;
 };
 
@@ -48,6 +51,7 @@ export function EditProductModal({
   onOpenChange,
   product,
   canEditPrice,
+  canEditIdentity,
   canEditImage,
 }: Props) {
   const router = useRouter();
@@ -55,6 +59,11 @@ export function EditProductModal({
   const [pending, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState({
+    brand: product.brand,
+    model: product.model,
+    sku: product.sku,
+    size_label: product.size_label,
+    barcode: product.barcode,
     hpp: product.hpp,
     sell_price: product.sell_price,
     price_offline: product.price_offline,
@@ -96,7 +105,15 @@ export function EditProductModal({
   function handleSave() {
     setFieldErrors({});
     startTransition(async () => {
-      const patch: Record<string, unknown> = { id: product.id, color: form.color };
+      const patch: Record<string, unknown> = { id: product.id };
+      if (canEditIdentity) {
+        patch.brand = form.brand;
+        patch.model = form.model;
+        patch.sku = form.sku;
+        patch.size_label = form.size_label;
+        patch.barcode = form.barcode;
+        patch.color = form.color;
+      }
       if (canEditPrice) {
         patch.hpp = form.hpp;
         patch.sell_price = form.sell_price;
@@ -137,15 +154,66 @@ export function EditProductModal({
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
-          <div>
-            <FieldLabel htmlFor="color">Warna</FieldLabel>
-            <Input
-              id="color"
-              value={form.color}
-              onChange={(e) => setForm({ ...form, color: e.target.value })}
-              placeholder="Contoh: Cloud White"
-            />
-          </div>
+          {canEditIdentity ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <FieldLabel htmlFor="brand">Brand</FieldLabel>
+                <Input
+                  id="brand"
+                  value={form.brand}
+                  onChange={(e) => setForm({ ...form, brand: e.target.value })}
+                />
+                <FieldError message={fieldErrors.brand} />
+              </div>
+              <div>
+                <FieldLabel htmlFor="model">Model</FieldLabel>
+                <Input
+                  id="model"
+                  value={form.model}
+                  onChange={(e) => setForm({ ...form, model: e.target.value })}
+                />
+                <FieldError message={fieldErrors.model} />
+              </div>
+              <div>
+                <FieldLabel htmlFor="sku">SKU Colorway</FieldLabel>
+                <Input
+                  id="sku"
+                  value={form.sku}
+                  onChange={(e) => setForm({ ...form, sku: e.target.value })}
+                />
+                <FieldError message={fieldErrors.sku} />
+              </div>
+              <div>
+                <FieldLabel htmlFor="size_label">Size</FieldLabel>
+                <Input
+                  id="size_label"
+                  value={form.size_label}
+                  onChange={(e) => setForm({ ...form, size_label: e.target.value })}
+                  placeholder="42 atau 42 2/3"
+                />
+                <FieldError message={fieldErrors.size_label} />
+              </div>
+              <div>
+                <FieldLabel htmlFor="barcode">Barcode</FieldLabel>
+                <Input
+                  id="barcode"
+                  value={form.barcode}
+                  onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+                />
+                <FieldError message={fieldErrors.barcode} />
+              </div>
+              <div>
+                <FieldLabel htmlFor="color">Warna</FieldLabel>
+                <Input
+                  id="color"
+                  value={form.color}
+                  onChange={(e) => setForm({ ...form, color: e.target.value })}
+                  placeholder="Contoh: Cloud White"
+                />
+                <FieldError message={fieldErrors.color} />
+              </div>
+            </div>
+          ) : null}
 
           {canEditImage && (
             <div>
@@ -321,7 +389,18 @@ export function EditProductModal({
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
             Batal
           </Button>
-          <Button onClick={handleSave} disabled={pending}>
+          <Button
+            onClick={handleSave}
+            disabled={
+              pending ||
+              (canEditIdentity &&
+                (!form.brand.trim() ||
+                  !form.model.trim() ||
+                  !form.sku.trim() ||
+                  !form.size_label.trim() ||
+                  !form.barcode.trim()))
+            }
+          >
             {pending ? "Menyimpan..." : "Simpan"}
           </Button>
         </div>

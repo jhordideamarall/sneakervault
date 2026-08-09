@@ -75,7 +75,14 @@ export function EmployeesClient({ employees }: { employees: EmployeeRow[] }) {
     setFormOpen(true);
   }
 
-  function archive(id: string) {
+  function archive(id: string, employeeName: string) {
+    if (
+      !window.confirm(
+        `Nonaktifkan ${employeeName}? Karyawan tidak akan muncul pada payroll baru sampai diaktifkan kembali.`,
+      )
+    ) {
+      return;
+    }
     startTransition(async () => {
       const result = await deactivateEmployee(id);
       if (result.error) {
@@ -127,36 +134,40 @@ export function EmployeesClient({ employees }: { employees: EmployeeRow[] }) {
             </h2>
           </div>
           <div>
-            <FieldLabel>Kode</FieldLabel>
-            <Input value={form.employee_code} onChange={(e) => setForm({ ...form, employee_code: e.target.value })} />
+            <FieldLabel htmlFor="employee-code">Kode</FieldLabel>
+            <Input id="employee-code" value={form.employee_code} onChange={(e) => setForm({ ...form, employee_code: e.target.value })} />
           </div>
           <div>
-            <FieldLabel>Nama *</FieldLabel>
-            <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
+            <FieldLabel htmlFor="employee-name">Nama *</FieldLabel>
+            <Input id="employee-name" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
           </div>
           <div>
-            <FieldLabel>Jabatan</FieldLabel>
-            <Input value={form.job_title} onChange={(e) => setForm({ ...form, job_title: e.target.value })} />
+            <FieldLabel htmlFor="employee-job-title">Jabatan</FieldLabel>
+            <Input id="employee-job-title" value={form.job_title} onChange={(e) => setForm({ ...form, job_title: e.target.value })} />
           </div>
           <div>
-            <FieldLabel>Departemen</FieldLabel>
-            <Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} />
+            <FieldLabel htmlFor="employee-department">Departemen</FieldLabel>
+            <Input id="employee-department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} />
           </div>
           <div>
-            <FieldLabel>Gaji Pokok</FieldLabel>
-            <NumberInput value={form.base_salary} onValueChange={(value) => setForm({ ...form, base_salary: value })} />
+            <FieldLabel htmlFor="employee-base-salary">Gaji Pokok</FieldLabel>
+            <NumberInput id="employee-base-salary" value={form.base_salary} onValueChange={(value) => setForm({ ...form, base_salary: value })} />
           </div>
           <div>
-            <FieldLabel>Bank</FieldLabel>
-            <Input value={form.bank_account_name} onChange={(e) => setForm({ ...form, bank_account_name: e.target.value })} />
+            <FieldLabel htmlFor="employee-bank-name">Bank</FieldLabel>
+            <Input id="employee-bank-name" value={form.bank_account_name} onChange={(e) => setForm({ ...form, bank_account_name: e.target.value })} />
           </div>
           <div>
-            <FieldLabel>No Rekening</FieldLabel>
-            <Input value={form.bank_account_number} onChange={(e) => setForm({ ...form, bank_account_number: e.target.value })} />
+            <FieldLabel htmlFor="employee-bank-number">No Rekening</FieldLabel>
+            <Input id="employee-bank-number" value={form.bank_account_number} onChange={(e) => setForm({ ...form, bank_account_number: e.target.value })} />
           </div>
           <div>
-            <FieldLabel>Tanggal Masuk</FieldLabel>
-            <Input type="date" value={form.hire_date} onChange={(e) => setForm({ ...form, hire_date: e.target.value })} />
+            <FieldLabel htmlFor="employee-tax-id">NPWP</FieldLabel>
+            <Input id="employee-tax-id" value={form.tax_id} onChange={(e) => setForm({ ...form, tax_id: e.target.value })} />
+          </div>
+          <div>
+            <FieldLabel htmlFor="employee-hire-date">Tanggal Masuk</FieldLabel>
+            <Input id="employee-hire-date" type="date" value={form.hire_date} onChange={(e) => setForm({ ...form, hire_date: e.target.value })} />
           </div>
           <div className="md:col-span-4 flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => { setFormOpen(false); setEditingId(null); }}>Batal</Button>
@@ -200,7 +211,7 @@ export function EmployeesClient({ employees }: { employees: EmployeeRow[] }) {
                       <Pencil size={14} /> Edit
                     </Button>
                     {employee.is_active ? (
-                      <Button size="sm" variant="ghost" disabled={pending} onClick={() => archive(employee.id)}>
+                      <Button size="sm" variant="ghost" disabled={pending} onClick={() => archive(employee.id, employee.full_name)}>
                         Nonaktif
                       </Button>
                     ) : (

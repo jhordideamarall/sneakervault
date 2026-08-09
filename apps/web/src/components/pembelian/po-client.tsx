@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -143,25 +143,25 @@ export function PurchaseOrderClient({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<PoStatus | "all">("all");
-  const [supplierOptions, setSupplierOptions] = useState<SupplierOpt[]>(suppliers);
-  const [detailCache, setDetailCache] =
-    useState<Record<string, PoDetail>>(detailById);
+  const [addedSupplierOptions, setAddedSupplierOptions] = useState<SupplierOpt[]>([]);
+  const supplierOptions = useMemo(() => {
+    const existingIds = new Set(suppliers.map((supplier) => supplier.id));
+    return [
+      ...suppliers,
+      ...addedSupplierOptions.filter((supplier) => !existingIds.has(supplier.id)),
+    ];
+  }, [addedSupplierOptions, suppliers]);
+  const [loadedDetails, setLoadedDetails] = useState<Record<string, PoDetail>>({});
+  const detailCache = useMemo(
+    () => ({ ...detailById, ...loadedDetails }),
+    [detailById, loadedDetails],
+  );
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     referenceNumber: string;
     blocker: TransactionDeleteResult | null;
   } | null>(null);
-
-  useEffect(() => {
-    queueMicrotask(() => {
-      setSupplierOptions(suppliers);
-    });
-  }, [suppliers]);
-
-  useEffect(() => {
-    setDetailCache(detailById);
-  }, [detailById]);
 
   const canManage = roles.includes("owner") || roles.includes("finance");
   const canDelete = canManage;
@@ -267,7 +267,7 @@ export function PurchaseOrderClient({
         toast.push(result.error ?? "Detail Pembelian Barang tidak ditemukan", "error");
         return null;
       }
-      setDetailCache((prev) => ({ ...prev, [id]: result.data! }));
+      setLoadedDetails((prev) => ({ ...prev, [id]: result.data! }));
       return result.data;
     } finally {
       setDetailLoadingId((current) => (current === id ? null : current));
@@ -307,7 +307,7 @@ export function PurchaseOrderClient({
         ...form.lines,
         {
           product_id: product.id,
-          product_label: `${product.brand} ${product.model} ${product.color} • Size ${product.size} • ${product.sku}`,
+          product_label: `${product.brand} ${product.model} ${product.color} • Size ${product.size_label} • ${product.sku}`,
           ordered_qty: 1,
           unit_cost: product.hpp || 0,
           notes: "",
@@ -675,7 +675,7 @@ export function PurchaseOrderClient({
                     key={o.id}
                     className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]"
                   >
-                    <td className="px-4 py-3 font-mono text-xs text-white/80">
+                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-white/80">
                       {o.po_number}
                     </td>
                     <td className="px-4 py-3 text-white/90">{o.supplier_name}</td>
@@ -690,7 +690,7 @@ export function PurchaseOrderClient({
                     <td className="px-4 py-3 text-center text-white/70">
                       {o.line_count}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-white">
+                    <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-white">
                       {fmtRupiah(o.total)}
                     </td>
                     <td className="px-4 py-3">
@@ -784,7 +784,7 @@ export function PurchaseOrderClient({
           onRemoveLine={removeLine}
           onUpdateLine={updateLine}
           onSupplierCreated={(supplier) => {
-            setSupplierOptions((prev) =>
+            setAddedSupplierOptions((prev) =>
               prev.some((item) => item.id === supplier.id)
                 ? prev
                 : [...prev, supplier].sort((a, b) => a.name.localeCompare(b.name)),
@@ -1140,7 +1140,7 @@ function FormModal({
                               <div className="text-white">
                                 {p.brand} {p.model}{" "}
                                 <span className="text-white/50">
-                                  · {p.color} · Size {p.size}
+                                  · {p.color} · Size {p.size_label}
                                 </span>
                               </div>
                               <div className="text-[11px] text-white/40">

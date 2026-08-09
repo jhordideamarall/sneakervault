@@ -5,6 +5,7 @@ import { canSeeFinancialDashboard } from "@/config/permissions";
 import type { Role } from "@sneakervault/shared";
 import { FileBarChart, TrendingUp, TrendingDown } from "lucide-react";
 import { formatRupiahAccounting as fmtRupiah } from "@/lib/format";
+import { ExportButtons } from "@/components/export-buttons";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,13 @@ export default async function ArusKasPage({
   const toDate = new Date(to);
   toDate.setHours(23, 59, 59, 999);
 
-  const periodTxs = allTxs.filter((t) => {
+  const activeAccountIds = new Set(
+    accounts.filter((account) => account.is_active).map((account) => account.id),
+  );
+  const relevantTxs = allTxs.filter((transaction) =>
+    activeAccountIds.has(transaction.bank_account_id),
+  );
+  const periodTxs = relevantTxs.filter((t) => {
     const d = new Date(t.transaction_date);
     return d >= fromDate && d <= toDate;
   });
@@ -102,35 +109,67 @@ export default async function ArusKasPage({
   const totalOut = cats.operasi.out + cats.investasi.out + cats.pendanaan.out;
   const netChange = totalIn - totalOut;
   // Approx opening balance
-  const openingBalance = totalCurrent - allTxs
+  const afterPeriodNet = relevantTxs
     .filter((t) => new Date(t.transaction_date) > toDate)
-    .reduce((s, t) => s + (t.type === "credit" ? -t.amount : t.amount), 0)
-    - netChange;
+    .reduce(
+      (sum, transaction) =>
+        sum + (transaction.type === "credit" ? transaction.amount : -transaction.amount),
+      0,
+    );
+  const openingBalance = totalCurrent - afterPeriodNet - netChange;
+
+  const exportRows = (["operasi", "investasi", "pendanaan"] as const).flatMap(
+    (category) =>
+      cats[category].items.map((item) => [
+        cats[category].label,
+        item.description,
+        item.type === "in" ? "Kas Masuk" : "Kas Keluar",
+        item.type === "in" ? item.amount : -item.amount,
+      ]),
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.04] text-white/80">
-          <FileBarChart size={20} strokeWidth={1.7} />
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.04] text-white/80">
+            <FileBarChart size={20} strokeWidth={1.7} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-white">
+              Laporan Arus Kas
+            </h1>
+            <p className="text-sm text-white/50">
+              Periode{" "}
+              {fromDate.toLocaleDateString("id-ID", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })}{" "}
+              —{" "}
+              {new Date(to).toLocaleDateString("id-ID", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })}
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">
-            Laporan Arus Kas
-          </h1>
-          <p className="text-sm text-white/50">
-            Periode{" "}
-            {fromDate.toLocaleDateString("id-ID", {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            })}{" "}
-            —{" "}
-            {new Date(to).toLocaleDateString("id-ID", {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            })}
-          </p>
+        <div className="flex flex-col items-end gap-2">
+          <ExportButtons
+            title="Laporan Arus Kas"
+            sheetName="Arus Kas"
+            columns={["Aktivitas", "Deskripsi", "Arah", "Nilai (Rp)"]}
+            rows={exportRows}
+            subtitle={`Periode ${from} sampai ${to}`}
+            pdfLabel="Arus Kas PDF"
+            excelLabel="Arus Kas Excel"
+          />
+          <form method="get" className="flex flex-wrap items-end gap-2">
+            <label className="text-xs text-white/45">Dari<input className="mt-1 block h-9 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white" type="date" name="from" defaultValue={from} /></label>
+            <label className="text-xs text-white/45">Sampai<input className="mt-1 block h-9 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white" type="date" name="to" defaultValue={to} /></label>
+            <button type="submit" className="h-9 rounded-md bg-white px-4 text-sm font-medium text-black">Terapkan</button>
+          </form>
         </div>
       </div>
 
@@ -234,7 +273,7 @@ export default async function ArusKasPage({
         <table className="w-full text-sm">
           <tbody>
             <tr className="border-b border-white/[0.04]">
-              <td className="px-2 py-2 text-white/70">Saldo Kas Awal (perkiraan)</td>
+              <td className="px-2 py-2 text-white/70">Saldo Kas Awal</td>
               <td className="px-2 py-2 text-right tabular-nums text-white">
                 {fmtRupiah(openingBalance)}
               </td>
@@ -260,10 +299,10 @@ export default async function ArusKasPage({
       </div>
 
       <div className="rounded-lg border border-amber-500/15 bg-amber-500/[0.04] p-3 text-xs text-amber-200/80">
-        Klasifikasi default: semua mutasi terkait operasi penjualan/pembelian
-        masuk Aktivitas Operasi. Investasi (pembelian aset tetap) dan Pendanaan
-        (modal/pinjaman owner) saat ini masih perlu kategorisasi manual lewat
-        catatan mutasi.
+        Saldo awal dihitung dari saldo akhir seluruh akun aktif dikurangi mutasi
+        pada periode dan mutasi setelah tanggal akhir. Klasifikasi default:
+        mutasi penjualan/pembelian masuk Aktivitas Operasi; investasi dan
+        pendanaan masih mengikuti kategori sumber transaksi.
       </div>
     </div>
   );

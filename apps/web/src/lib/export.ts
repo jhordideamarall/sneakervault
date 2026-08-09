@@ -171,9 +171,19 @@ export async function exportToExcel(params: ExportParams) {
   const maxCols = Math.max(...allRows.map(r => r.length));
   ws["!cols"] = Array.from({ length: maxCols }, () => ({ wch: 18 }));
 
-  XLSX.utils.book_append_sheet(wb, ws, (params.sheetName ?? params.title).slice(0, 31));
+  XLSX.utils.book_append_sheet(wb, ws, excelSheetName(params.sheetName ?? params.title));
   const filename = params.filename ?? `${COMPANY}-${params.title.toLowerCase().replace(/\s+/g, "-")}-${isoDate()}.xlsx`;
   XLSX.writeFile(wb, filename);
+}
+
+/**
+ * Excel forbids \\ / ? * [ ] : in worksheet names and caps them at 31 chars.
+ * Report titles are user-facing copy, so normalize them at the export boundary
+ * instead of forcing every caller to know Excel's naming rules.
+ */
+export function excelSheetName(value: string): string {
+  const sanitized = value.replace(/[\\/?*\[\]:]/g, "-").trim();
+  return (sanitized || "Laporan").slice(0, 31);
 }
 
 function isoDate() {

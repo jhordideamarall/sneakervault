@@ -27,6 +27,13 @@ function buildTree(
     .sort((a, b) => a.code.localeCompare(b.code));
 }
 
+function statementBalance(account: AccountBalance): number {
+  const expectedNormal = account.type === "asset" ? "debit" : "credit";
+  return account.normal_balance === expectedNormal
+    ? account.balance
+    : -account.balance;
+}
+
 function sumLeaves(accounts: AccountBalance[]): number {
   // Sum only leaf accounts (no children) to avoid double counting
   const idsWithChildren = new Set(
@@ -34,7 +41,7 @@ function sumLeaves(accounts: AccountBalance[]): number {
   );
   return accounts
     .filter((a) => !idsWithChildren.has(a.account_id))
-    .reduce((sum, a) => sum + a.balance, 0);
+    .reduce((sum, account) => sum + statementBalance(account), 0);
 }
 
 function SectionTable({
@@ -85,8 +92,8 @@ function SectionTable({
                   {isParent ? (
                     <span className="text-white/30">—</span>
                   ) : (
-                    <span className={a.balance < 0 ? "text-red-300" : "text-white"}>
-                      {fmtRupiah(a.balance)}
+                    <span className={statementBalance(a) < 0 ? "text-red-300" : "text-white"}>
+                      {fmtRupiah(statementBalance(a))}
                     </span>
                   )}
                 </td>
@@ -146,7 +153,7 @@ export function NeracaClient({
         i + 1,
         a.code,
         a.name,
-        idsWithChildren.has(a.account_id) ? "—" : a.balance
+        idsWithChildren.has(a.account_id) ? "—" : statementBalance(a)
       ]);
     };
 
@@ -212,6 +219,7 @@ export function NeracaClient({
         <div className="flex items-center gap-2">
           <Calendar size={14} strokeWidth={1.8} className="text-white/40" />
           <Input
+            aria-label="Tanggal neraca"
             type="date"
             value={toDate}
             onChange={(e) => setToDate(e.target.value)}

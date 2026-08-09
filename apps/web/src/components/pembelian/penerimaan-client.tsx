@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -76,8 +83,11 @@ export function PenerimaanClient({
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [detailCache, setDetailCache] =
-    useState<Record<string, PoDetail>>(detailById);
+  const [loadedDetails, setLoadedDetails] = useState<Record<string, PoDetail>>({});
+  const detailCache = useMemo(
+    () => ({ ...detailById, ...loadedDetails }),
+    [detailById, loadedDetails],
+  );
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"queue" | "history">(initialTab);
   const [deletingReceipt, setDeletingReceipt] =
@@ -87,18 +97,6 @@ export function PenerimaanClient({
   const [deleteBlocker, setDeleteBlocker] =
     useState<TransactionDeleteResult | null>(null);
   const initialPoOpenedRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    setDetailCache(detailById);
-  }, [detailById]);
-
-  useEffect(() => {
-    if (!initialPoId || receiving || initialPoOpenedRef.current === initialPoId) {
-      return;
-    }
-    initialPoOpenedRef.current = initialPoId;
-    void startReceiveById(initialPoId);
-  }, [initialPoId, receiving]);
 
   const canReceive =
     roles.includes("owner") ||
@@ -128,7 +126,7 @@ export function PenerimaanClient({
     };
   }, [receivablePos]);
 
-  function startReceive(po: PoDetail) {
+  const startReceive = useCallback((po: PoDetail) => {
     setReceiving(po);
     setForm(
       po.lines.map((l) => ({
@@ -143,9 +141,9 @@ export function PenerimaanClient({
     );
     setNotes("");
     setFormError(null);
-  }
+  }, []);
 
-  async function loadDetail(id: string): Promise<PoDetail | null> {
+  const loadDetail = useCallback(async (id: string): Promise<PoDetail | null> => {
     const cached = detailCache[id];
     if (cached) return cached;
 
@@ -159,17 +157,25 @@ export function PenerimaanClient({
         toast.push(result.error ?? "Detail Pembelian Barang tidak ditemukan", "error");
         return null;
       }
-      setDetailCache((prev) => ({ ...prev, [id]: result.data! }));
+      setLoadedDetails((prev) => ({ ...prev, [id]: result.data! }));
       return result.data;
     } finally {
       setDetailLoadingId((current) => (current === id ? null : current));
     }
-  }
+  }, [detailCache, toast]);
 
-  async function startReceiveById(id: string) {
+  const startReceiveById = useCallback(async (id: string) => {
     const detail = await loadDetail(id);
     if (detail) startReceive(detail);
-  }
+  }, [loadDetail, startReceive]);
+
+  useEffect(() => {
+    if (!initialPoId || receiving || initialPoOpenedRef.current === initialPoId) {
+      return;
+    }
+    initialPoOpenedRef.current = initialPoId;
+    void startReceiveById(initialPoId);
+  }, [initialPoId, receiving, startReceiveById]);
 
   function close() {
     if (initialPoId) {
@@ -600,12 +606,12 @@ function ReceiptHistory({
                     {receipt.lines.map((line) => line.product_label).join(", ")}
                   </div>
                 </td>
-                <td className="px-4 py-3 font-mono text-xs">
+                <td className="whitespace-nowrap px-4 py-3 font-mono text-xs">
                   {receipt.po_number}
                 </td>
                 <td className="px-4 py-3">{receipt.supplier_name}</td>
-                <td className="px-4 py-3">{fmtDate(receipt.receipt_date)}</td>
-                <td className="px-4 py-3 text-right tabular-nums">
+                <td className="whitespace-nowrap px-4 py-3">{fmtDate(receipt.receipt_date)}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
                   {receipt.total_quantity}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">

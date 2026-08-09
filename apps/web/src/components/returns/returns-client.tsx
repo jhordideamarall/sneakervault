@@ -38,8 +38,9 @@ type ReturnRow = Record<string, unknown> & {
   created_at: string;
   verified_at: string | null;
   processed_at: string | null;
-  original?: { brand: string; model: string; size: number } | null;
-  new?: { brand: string; model: string; size: number } | null;
+  original_product_id: string;
+  original?: { brand: string; model: string; size: number; size_label?: string | null } | null;
+  new?: { brand: string; model: string; size: number; size_label?: string | null } | null;
   packing_items?: {
     id: string;
     packing_sessions?: { platform_order_id: string | null; platform: string } | null;
@@ -49,7 +50,7 @@ type ReturnRow = Record<string, unknown> & {
 type ReturnableItem = Record<string, unknown> & {
   id: string;
   barcode_scanned: string;
-  products?: { id: string; brand: string; model: string; size: number; sku: string } | null;
+  products?: { id: string; brand: string; model: string; size: number; size_label?: string | null; sku: string } | null;
   packing_sessions?: { platform_order_id: string | null; platform: string } | null;
 };
 
@@ -173,7 +174,12 @@ export function ReturnsClient({
                 toast.push(msg, "error");
                 return;
               }
-              toast.push("Retur diproses dan stok sudah disesuaikan", "success");
+              toast.push(
+                type === "refund"
+                  ? "Barang refund sudah masuk dan HPP dibalik. Pengembalian uang dicatat terpisah di Kas & Bank."
+                  : "Tukar size selesai; stok dan jurnal HPP sudah disesuaikan.",
+                "success",
+              );
               router.refresh();
             });
           }}
@@ -346,7 +352,7 @@ function ReturnsList({
                       item.type === "refund" ? (
                         <Button size="sm" variant="success" onClick={() => onProcess(item.id, "refund")} disabled={pending}>
                           <RefreshCcw size={14} strokeWidth={1.8} />
-                          Refund + Stok Masuk
+                          Terima Barang Refund
                         </Button>
                       ) : (
                         <Button size="sm" variant="success" onClick={() => setProcessingId(item.id)} disabled={pending}>
@@ -360,8 +366,8 @@ function ReturnsList({
               </div>
 
               <div className="grid gap-4 px-5 py-4 md:grid-cols-2 xl:grid-cols-4">
-                <InfoBlock label="Barang Awal" value={`Size ${item.original_size}`} />
-                <InfoBlock label="Pengganti" value={item.new ? `Size ${item.new.size}` : item.type === "refund" ? "Refund" : "Belum dipilih"} />
+                <InfoBlock label="Barang Awal" value={`Size ${item.original?.size_label ?? item.original_size}`} />
+                <InfoBlock label="Pengganti" value={item.new ? `Size ${item.new.size_label ?? item.new.size}` : item.type === "refund" ? "Refund" : "Belum dipilih"} />
                 <InfoBlock label="Diverifikasi" value={formatDate(item.verified_at)} />
                 <InfoBlock label="Diproses" value={formatDate(item.processed_at)} />
               </div>
@@ -410,7 +416,7 @@ function ExchangeModal({
   onConfirm: (newProductId: string) => void;
   pending: boolean;
 }) {
-  const [products, setProducts] = useState<{ id: string; size: number; quantity: number }[]>([]);
+  const [products, setProducts] = useState<{ id: string; size: number; size_label?: string | null; quantity: number }[]>([]);
   const [selected, setSelected] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -426,8 +432,8 @@ function ExchangeModal({
         if (!alive) return;
 
         if (res.ok) {
-          const data = (await res.json()) as { id: string; size: number; quantity: number }[];
-          setProducts(data.filter((product) => product.size !== returnRow.original_size));
+          const data = (await res.json()) as { id: string; size: number; size_label?: string | null; quantity: number }[];
+          setProducts(data.filter((product) => product.id !== returnRow.original_product_id));
         }
       } catch {
         if (alive) setProducts([]);
@@ -463,12 +469,12 @@ function ExchangeModal({
             <Alert tone="warning">Tidak ada size pengganti lain yang tersedia untuk model ini.</Alert>
           ) : (
             <div>
-              <FieldLabel required>Pilih size pengganti</FieldLabel>
-              <Select value={selected} onChange={(e) => setSelected(e.target.value)}>
+              <FieldLabel htmlFor="return-replacement-product" required>Pilih size pengganti</FieldLabel>
+              <Select id="return-replacement-product" value={selected} onChange={(e) => setSelected(e.target.value)}>
                 <option value="">-- Pilih size --</option>
                 {products.map((product) => (
                   <option key={product.id} value={product.id} disabled={product.quantity === 0}>
-                    Size {product.size} — stok {product.quantity}
+                    Size {product.size_label ?? product.size} — stok {product.quantity}
                   </option>
                 ))}
               </Select>
@@ -531,12 +537,12 @@ function InitiateReturnForm({
 
         <div className="space-y-5">
           <div>
-            <FieldLabel required>Item dari order</FieldLabel>
-            <Select value={itemId} onChange={(e) => setItemId(e.target.value)}>
+            <FieldLabel htmlFor="return-packing-item" required>Item dari order</FieldLabel>
+            <Select id="return-packing-item" value={itemId} onChange={(e) => setItemId(e.target.value)}>
               <option value="">-- Pilih item dari order yang sudah dikirim --</option>
               {items.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {(item.packing_sessions?.platform_order_id ?? "(tanpa order id)")} — {item.products?.brand} {item.products?.model} size {item.products?.size}
+                  {(item.packing_sessions?.platform_order_id ?? "(tanpa order id)")} — {item.products?.brand} {item.products?.model} size {item.products?.size_label ?? item.products?.size}
                 </option>
               ))}
             </Select>
@@ -545,8 +551,8 @@ function InitiateReturnForm({
 
           <div className="grid gap-5 md:grid-cols-2">
             <div>
-              <FieldLabel required>Tipe retur</FieldLabel>
-              <Select value={type} onChange={(e) => setType(e.target.value as "exchange_size" | "refund")}>
+              <FieldLabel htmlFor="return-type" required>Tipe retur</FieldLabel>
+              <Select id="return-type" value={type} onChange={(e) => setType(e.target.value as "exchange_size" | "refund")}>
                 <option value="exchange_size">Tukar Size</option>
                 <option value="refund">Refund</option>
               </Select>
@@ -557,14 +563,15 @@ function InitiateReturnForm({
               <p className="mt-2 text-sm text-white/70">
                 {type === "exchange_size"
                   ? "Gudang verifikasi barang dulu, lalu pilih size pengganti sebelum stok keluar lagi."
-                  : "Gudang verifikasi barang dulu, lalu stok barang lama dikembalikan saat refund diproses."}
+                  : "Gudang verifikasi barang, lalu barang masuk kembali dan HPP dibalik. Pengembalian uang wajib dicatat terpisah di Kas & Bank."}
               </p>
             </div>
           </div>
 
           <div>
-            <FieldLabel required>Alasan retur</FieldLabel>
+            <FieldLabel htmlFor="return-reason" required>Alasan retur</FieldLabel>
             <Textarea
+              id="return-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Contoh: size kekecilan, customer minta tukar ke size 42"
@@ -594,6 +601,9 @@ function InitiateReturnForm({
           </div>
           <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
             4. Item yang sudah pernah diretur tidak akan muncul lagi di daftar ini.
+          </div>
+          <div className="rounded-xl border border-amber-400/15 bg-amber-400/[0.04] p-4 text-amber-100/75">
+            5. Untuk refund, proses di halaman ini hanya menerima barang dan membalik HPP. Catat uang keluar sesuai rekening tujuan di Kas &amp; Bank agar audit jelas.
           </div>
         </div>
       </Card>

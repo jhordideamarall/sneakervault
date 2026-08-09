@@ -31,9 +31,26 @@ export async function createManualJournalEntry(data: {
     return { error: { _form: ["Jurnal minimal 2 baris"] } };
   }
 
+  const invalidLine = data.lines.find(
+    (line) =>
+      !line.account_code ||
+      line.debit < 0 ||
+      line.credit < 0 ||
+      (line.debit > 0) === (line.credit > 0),
+  );
+  if (invalidLine) {
+    return {
+      error: {
+        _form: [
+          "Setiap baris harus memilih akun dan mengisi tepat salah satu nilai Debit atau Kredit",
+        ],
+      },
+    };
+  }
+
   const totalDebit = data.lines.reduce((s, l) => s + (l.debit || 0), 0);
   const totalCredit = data.lines.reduce((s, l) => s + (l.credit || 0), 0);
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+  if (totalDebit <= 0 || Math.abs(totalDebit - totalCredit) > 0.01) {
     return {
       error: {
         _form: [
@@ -41,6 +58,15 @@ export async function createManualJournalEntry(data: {
         ],
       },
     };
+  }
+
+  const supabase = await createClient();
+  const resolved = await resolveLeafAccountIds(
+    supabase,
+    data.lines.map((line) => line.account_code),
+  );
+  if (resolved.error) {
+    return { error: { _form: [resolved.error] } };
   }
 
   const result = await createJournalEntry({
@@ -72,16 +98,53 @@ export async function createManualJournalEntry(data: {
   return { success: true, id: result.id };
 }
 
-async function coaIdByCode(
+async function resolveLeafAccountIds(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  code: string,
-): Promise<string | null> {
-  const { data } = await supabase
+  codes: string[],
+): Promise<{ ids?: Map<string, string>; error?: string }> {
+  const uniqueCodes = Array.from(new Set(codes));
+  const { data, error } = await supabase
     .from("chart_of_accounts")
-    .select("id")
-    .eq("code", code)
-    .single();
-  return (data as { id: string } | null)?.id ?? null;
+    .select("id, code, is_active")
+    .in("code", uniqueCodes);
+
+  if (error) return { error: error.message };
+
+  const accounts = (data ?? []) as Array<{
+    id: string;
+    code: string;
+    is_active: boolean;
+  }>;
+  const byCode = new Map(accounts.map((account) => [account.code, account]));
+  const missing = uniqueCodes.find((code) => !byCode.has(code));
+  if (missing) return { error: `Akun ${missing} tidak ditemukan` };
+
+  const inactive = accounts.find((account) => !account.is_active);
+  if (inactive) return { error: `Akun ${inactive.code} sudah tidak aktif` };
+
+  const accountIds = accounts.map((account) => account.id);
+  const { data: children, error: childrenError } = await supabase
+    .from("chart_of_accounts")
+    .select("parent_id")
+    .in("parent_id", accountIds)
+    .limit(accountIds.length);
+  if (childrenError) return { error: childrenError.message };
+
+  const parentIds = new Set(
+    ((children ?? []) as Array<{ parent_id: string | null }>)
+      .map((child) => child.parent_id)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const parent = accounts.find((account) => parentIds.has(account.id));
+  if (parent) {
+    return {
+      error: `Akun ${parent.code} adalah kelompok. Pilih akun detail agar laporan tidak salah.`,
+    };
+  }
+
+  return {
+    ids: new Map(accounts.map((account) => [account.code, account.id])),
+  };
 }
 
 export async function updateManualJournalEntry(data: {
@@ -110,9 +173,26 @@ export async function updateManualJournalEntry(data: {
     return { error: { _form: ["Jurnal minimal 2 baris"] } };
   }
 
+  const invalidLine = data.lines.find(
+    (line) =>
+      !line.account_code ||
+      line.debit < 0 ||
+      line.credit < 0 ||
+      (line.debit > 0) === (line.credit > 0),
+  );
+  if (invalidLine) {
+    return {
+      error: {
+        _form: [
+          "Setiap baris harus memilih akun dan mengisi tepat salah satu nilai Debit atau Kredit",
+        ],
+      },
+    };
+  }
+
   const totalDebit = data.lines.reduce((s, l) => s + (l.debit || 0), 0);
   const totalCredit = data.lines.reduce((s, l) => s + (l.credit || 0), 0);
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+  if (totalDebit <= 0 || Math.abs(totalDebit - totalCredit) > 0.01) {
     return {
       error: {
         _form: [
@@ -149,50 +229,30 @@ export async function updateManualJournalEntry(data: {
     return { error: { _form: ["Jurnal yang sudah di-reverse tidak bisa diedit"] } };
   }
 
-  // Resolve all account codes first
-  const codeToId = new Map<string, string>();
-  for (const l of data.lines) {
-    if (codeToId.has(l.account_code)) continue;
-    const id = await coaIdByCode(supabase, l.account_code);
-    if (!id) {
-      return { error: { _form: [`Akun ${l.account_code} tidak ditemukan`] } };
-    }
-    codeToId.set(l.account_code, id);
+  // Resolve only active posting accounts. Parent/group accounts would make
+  // leaf-based financial statements silently omit the journal amount.
+  const resolved = await resolveLeafAccountIds(
+    supabase,
+    data.lines.map((line) => line.account_code),
+  );
+  if (resolved.error || !resolved.ids) {
+    return {
+      error: { _form: [resolved.error ?? "Akun jurnal tidak valid"] },
+    };
   }
 
-  // Update header
-  const { error: hdrErr } = await supabase
-    .from("journal_entries")
-    .update({
-      entry_date: data.entry_date,
-      description: data.description,
-      notes: data.notes ?? null,
-      total_debit: totalDebit,
-      total_credit: totalCredit,
-    })
-    .eq("id", data.id);
-  if (hdrErr) {
-    return { error: { _form: [hdrErr.message] } };
-  }
-
-  // Delete old lines + insert new
-  const { error: deleteLinesErr } = await supabase.from("journal_lines").delete().eq("entry_id", data.id);
-  if (deleteLinesErr) {
-    return { error: { _form: [`Gagal menghapus line lama: ${deleteLinesErr.message}`] } };
-  }
-
-  const lineRows = data.lines.map((l, idx) => ({
-    entry_id: data.id,
-    account_id: codeToId.get(l.account_code)!,
-    debit: l.debit || 0,
-    credit: l.credit || 0,
-    description: l.description ?? null,
-    line_order: idx,
-  }));
-
-  const { error: lineErr } = await supabase.from("journal_lines").insert(lineRows);
-  if (lineErr) {
-    return { error: { _form: [`Gagal update lines: ${lineErr.message}`] } };
+  const { error: updateError } = await supabase.rpc(
+    "update_manual_journal_atomic",
+    {
+      p_entry_id: data.id,
+      p_entry_date: data.entry_date,
+      p_description: data.description,
+      p_notes: data.notes ?? null,
+      p_lines: data.lines,
+    },
+  );
+  if (updateError) {
+    return { error: { _form: [updateError.message] } };
   }
 
   await logActivity({
@@ -250,12 +310,10 @@ export async function deleteManualJournalEntry(id: string) {
     };
   }
 
-  // Cascade delete: lines deleted first then header
-  await supabase.from("journal_lines").delete().eq("entry_id", id);
-  const { error: delErr } = await supabase
-    .from("journal_entries")
-    .delete()
-    .eq("id", id);
+  const { error: delErr } = await supabase.rpc(
+    "delete_manual_journal_atomic",
+    { p_entry_id: id },
+  );
 
   if (delErr) {
     return { error: delErr.message };

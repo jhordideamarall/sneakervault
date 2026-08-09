@@ -12,17 +12,16 @@ const LazyMailGlobalDialog = dynamic(
 export function MailGlobalHost({ userId }: { userId: string }) {
   const searchParams = useSearchParams();
   const openMailId = searchParams.get("openMail");
-  const [shouldLoad, setShouldLoad] = useState(Boolean(openMailId));
-  const [initialOpen, setInitialOpen] = useState(Boolean(openMailId));
-  const [initialSelectedId, setInitialSelectedId] = useState<string | null>(openMailId);
+  const [openedManually, setOpenedManually] = useState(false);
+  const [manualSelectedId, setManualSelectedId] = useState<string | null>(null);
+  const shouldLoad = openedManually || Boolean(openMailId);
 
   useEffect(() => {
     if (shouldLoad) return;
 
     const loadAndOpen = (selectedId: string | null = null) => {
-      setInitialOpen(true);
-      setInitialSelectedId(selectedId);
-      setShouldLoad(true);
+      setManualSelectedId(selectedId);
+      setOpenedManually(true);
     };
 
     const keyHandler = (event: KeyboardEvent) => {
@@ -43,20 +42,13 @@ export function MailGlobalHost({ userId }: { userId: string }) {
     };
   }, [shouldLoad]);
 
-  useEffect(() => {
-    if (!openMailId) return;
-    setInitialOpen(true);
-    setInitialSelectedId(openMailId);
-    setShouldLoad(true);
-  }, [openMailId]);
-
   if (!shouldLoad) return null;
 
   return (
     <LazyMailGlobalDialog
       userId={userId}
-      initialOpen={initialOpen}
-      initialSelectedId={initialSelectedId}
+      initialOpen
+      initialSelectedId={openMailId ?? manualSelectedId}
     />
   );
 }

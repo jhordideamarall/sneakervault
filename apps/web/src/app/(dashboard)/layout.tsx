@@ -50,7 +50,9 @@ export default async function DashboardLayout({
       <ResizablePanelGroup direction="horizontal" className="flex-1">
         {/* Left Sidebar — resizable */}
         <ResizablePanel 
-          defaultSize={15}
+          defaultSize="15%"
+          minSize="12%"
+          maxSize="28%"
           className="bg-[#262626] rounded-md overflow-hidden"
         >
           <Suspense
@@ -66,7 +68,8 @@ export default async function DashboardLayout({
 
         {/* Main Content */}
         <ResizablePanel
-          defaultSize={85}
+          defaultSize="85%"
+          minSize="50%"
           className="bg-[#1F1F1E] rounded-md overflow-hidden"
         >
           <div className="flex h-full flex-col">

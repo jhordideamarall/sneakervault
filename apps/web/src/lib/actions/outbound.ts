@@ -25,6 +25,30 @@ export async function createPackingSession(input: unknown) {
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
   const supabase = await createClient();
+  if (parsed.data.platform_order_id?.trim()) {
+    const { data: existingSession, error: existingError } = await supabase
+      .from("packing_sessions")
+      .select("id")
+      .eq("platform", parsed.data.platform)
+      .eq("platform_order_id", parsed.data.platform_order_id.trim())
+      .eq("status", "packing")
+      .is("packed_at", null)
+      .limit(1)
+      .maybeSingle();
+    if (existingError) {
+      return { error: { _form: [existingError.message] } };
+    }
+    if (existingSession) {
+      return {
+        error: {
+          _form: [
+            "Order ini masih punya sesi packing yang belum selesai. Lanjutkan sesi dari panel Sesi Belum Selesai.",
+          ],
+        },
+      };
+    }
+  }
+
   const { data, error } = await supabase
     .from("packing_sessions")
     .insert({
@@ -194,12 +218,69 @@ export async function finalizePackingSession(sessionId: string) {
   const profile = await requireRole(["owner", "shopkeeper"]);
   const supabase = await createClient();
 
-  const { data: session } = await supabase.from("packing_sessions").select("status").eq("id", sessionId).maybeSingle();
+  const { data: session } = await supabase
+    .from("packing_sessions")
+    .select("status, platform, platform_order_id")
+    .eq("id", sessionId)
+    .maybeSingle();
   if (!session) return { error: "Sesi tidak ditemukan" };
   if (session.status !== "packing") return { error: "Sesi sudah tidak aktif" };
 
   const { count } = await supabase.from("packing_items").select("id", { count: "exact", head: true }).eq("packing_session_id", sessionId);
   if (!count || count === 0) return { error: "Sesi tidak memiliki item" };
+
+  if (
+    ["shopee", "tiktok", "tokopedia"].includes(session.platform) &&
+    session.platform_order_id
+  ) {
+    const { data: invoice } = await supabase
+      .from("sales_invoices")
+      .select("id, invoice_number, sales_invoice_lines(product_id, qty)")
+      .eq("channel", session.platform)
+      .eq("marketplace_order_id", session.platform_order_id)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (invoice) {
+      const { data: relatedSessions } = await supabase
+        .from("packing_sessions")
+        .select("id")
+        .eq("platform", session.platform)
+        .eq("platform_order_id", session.platform_order_id)
+        .neq("status", "cancelled");
+      const relatedIds = (relatedSessions ?? []).map((row) => row.id);
+      const { data: packedItems } = relatedIds.length
+        ? await supabase
+            .from("packing_items")
+            .select("product_id")
+            .in("packing_session_id", relatedIds)
+        : { data: [] as Array<{ product_id: string }> };
+
+      const expected = new Map<string, number>();
+      for (const line of invoice.sales_invoice_lines ?? []) {
+        if (!line.product_id) continue;
+        expected.set(
+          line.product_id,
+          (expected.get(line.product_id) ?? 0) + Number(line.qty ?? 0),
+        );
+      }
+      const packed = new Map<string, number>();
+      for (const item of packedItems ?? []) {
+        packed.set(item.product_id, (packed.get(item.product_id) ?? 0) + 1);
+      }
+      const missingQty = Array.from(expected.entries()).reduce(
+        (sum, [productId, qty]) => sum + Math.max(0, qty - (packed.get(productId) ?? 0)),
+        0,
+      );
+      if (missingQty > 0) {
+        return {
+          error: `Belum bisa selesai: masih ada ${missingQty} item invoice ${invoice.invoice_number} yang belum discan.`,
+        };
+      }
+    }
+  }
 
   await supabase.from("packing_sessions").update({ packed_at: new Date().toISOString(), status_updated_by: profile.id }).eq("id", sessionId);
 
