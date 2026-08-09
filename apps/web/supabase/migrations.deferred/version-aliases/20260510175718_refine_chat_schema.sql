@@ -1,5 +1,5 @@
 -- Add new columns for modern chat features
-ALTER TABLE internal_messages 
+ALTER TABLE internal_messages
 ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES internal_messages(id),
 ADD COLUMN IF NOT EXISTS attachment_urls TEXT[] DEFAULT '{}',
 ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';

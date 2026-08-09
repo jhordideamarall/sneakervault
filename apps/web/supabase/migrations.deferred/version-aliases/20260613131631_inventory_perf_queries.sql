@@ -40,6 +40,7 @@ RETURNS TABLE (
 LANGUAGE sql
 SECURITY INVOKER
 STABLE
+SET search_path = public, pg_temp
 AS $$
   WITH normalized AS (
     SELECT nullif(trim(coalesce(p_search, '')), '') AS q
@@ -127,6 +128,7 @@ RETURNS TABLE (
 LANGUAGE sql
 SECURITY INVOKER
 STABLE
+SET search_path = public, pg_temp
 AS $$
   WITH normalized AS (
     SELECT nullif(trim(coalesce(p_search, '')), '') AS q
