@@ -415,7 +415,7 @@ export async function getSuppliers() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("suppliers")
-    .select("id, name, contact_person, phone, email")
+    .select("id, name, contact_person, phone, email, address, created_at")
     .eq("is_active", true)
     .order("name");
   return data ?? [];

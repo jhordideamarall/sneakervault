@@ -35,7 +35,7 @@ export default async function LoginPage({
               ["Mail", "Internal"],
             ].map(([label, value]) => (
               <div key={label} className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-3">
-                <p className="text-[11px] text-white/35">{label}</p>
+                <p className="text-[11px] text-white/60">{label}</p>
                 <p className="mt-1 text-sm font-medium text-white/80">{value}</p>
               </div>
             ))}
@@ -55,7 +55,7 @@ export default async function LoginPage({
             <div className="mb-7 hidden md:block">
               <p className="text-xs font-medium uppercase text-emerald-300/80">Internal Access</p>
               <h2 className="mt-2 text-2xl font-semibold text-white">Masuk ke akun</h2>
-              <p className="mt-2 text-sm text-white/45">Gunakan kredensial staff yang sudah terdaftar.</p>
+              <p className="mt-2 text-sm text-white/60">Gunakan kredensial staf yang sudah terdaftar.</p>
             </div>
 
             <LoginForm action={login} inactive={inactive} />

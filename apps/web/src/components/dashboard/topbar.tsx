@@ -42,7 +42,7 @@ export function Topbar({ fullName, roles }: { fullName?: string; roles?: string[
         <div className="flex items-center gap-3">
           <div className="text-right">
             <p className="text-sm font-medium text-white/80">{fullName ?? "User"}</p>
-            <p className="text-[11px] capitalize text-white/30">{roleLabel}</p>
+            <p className="text-[11px] capitalize text-white/60">{roleLabel}</p>
           </div>
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.08] text-xs font-bold text-white/70">
             {(fullName ?? "U").charAt(0).toUpperCase()}

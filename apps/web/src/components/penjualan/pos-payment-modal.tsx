@@ -14,6 +14,20 @@ const PAYMENTS = [
 
 const QUICK = [50000, 100000, 200000];
 
+function accountsForPayment(
+  accounts: BankAccountRow[],
+  method: string,
+) {
+  if (method === "cash") return accounts.filter((account) => account.type === "cash");
+  if (method === "bank_transfer") return accounts.filter((account) => account.type === "bank");
+  return accounts.filter((account) => account.type === "bank" || account.type === "ewallet");
+}
+
+function preferredAccountId(accounts: BankAccountRow[], method: string) {
+  const eligible = accountsForPayment(accounts, method);
+  return eligible.find((account) => account.is_default)?.id ?? eligible[0]?.id ?? "";
+}
+
 export type PosPaymentResult = {
   payment_method: string;
   bank_account_id: string;
@@ -36,10 +50,11 @@ export function PosPaymentModal({
   onConfirm: (result: PosPaymentResult) => void;
 }) {
   const accounts = bankAccounts.filter((a) => a.is_active !== false);
-  const defaultAccountId = accounts[0]?.id ?? "";
+  const defaultAccountId = preferredAccountId(accounts, "cash");
   const [method, setMethod] = useState<string>("cash");
   const [account, setAccount] = useState(defaultAccountId);
   const [cash, setCash] = useState(0);
+  const eligibleAccounts = accountsForPayment(accounts, method);
 
   useEffect(() => {
     if (open) {
@@ -64,15 +79,21 @@ export function PosPaymentModal({
         onClick={onClose}
         aria-hidden
       />
-      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-white/[0.08] bg-[#262626] text-white shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-200">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pos-payment-title"
+        className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-white/[0.08] bg-[#262626] text-white shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-200"
+      >
         <div className="flex items-center justify-between px-6 pt-5">
-          <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
+          <span id="pos-payment-title" className="text-[10px] font-black uppercase tracking-widest text-white/60">
             Pembayaran
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="grid size-8 place-items-center rounded-lg text-white/40 hover:bg-white/[0.08] hover:text-white"
+            aria-label="Tutup form pembayaran"
+            className="grid size-8 place-items-center rounded-lg text-white/60 hover:bg-white/[0.08] hover:text-white"
           >
             <X className="size-4" />
           </button>
@@ -80,7 +101,7 @@ export function PosPaymentModal({
 
         <div className="space-y-5 p-6">
           <div className="rounded-2xl border border-white/[0.08] bg-black/25 p-5 text-center">
-            <p className="text-[10px] font-black uppercase tracking-widest text-white/40">
+            <p className="text-[10px] font-black uppercase tracking-widest text-white/60">
               Total Tagihan
             </p>
             <p className="mt-1 text-3xl font-black tabular-nums tracking-tighter text-white">
@@ -89,7 +110,7 @@ export function PosPaymentModal({
           </div>
 
           <div>
-            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-white/40">
+            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-white/60">
               Metode Bayar
             </p>
             <div className="grid grid-cols-3 gap-2">
@@ -97,12 +118,15 @@ export function PosPaymentModal({
                 <button
                   key={p.value}
                   type="button"
-                  onClick={() => setMethod(p.value)}
+                  onClick={() => {
+                    setMethod(p.value);
+                    setAccount(preferredAccountId(accounts, p.value));
+                  }}
                   className={cn(
                     "h-12 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all",
                     method === p.value
                       ? "bg-white text-black shadow-lg shadow-black/20"
-                      : "bg-white/[0.05] text-white/45 hover:bg-white/[0.08] hover:text-white",
+                      : "bg-white/[0.05] text-white/60 hover:bg-white/[0.08] hover:text-white",
                   )}
                 >
                   {p.label}
@@ -112,15 +136,19 @@ export function PosPaymentModal({
           </div>
 
           <div>
-            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-white/40">
-              Akun Kas/Bank
+            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-white/60">
+              {method === "cash" ? "Akun Kas" : "Akun Bank / e-Wallet"}
             </p>
             <select
+              aria-label={method === "cash" ? "Akun kas untuk pembayaran" : "Akun bank untuk pembayaran"}
               value={account}
               onChange={(e) => setAccount(e.target.value)}
               className="h-12 w-full rounded-xl border border-white/[0.08] bg-white/[0.05] px-3 text-sm font-bold text-white outline-none"
             >
-              {accounts.map((a) => (
+              {eligibleAccounts.length === 0 ? (
+                <option value="">Belum ada akun yang sesuai</option>
+              ) : null}
+              {eligibleAccounts.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
                 </option>
@@ -130,7 +158,7 @@ export function PosPaymentModal({
 
           {method === "cash" ? (
             <div>
-              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-white/40">
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-white/60">
                 Uang Diterima
               </p>
               <NumberInput
@@ -175,7 +203,7 @@ export function PosPaymentModal({
           <button
             type="button"
             onClick={onClose}
-            className="h-14 flex-1 rounded-xl bg-white/[0.06] text-[11px] font-black uppercase tracking-widest text-white/50 hover:bg-white/[0.1] hover:text-white"
+            className="h-14 flex-1 rounded-xl bg-white/[0.06] text-[11px] font-black uppercase tracking-widest text-white/65 hover:bg-white/[0.1] hover:text-white"
           >
             Batal
           </button>

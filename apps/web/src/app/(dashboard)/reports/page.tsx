@@ -72,16 +72,16 @@ export default async function ReportsPage({
     <div className="space-y-8">
       <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
         <div>
-          <h1 className="text-2xl font-bold text-white/90">Executive Summary</h1>
-          <p className="text-sm text-white/40 mt-1">{periodLabel}</p>
+          <h1 className="text-2xl font-bold text-white/90">Ringkasan Operasional</h1>
+          <p className="text-sm text-white/60 mt-1">{periodLabel}</p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <form className="flex flex-wrap items-end gap-2" method="get">
-            <label className="text-xs text-white/45">
+            <label className="text-xs text-white/65">
               <span className="mb-1 block">Dari tanggal</span>
               <input className="h-9 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white" type="date" name="from" defaultValue={from.slice(0, 10)} />
             </label>
-            <label className="text-xs text-white/45">
+            <label className="text-xs text-white/65">
               <span className="mb-1 block">Sampai tanggal</span>
               <input className="h-9 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white" type="date" name="to" defaultValue={to.slice(0, 10)} />
             </label>
@@ -157,23 +157,23 @@ async function SummaryCards({ from, to }: { from: string; to: string }) {
   return (
     <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
       <SummaryCard
-        label="Revenue"
+        label="Omzet"
         value={`Rp ${formatNum(profit.revenue)}`}
       />
       <SummaryCard
-        label="Profit"
+        label="Laba"
         value={`Rp ${formatNum(profit.profit)}`}
         sub={`Margin: ${margin}%`}
-        subColor="text-white/40"
+        subColor="text-white/60"
       />
       <SummaryCard
         label="Unit Terjual"
         value={`${profit.items} pcs`}
       />
       <SummaryCard
-        label="Nilai Stok Tersisa"
+        label="Nilai Stok Operasional"
         value={`Rp ${formatNum(stock.cost)}`}
-        sub={`${stock.items} unit`}
+        sub={`${stock.items} unit · dari inventori`}
       />
     </div>
   );
@@ -182,9 +182,9 @@ async function SummaryCards({ from, to }: { from: string; to: string }) {
 function SummaryCard({ label, value, sub, subColor }: { label: string; value: string; sub?: string; subColor?: string }) {
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-      <p className="text-[11px] text-white/40 uppercase tracking-wider">{label}</p>
+      <p className="text-[11px] text-white/60 uppercase tracking-wider">{label}</p>
       <p className="text-xl font-bold text-white/90 mt-2">{value}</p>
-      {sub && <p className={`text-[11px] mt-1 ${subColor ?? "text-white/30"}`}>{sub}</p>}
+      {sub && <p className={`text-[11px] mt-1 ${subColor ?? "text-white/60"}`}>{sub}</p>}
     </div>
   );
 }
@@ -213,7 +213,7 @@ async function ProfitByModelTable({
   if (data.length === 0) {
     return (
       <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 text-center">
-        <p className="text-sm text-white/30">Belum ada data penjualan</p>
+        <p className="text-sm text-white/60">Belum ada data penjualan</p>
       </div>
     );
   }
@@ -222,11 +222,11 @@ async function ProfitByModelTable({
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
       <div className="px-6 py-4 border-b border-white/[0.04]">
         <p className="text-sm font-medium text-white/80">Financial Reporting</p>
-        <p className="text-[11px] text-white/30">Profit per model — produk mana yang paling menguntungkan</p>
+        <p className="text-[11px] text-white/60">Laba per model — produk mana yang paling menguntungkan</p>
       </div>
       <table className="w-full">
         <thead>
-          <tr className="border-b border-white/[0.04] text-[11px] uppercase tracking-wider text-white/30">
+          <tr className="border-b border-white/[0.04] text-[11px] uppercase tracking-wider text-white/60">
             <th className="px-6 py-3 text-left font-medium">Produk</th>
             <th className="px-6 py-3 text-right font-medium">Terjual</th>
             <th className="px-6 py-3 text-right font-medium">Revenue</th>
@@ -239,7 +239,7 @@ async function ProfitByModelTable({
             <tr key={`${row.brand}-${row.model}`} className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
               <td className="px-6 py-3">
                 <span className="text-[13px] font-medium text-white/80">{row.brand}</span>
-                <span className="text-[12px] text-white/40 ml-2">{row.model}</span>
+                <span className="text-[12px] text-white/60 ml-2">{row.model}</span>
               </td>
               <td className="px-6 py-3 text-right text-[12px] text-white/60">{row.units_sold}</td>
               <td className="px-6 py-3 text-right text-[12px] text-white/60">Rp {formatNum(row.revenue)}</td>
@@ -264,7 +264,7 @@ async function AgingTable() {
   if (aging.length === 0) {
     return (
       <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 text-center">
-        <p className="text-sm text-white/30">Tidak ada data aging</p>
+        <p className="text-sm text-white/60">Tidak ada data umur stok</p>
       </div>
     );
   }
@@ -280,7 +280,7 @@ async function AgingTable() {
       <div className="px-6 py-4 border-b border-white/[0.04] flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-white/80">Inventory Reporting — Aging</p>
-          <p className="text-[11px] text-white/30">Barang lama belum terjual — pertimbangkan diskon atau retur ke supplier</p>
+          <p className="text-[11px] text-white/60">Barang lama belum terjual — pertimbangkan diskon atau retur ke supplier</p>
         </div>
       </div>
 
@@ -294,7 +294,7 @@ async function AgingTable() {
 
       <table className="w-full">
         <thead>
-          <tr className="border-b border-white/[0.04] text-[11px] uppercase tracking-wider text-white/30">
+          <tr className="border-b border-white/[0.04] text-[11px] uppercase tracking-wider text-white/60">
             <th className="px-6 py-3 text-left font-medium">Produk</th>
             <th className="px-6 py-3 text-right font-medium">Stok</th>
             <th className="px-6 py-3 text-right font-medium">Modal</th>
@@ -314,10 +314,10 @@ async function AgingTable() {
               <tr key={p.id} className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
                 <td className="px-6 py-3">
                   <span className="text-[13px] text-white/80">{p.brand} {p.model}</span>
-                  <span className="text-[11px] text-white/30 ml-2">({p.size})</span>
+                  <span className="text-[11px] text-white/60 ml-2">({p.size})</span>
                 </td>
                 <td className="px-6 py-3 text-right text-[12px] text-white/60">{p.quantity}</td>
-                <td className="px-6 py-3 text-right text-[12px] text-white/40">Rp {formatNum(p.quantity * p.hpp)}</td>
+                <td className="px-6 py-3 text-right text-[12px] text-white/60">Rp {formatNum(p.quantity * p.hpp)}</td>
                 <td className="px-6 py-3 text-right text-[12px] text-white/60">{ageDays !== null ? `${ageDays} hari` : "—"}</td>
                 <td className="px-6 py-3 text-right">
                   <span className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold uppercase border ${statusStyle}`}>
@@ -345,11 +345,11 @@ async function ChannelAndExpenseTables({ from, to }: { from: string; to: string 
       <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
         <div className="border-b border-white/[0.04] px-6 py-4">
           <p className="text-sm font-medium text-white/80">Profit per Channel</p>
-          <p className="text-[11px] text-white/30">Omset, HPP, fee, dan margin per sumber penjualan</p>
+          <p className="text-[11px] text-white/60">Omzet, HPP, biaya, dan margin per sumber penjualan</p>
         </div>
         <table className="w-full">
           <thead>
-            <tr className="border-b border-white/[0.04] text-[11px] uppercase tracking-wider text-white/30">
+            <tr className="border-b border-white/[0.04] text-[11px] uppercase tracking-wider text-white/60">
               <th className="px-6 py-3 text-left font-medium">Channel</th>
               <th className="px-6 py-3 text-right font-medium">Invoice</th>
               <th className="px-6 py-3 text-right font-medium">Revenue</th>
@@ -360,7 +360,7 @@ async function ChannelAndExpenseTables({ from, to }: { from: string; to: string 
           </thead>
           <tbody>
             {channelProfit.length === 0 ? (
-              <tr><td colSpan={6} className="px-6 py-8 text-center text-sm text-white/25">Belum ada data channel</td></tr>
+              <tr><td colSpan={6} className="px-6 py-8 text-center text-sm text-white/60">Belum ada data channel</td></tr>
             ) : channelProfit.map((row) => (
               <tr key={row.channel} className="border-b border-white/[0.02]">
                 <td className="px-6 py-3 text-sm font-medium capitalize text-white/75">{row.channel}</td>
@@ -378,19 +378,19 @@ async function ChannelAndExpenseTables({ from, to }: { from: string; to: string 
       <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
         <div className="border-b border-white/[0.04] px-6 py-4">
           <p className="text-sm font-medium text-white/80">Biaya Marketplace & Pengeluaran</p>
-          <p className="text-[11px] text-white/30">Fee marketplace dan beban operasional per kategori</p>
+          <p className="text-[11px] text-white/60">Biaya marketplace dan beban operasional per kategori</p>
         </div>
         <div className="divide-y divide-white/[0.04]">
           <div className="p-5">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/35">Marketplace</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/60">Marketplace</p>
             {marketplaceCosts.length === 0 ? (
-              <p className="text-sm text-white/25">Belum ada fee marketplace.</p>
+              <p className="text-sm text-white/60">Belum ada biaya marketplace.</p>
             ) : marketplaceCosts.map((row) => (
               <div key={row.channel} className="flex items-center justify-between py-2 text-sm">
                 <span className="capitalize text-white/70">{row.channel}</span>
                 <span className="text-right text-white/50">
                   Fee Rp {formatNum(row.marketplace_fee)}
-                  <span className="ml-2 text-[10px] uppercase text-white/25">
+                  <span className="ml-2 text-[10px] uppercase text-white/60">
                     {row.fee_source === "settlement_actual" ? "Settlement" : row.fee_source === "mixed" ? "Settlement+Estimasi" : row.fee_source === "order_estimate" ? "Estimasi" : "-"}
                   </span>
                 </span>
@@ -398,9 +398,9 @@ async function ChannelAndExpenseTables({ from, to }: { from: string; to: string 
             ))}
           </div>
           <div className="p-5">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/35">Pengeluaran</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/60">Pengeluaran</p>
             {expenses.length === 0 ? (
-              <p className="text-sm text-white/25">Belum ada pengeluaran paid.</p>
+              <p className="text-sm text-white/60">Belum ada pengeluaran terbayar.</p>
             ) : expenses.slice(0, 8).map((row) => (
               <div key={`${row.account_code}-${row.category}`} className="flex items-center justify-between py-2 text-sm">
                 <span className="text-white/70">{row.category}</span>
@@ -420,11 +420,11 @@ async function StockCardTable({ from, to }: { from: string; to: string }) {
     <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
       <div className="border-b border-white/[0.04] px-6 py-4">
         <p className="text-sm font-medium text-white/80">Kartu Stok</p>
-        <p className="text-[11px] text-white/30">Saldo awal, mutasi periode terpilih, dan saldo akhir per produk</p>
+        <p className="text-[11px] text-white/60">Saldo awal, mutasi periode terpilih, dan saldo akhir per produk</p>
       </div>
       <table className="w-full">
         <thead>
-          <tr className="border-b border-white/[0.04] text-[11px] uppercase tracking-wider text-white/30">
+          <tr className="border-b border-white/[0.04] text-[11px] uppercase tracking-wider text-white/60">
             <th className="px-6 py-3 text-left font-medium">Produk</th>
             <th className="px-6 py-3 text-right font-medium">Awal</th>
             <th className="px-6 py-3 text-right font-medium">Masuk</th>
@@ -435,12 +435,12 @@ async function StockCardTable({ from, to }: { from: string; to: string }) {
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <tr><td colSpan={6} className="px-6 py-8 text-center text-sm text-white/25">Belum ada kartu stok.</td></tr>
+            <tr><td colSpan={6} className="px-6 py-8 text-center text-sm text-white/60">Belum ada kartu stok.</td></tr>
           ) : rows.slice(0, 25).map((row) => (
             <tr key={row.product_id} className="border-b border-white/[0.02]">
               <td className="px-6 py-3">
                 <p className="text-sm text-white/75">{row.product_label}</p>
-                <p className="font-mono text-[11px] text-white/30">{row.sku}</p>
+                <p className="font-mono text-[11px] text-white/60">{row.sku}</p>
               </td>
               <td className="px-6 py-3 text-right text-xs font-semibold text-white/80">{row.opening_qty}</td>
               <td className="px-6 py-3 text-right text-xs text-white/50">{row.inbound}</td>

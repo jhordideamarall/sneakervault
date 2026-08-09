@@ -308,7 +308,7 @@ export function Sidebar({
                     "flex w-full items-center gap-3 rounded-md px-3 py-2 text-[12px] font-medium uppercase tracking-[0.08em] transition-colors @max-[120px]:justify-center @max-[120px]:px-0",
                     hasActive
                       ? "text-white/80"
-                      : "text-white/35 hover:text-white/60",
+                      : "text-white/55 hover:text-white/80",
                   )}
                 >
                   <span className="flex-shrink-0">{group.icon}</span>
@@ -345,7 +345,7 @@ export function Sidebar({
                                   "ml-2 mr-1 flex items-center gap-3 rounded-md px-3 py-2 text-[13px] transition-colors @max-[120px]:ml-0 @max-[120px]:mr-0 @max-[120px]:justify-center @max-[120px]:px-0",
                                   active
                                     ? "bg-white/[0.06] text-white font-medium"
-                                    : "text-white/50 hover:bg-white/[0.03] hover:text-white/80",
+                                    : "text-white/60 hover:bg-white/[0.03] hover:text-white/90",
                                 )}
                               >
                                 <span
@@ -394,7 +394,7 @@ export function Sidebar({
                 <TooltipTrigger asChild>
                   <button
                     type="submit"
-                    className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] text-white/40 hover:bg-white/[0.03] hover:text-white/70 transition-colors whitespace-nowrap @max-[120px]:px-0 @max-[120px]:justify-center"
+                    className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] text-white/60 hover:bg-white/[0.03] hover:text-white/85 transition-colors whitespace-nowrap @max-[120px]:px-0 @max-[120px]:justify-center"
                   >
                     <LogOut size={16} strokeWidth={1.7} className="flex-shrink-0" />
                     <span className="@max-[120px]:hidden">Keluar</span>

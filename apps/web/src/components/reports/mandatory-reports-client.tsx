@@ -31,7 +31,7 @@ export function MandatoryReportsClient({
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02]">
       <div className="border-b border-white/[0.04] px-6 py-4">
         <p className="text-sm font-medium text-white/80">Laporan Wajib Client</p>
-        <p className="mt-1 text-[11px] text-white/30">
+        <p className="mt-1 text-[11px] text-white/60">
           Buku besar, jurnal, penjualan, kartu stok mutasi, dan utang/piutang.
         </p>
       </div>
@@ -222,7 +222,7 @@ function ReportBlock({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-white/85">{title}</p>
-          <p className="mt-1 text-xs text-white/35">{description}</p>
+          <p className="mt-1 text-xs text-white/60">{description}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -252,7 +252,7 @@ function ReportBlock({
           <tbody>
             {preview.length === 0 ? (
               <tr>
-                <td className="px-4 py-6 text-center text-xs text-white/25">
+                <td className="px-4 py-6 text-center text-xs text-white/60">
                   Belum ada data.
                 </td>
               </tr>
@@ -263,7 +263,7 @@ function ReportBlock({
                     <td
                       key={`${title}-${index}-${cellIndex}`}
                       className={`px-4 py-2 text-xs ${
-                        cellIndex === 0 ? "text-white/65" : "text-white/45"
+                        cellIndex === 0 ? "text-white/75" : "text-white/60"
                       }`}
                     >
                       {cell}

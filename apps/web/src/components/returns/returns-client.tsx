@@ -100,7 +100,7 @@ export function ReturnsClient({
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-white/[0.06] bg-[#262626] p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-5 2xl:flex-row 2xl:items-start 2xl:justify-between">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/[0.05] text-white/80">
@@ -136,7 +136,7 @@ export function ReturnsClient({
             </div>
           </div>
 
-          <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:max-w-[520px] xl:grid-cols-4">
+          <div className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:max-w-[560px] 2xl:flex-1">
             <StatCard label="Total Retur" value={stats.total} tone="default" />
             <StatCard label="Menunggu" value={stats.pending} tone="warning" />
             <StatCard label="Terverifikasi" value={stats.verified} tone="info" />
@@ -219,7 +219,7 @@ function StatCard({
 
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-white/35">{label}</p>
+      <p className="min-h-8 text-[11px] leading-4 uppercase tracking-[0.1em] text-white/60">{label}</p>
       <p className={cn("mt-2 text-2xl font-semibold tabular-nums", toneClasses[tone])}>{value}</p>
     </div>
   );
@@ -294,7 +294,7 @@ function ReturnsList({
               <option value="cancelled">Dibatalkan</option>
             </Select>
           </div>
-          <p className="text-xs text-white/35">
+          <p className="text-xs text-white/60">
             Menampilkan {filteredReturns.length} dari {returns.length} retur
           </p>
         </div>
@@ -306,7 +306,7 @@ function ReturnsList({
             <PackageCheck size={20} strokeWidth={1.8} />
           </div>
           <h2 className="mt-4 text-lg font-semibold text-white/85">Belum ada retur yang cocok</h2>
-          <p className="mt-2 text-sm text-white/45">
+          <p className="mt-2 text-sm text-white/60">
             Coba ubah filter, kata kunci pencarian, atau buat retur baru dari item yang sudah dikirim.
           </p>
         </Card>

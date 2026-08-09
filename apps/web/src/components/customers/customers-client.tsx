@@ -308,7 +308,7 @@ export function CustomersClient({
         <div className="overflow-hidden rounded-lg border border-white/[0.06] bg-[#262626]">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wider text-white/40">
+              <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wider text-white/60">
                 <th className="px-4 py-3 font-medium">Nama</th>
                 <th className="px-4 py-3 font-medium">Kontak</th>
                 <th className="px-4 py-3 font-medium">Channel</th>
@@ -325,12 +325,12 @@ export function CustomersClient({
                   <td className="px-4 py-3">
                     <div className="font-medium text-white">{c.name}</div>
                     {c.contact_person ? (
-                      <div className="text-xs text-white/40">
+                      <div className="text-xs text-white/60">
                         c/p: {c.contact_person}
                       </div>
                     ) : null}
                     {c.address ? (
-                      <div className="mt-0.5 flex items-start gap-1 text-xs text-white/40">
+                      <div className="mt-0.5 flex items-start gap-1 text-xs text-white/60">
                         <MapPin
                           size={11}
                           strokeWidth={1.7}
@@ -368,7 +368,7 @@ export function CustomersClient({
                     {c.is_active ? (
                       <span className="text-[11px] text-emerald-300">Aktif</span>
                     ) : (
-                      <span className="text-[11px] text-white/40">
+                      <span className="text-[11px] text-white/60">
                         Nonaktif
                       </span>
                     )}
@@ -579,7 +579,7 @@ function StatTile({
           : "text-white";
   return (
     <div className="rounded-lg border border-white/[0.06] bg-[#262626] p-4">
-      <div className="text-[11px] uppercase tracking-wider text-white/40">
+      <div className="text-[11px] uppercase tracking-wider text-white/60">
         {label}
       </div>
       <div className={`mt-1 text-2xl font-semibold ${toneClass}`}>{value}</div>

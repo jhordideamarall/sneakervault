@@ -468,20 +468,20 @@ export function DataSyncClient({ accounts }: { accounts: CoaRow[] }) {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-white/40">
+          <div className="mb-2 flex items-center gap-2 text-white/60">
             <Database size={18} />
             <span className="text-xs font-semibold uppercase tracking-[0.12em]">
-              Cutover Accurate
+              Persiapan Data Awal
             </span>
           </div>
           <h1 className="text-2xl font-bold text-white/90">Sinkronisasi Data</h1>
-          <p className="mt-1 text-sm text-white/45">
-            Import master, saldo awal, piutang, hutang, dan hasil parser PDF deterministik.
+          <p className="mt-1 text-sm text-white/60">
+            Import master, saldo awal, piutang, hutang, dan baca data mutasi dari PDF.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-xs font-semibold uppercase tracking-[0.1em] text-white/35">
-            Cutoff
+          <label className="text-xs font-semibold uppercase tracking-[0.1em] text-white/60">
+            Mulai pakai sistem
           </label>
           <input
             type="date"
@@ -491,13 +491,13 @@ export function DataSyncClient({ accounts }: { accounts: CoaRow[] }) {
           />
           <Button type="button" variant="secondary" size="sm" onClick={testNotificationSound}>
             <Volume2 size={14} className="mr-1.5" />
-            Test Sound
+            Tes Suara
           </Button>
         </div>
       </div>
 
       <Alert tone="warning">
-        Jalankan cutover sebelum transaksi harian. Saldo awal harus balance dan tidak boleh dibuat dua kali
+        Masukkan data awal sebelum transaksi harian. Saldo awal harus seimbang dan tidak boleh dibuat dua kali
         pada tanggal yang sama.
       </Alert>
 
@@ -521,11 +521,11 @@ export function DataSyncClient({ accounts }: { accounts: CoaRow[] }) {
               }`}
             >
               <div className="flex items-center justify-between">
-                <Badge tone={selected ? "info" : "neutral"}>{item.badge}</Badge>
+                <Badge tone={selected ? "info" : "neutral"} className={selected ? undefined : "text-white/60"}>{item.badge}</Badge>
                 {selected && <CheckCircle2 size={16} className="text-blue-300" />}
               </div>
               <div className="mt-3 text-sm font-semibold text-white/80">{item.label}</div>
-              <div className="mt-1 text-xs text-white/35">{item.columns.length} kolom template</div>
+              <div className="mt-1 text-xs text-white/60">{item.columns.length} kolom template</div>
             </button>
           );
         })}
@@ -539,7 +539,7 @@ export function DataSyncClient({ accounts }: { accounts: CoaRow[] }) {
                 <Badge tone="info">{config.badge}</Badge>
                 <h2 className="text-lg font-semibold text-white/90">{config.label}</h2>
               </div>
-              <p className="mt-1 text-xs text-white/40">
+              <p className="mt-1 text-xs text-white/60">
                 Format kolom: <span className="font-mono text-white/60">{config.columns.join(", ")}</span>
               </p>
             </div>
@@ -575,7 +575,7 @@ export function DataSyncClient({ accounts }: { accounts: CoaRow[] }) {
                   <Upload size={16} className="text-white/40" />
                   <div>
                     <div className="text-sm font-medium text-white/80">{preview.fileName}</div>
-                    <div className="text-xs text-white/35">{preview.rows.length} baris siap diproses</div>
+                    <div className="text-xs text-white/60">{preview.rows.length} baris siap diproses</div>
                   </div>
                 </div>
                 <Button type="button" size="sm" disabled={pending} onClick={confirmImport}>
@@ -586,7 +586,7 @@ export function DataSyncClient({ accounts }: { accounts: CoaRow[] }) {
 
               <div className="overflow-x-auto rounded-lg border border-white/[0.06]">
                 <table className="w-full min-w-[760px] text-left text-xs">
-                  <thead className="border-b border-white/[0.06] bg-white/[0.03] text-white/35">
+                  <thead className="border-b border-white/[0.06] bg-white/[0.03] text-white/60">
                     <tr>
                       {config.columns.slice(0, 8).map((column) => (
                         <th key={column} className="px-3 py-2 font-medium">
@@ -613,7 +613,7 @@ export function DataSyncClient({ accounts }: { accounts: CoaRow[] }) {
             <div className="flex min-h-[220px] flex-col items-center justify-center rounded-lg border border-dashed border-white/[0.08] bg-black/10 text-center">
               <FileText size={28} className="mb-3 text-white/25" />
               <div className="text-sm font-medium text-white/60">Belum ada file dipilih</div>
-              <div className="mt-1 text-xs text-white/30">Download template lalu upload Excel/CSV hasil export.</div>
+              <div className="mt-1 text-xs text-white/60">Unduh template, isi datanya, lalu unggah file Excel/CSV.</div>
             </div>
           )}
 
@@ -641,14 +641,14 @@ export function DataSyncClient({ accounts }: { accounts: CoaRow[] }) {
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] p-4">
             <div className="mb-3 flex items-center gap-2">
               <AlertTriangle size={16} className="text-amber-300" />
-              <h3 className="text-sm font-semibold text-white/80">Urutan Cutover</h3>
+              <h3 className="text-sm font-semibold text-white/80">Urutan Data Awal</h3>
             </div>
-            <ol className="space-y-2 text-xs text-white/45">
+            <ol className="space-y-2 text-xs text-white/65">
               <li>1. Supplier dan customer</li>
               <li>2. Produk + stok + HPP</li>
               <li>3. Akun kas/bank</li>
-              <li>4. Saldo awal CoA</li>
-              <li>5. Piutang dan hutang outstanding</li>
+              <li>4. Saldo awal akun (CoA)</li>
+              <li>5. Piutang dan hutang yang belum lunas</li>
             </ol>
           </div>
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] p-4">
@@ -656,7 +656,7 @@ export function DataSyncClient({ accounts }: { accounts: CoaRow[] }) {
             <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
               {accountRows.map((account) => (
                 <div key={account.id} className="flex items-center justify-between gap-3 text-xs">
-                  <span className="font-mono text-white/45">{account.code}</span>
+                  <span className="font-mono text-white/65">{account.code}</span>
                   <span className="truncate text-white/60">{account.name}</span>
                 </div>
               ))}
@@ -670,24 +670,26 @@ export function DataSyncClient({ accounts }: { accounts: CoaRow[] }) {
           <div>
             <div className="flex items-center gap-2">
               <Badge tone="neutral">PDF</Badge>
-              <h2 className="text-lg font-semibold text-white/90">Parser PDF Deterministik</h2>
+              <h2 className="text-lg font-semibold text-white/90">Baca Data dari PDF</h2>
             </div>
-            <p className="mt-1 text-xs text-white/40">
-              Paste teks hasil PDF/MarkItDown, lalu export CSV hasil parse.
+            <p className="mt-1 text-xs text-white/60">
+              Tempel teks hasil PDF, periksa hasilnya, lalu unduh sebagai CSV.
             </p>
           </div>
           <select
+            aria-label="Jenis dokumen PDF"
             value={pdfTemplate}
             onChange={(event) => setPdfTemplate(event.target.value as PdfTemplate)}
             className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white/80 outline-none"
           >
-            <option className="bg-[#262626]" value="bca_statement">BCA / Bank Statement</option>
-            <option className="bg-[#262626]" value="shopee_settlement">Shopee Settlement</option>
+            <option className="bg-[#262626]" value="bca_statement">Mutasi Bank BCA</option>
+            <option className="bg-[#262626]" value="shopee_settlement">Pencairan Dana Shopee</option>
           </select>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
           <textarea
+            aria-label="Teks dokumen PDF"
             value={pdfText}
             onChange={(event) => setPdfText(event.target.value)}
             placeholder="Paste teks PDF di sini"
@@ -698,7 +700,7 @@ export function DataSyncClient({ accounts }: { accounts: CoaRow[] }) {
               <span className="text-sm font-medium text-white/75">{pdfRows.length} baris</span>
               <div className="flex gap-2">
                 <Button type="button" size="sm" variant="secondary" onClick={runPdfParser}>
-                  Parse
+                  Baca Data
                 </Button>
                 <Button type="button" size="sm" variant="ghost" disabled={pdfRows.length === 0} onClick={downloadPdfRows}>
                   <Download size={14} className="mr-1.5" />
@@ -708,10 +710,10 @@ export function DataSyncClient({ accounts }: { accounts: CoaRow[] }) {
             </div>
             <div className="max-h-[260px] overflow-auto p-3">
               {pdfRows.length === 0 ? (
-                <div className="py-16 text-center text-sm text-white/25">Belum ada hasil parse</div>
+                <div className="py-16 text-center text-sm text-white/60">Belum ada hasil</div>
               ) : (
                 <table className="w-full min-w-[520px] text-left text-xs">
-                  <thead className="text-white/35">
+                  <thead className="text-white/60">
                     <tr>
                       {Object.keys(pdfRows[0] ?? {}).map((column) => (
                         <th key={column} className="px-2 py-2 font-medium">

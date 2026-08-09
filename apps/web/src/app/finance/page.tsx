@@ -19,7 +19,7 @@ import {
   ArrowUpRight,
   Sparkles,
 } from "lucide-react";
-import { formatRupiah as fmtRupiah, formatRupiahShort as fmtRupiahShort } from "@/lib/format";
+import { formatRupiah as fmtRupiah } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -59,8 +59,8 @@ export default async function FinancePage() {
           Keuangan & Akuntansi
         </h1>
         <p className="mt-1.5 text-sm text-white/50">
-          Ringkasan finansial periode {monthName} · snapshot real-time per SKU
-          dengan HPP averaging &amp; dual-price.
+          Ringkasan periode {monthName}: penjualan, laba, nilai modal stok, dan
+          potensi nilai jual berdasarkan data terbaru.
         </p>
       </div>
 
@@ -82,25 +82,36 @@ export default async function FinancePage() {
         />
         <KpiCard
           label="Nilai Stok (HPP)"
-          value={fmtRupiahShort(stockValue.cost)}
+          value={fmtRupiah(stockValue.cost)}
           sublabel={`${stockValue.items.toLocaleString("id-ID")} pcs`}
           icon={<Boxes size={16} />}
           tone="default"
+          valueClassName="text-xl"
         />
         <KpiCard
           label="Potensi Jual (Retail)"
-          value={fmtRupiahShort(stockValue.retail)}
+          value={fmtRupiah(stockValue.retail)}
           sublabel={`+${stockMargin.toFixed(1)}% markup`}
           icon={<Wallet size={16} />}
           tone="info"
+          valueClassName="text-xl"
         />
       </section>
+
+      <div className="-mt-6 rounded-lg border border-sky-500/15 bg-sky-500/[0.04] px-4 py-3 text-xs leading-relaxed text-sky-100/70">
+        Nilai stok di atas dihitung langsung dari stok fisik × HPP rata-rata.
+        Saldo Persediaan di Neraca mengikuti jurnal. Jika keduanya berbeda,
+        periksa atau impor Saldo Awal CoA melalui{" "}
+        <Link href="/settings/data-sync" className="font-semibold text-sky-300 hover:text-sky-200">
+          Sinkronisasi Data
+        </Link>.
+      </div>
 
       {/* ─── Modul Tersedia ────────────────────────────────────── */}
       <section>
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="text-lg font-semibold text-white">Modul Tersedia</h2>
-          <p className="text-xs text-white/40">
+          <p className="text-xs text-white/60">
             Klik untuk masuk ke halaman lengkap
           </p>
         </div>
@@ -129,7 +140,7 @@ export default async function FinancePage() {
           <ModuleCard
             href="/inventory"
             title="Inventori + HPP"
-            description="Stok + HPP per SKU dengan average costing, harga online &amp; offline"
+            description="Stok dan nilai modal per SKU dengan HPP rata-rata, harga online, dan harga toko"
             icon={<Boxes size={18} />}
             status="live"
           />
@@ -143,83 +154,77 @@ export default async function FinancePage() {
           <ModuleCard
             href="/activity-log"
             title="Activity Log"
-            description="Audit trail semua perubahan finansial — immutable, tidak bisa diubah"
+            description="Riwayat semua perubahan finansial beserta user dan waktu kejadiannya"
             icon={<Clock size={18} />}
             status="live"
           />
         </div>
       </section>
 
-      {/* ─── Roadmap — Coming Soon ─────────────────────────────── */}
+      {/* ─── Accounting flow — everything below is live ───────── */}
       <section>
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="text-lg font-semibold text-white">
-            Roadmap Akuntansi Lengkap
+            Alur Akuntansi Aktif
           </h2>
-          <p className="text-xs text-white/40">
-            Sesuai kebutuhan meeting 2 (per tim finance)
+          <p className="text-xs text-white/60">
+            Semua tahap di bawah sudah dapat digunakan
           </p>
         </div>
 
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
           <p className="mb-5 text-sm leading-relaxed text-white/60">
-            Tim finance butuh sistem akuntansi lengkap menggantikan Accurate:{" "}
-            pembelian → HPP → Kas Bank → penjualan → buku besar → neraca/laba
-            rugi/perubahan ekuitas. Pajak tetap pakai jasa eksternal (di luar
-            scope). Berikut modul yang akan ditambahkan per phase:
+            Urutan kerja harian: buat transaksi sumber, cek kas atau bank, tinjau
+            jurnal otomatis, lalu periksa laporan. Klik tahap untuk membuka
+            halaman operasionalnya.
           </p>
 
           <div className="grid gap-2.5 sm:grid-cols-2">
-            <RoadmapItem
-              phase="Phase 2"
+            <ActiveFlowItem
+              step="1"
+              href="/pembelian/purchase-order"
               title="Pembelian Barang (Daftar Pembelian)"
-              description="Finance buat PO → shopkeeper cocokkan fisik → auto-generate inbound batch (tidak perlu scan ulang)."
+              description="Finance membuat pembelian, menyetujui pembayaran, lalu gudang menerima barang."
             />
-            <RoadmapItem
-              phase="Phase 2"
-              title="Faktur Pembelian &amp; Vendor Payment"
-              description="Link PO → invoice vendor → pembayaran. Support credit / tempo / DP."
+            <ActiveFlowItem
+              step="2"
+              href="/penjualan/invoice"
+              title="Invoice &amp; Penerimaan Customer"
+              description="Terbitkan invoice, kurangi stok, dan catat pembayaran customer."
             />
-            <RoadmapItem
-              phase="Phase 3"
-              title="Sales Invoice + Marketplace Fee"
-              description="Detail biaya admin, diskon voucher, affiliate, GMV. Breakdown per platform (Shopee, TikTok, WA)."
+            <ActiveFlowItem
+              step="3"
+              href="/kas-bank/akun"
+              title="Kas, Bank &amp; Rekonsiliasi"
+              description="Pantau saldo, uang masuk, uang keluar, transfer, dan rekonsiliasi bank."
             />
-            <RoadmapItem
-              phase="Phase 3"
-              title="Kas Bank + Mutasi BCA"
-              description="Rekening, running balance harian, import mutasi BCA, reconciliation dengan invoice."
+            <ActiveFlowItem
+              step="4"
+              href="/buku-besar/journal"
+              title="Jurnal &amp; Buku Besar"
+              description="Periksa debit-kredit otomatis dan riwayat transaksi per akun."
             />
-            <RoadmapItem
-              phase="Phase 3"
-              title="Import Laporan Marketplace"
-              description="Upload Excel dari Shopee/TikTok Seller Center → auto-parse → sales_invoices + fee split."
+            <ActiveFlowItem
+              step="5"
+              href="/buku-besar/payroll"
+              title="Payroll &amp; Hutang Gaji"
+              description="Proses karyawan terpilih, unduh slip per orang, lalu bayar hutang gaji."
             />
-            <RoadmapItem
-              phase="Phase 4"
-              title="Chart of Accounts + Auto-Journal"
-              description="Struktur akun sesuai SAK-EMKM/ETAP. Auto posting dari PO, invoice, pembayaran."
-            />
-            <RoadmapItem
-              phase="Phase 4"
-              title="Buku Besar (General Ledger)"
-              description="Totalan per akun, mutasi, saldo awal-akhir. Filter periode, export PDF."
-            />
-            <RoadmapItem
-              phase="Phase 4"
+            <ActiveFlowItem
+              step="6"
+              href="/laporan-keuangan/neraca"
               title="Laporan Keuangan"
-              description="Neraca, laba rugi, perubahan ekuitas — siap serahkan ke jasa pajak."
+              description="Periksa neraca, laba rugi, arus kas, dan perubahan ekuitas sebelum tutup buku."
             />
           </div>
 
-          <div className="mt-5 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.04] px-4 py-3 text-xs text-amber-200/80">
+          <div className="mt-5 flex items-center gap-2 rounded-lg border border-sky-500/20 bg-sky-500/[0.05] px-4 py-3 text-xs text-sky-100/80">
             <BookOpen size={14} className="flex-shrink-0" />
             <span>
-              Detail di{" "}
-              <code className="rounded bg-amber-500/[0.1] px-1.5 py-0.5 font-mono">
-                docs/meeting2-execution-plan.md
-              </code>{" "}
-              · estimasi total: 8 minggu dari Phase 1.
+              Untuk urutan dari data awal sampai transaksi harian, buka{" "}
+              <Link className="font-semibold text-sky-300 hover:text-sky-200" href="/panduan">
+                Panduan Pemakaian
+              </Link>.
             </span>
           </div>
         </div>
@@ -236,12 +241,14 @@ function KpiCard({
   sublabel,
   icon,
   tone,
+  valueClassName,
 }: {
   label: string;
   value: string;
   sublabel: string;
   icon: React.ReactNode;
   tone: "default" | "success" | "danger" | "info";
+  valueClassName?: string;
 }) {
   const toneClass =
     tone === "success"
@@ -255,15 +262,15 @@ function KpiCard({
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-white/40">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-white/60">
           {label}
         </p>
         <span className={toneClass}>{icon}</span>
       </div>
-      <p className={`mt-2 text-2xl font-semibold tabular-nums ${toneClass}`}>
+      <p className={`mt-2 whitespace-nowrap font-semibold tabular-nums tracking-tight ${valueClassName ?? "text-2xl"} ${toneClass}`}>
         {value}
       </p>
-      <p className="mt-1 text-[11px] text-white/40">{sublabel}</p>
+      <p className="mt-1 text-[11px] text-white/60">{sublabel}</p>
     </div>
   );
 }
@@ -317,26 +324,28 @@ function ModuleCard({
   return <Link href={href}>{content}</Link>;
 }
 
-function RoadmapItem({
-  phase,
+function ActiveFlowItem({
+  step,
+  href,
   title,
   description,
 }: {
-  phase: string;
+  step: string;
+  href: string;
   title: string;
   description: string;
 }) {
   return (
-    <div className="rounded-lg border border-white/[0.04] bg-black/20 px-4 py-3">
+    <Link href={href} className="group rounded-lg border border-white/[0.04] bg-black/20 px-4 py-3 transition-colors hover:border-sky-400/20 hover:bg-sky-500/[0.04]">
       <div className="mb-1 flex items-center gap-2">
         <span className="rounded-full border border-sky-500/20 bg-sky-500/[0.08] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-300">
-          {phase}
+          Langkah {step}
         </span>
-        <h4 className="text-[13px] font-semibold text-white/90">{title}</h4>
+        <h3 className="text-[13px] font-semibold text-white/90">{title}</h3>
       </div>
       <p className="text-[11px] leading-relaxed text-white/50">
         {description}
       </p>
-    </div>
+    </Link>
   );
 }

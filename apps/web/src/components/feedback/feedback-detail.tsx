@@ -36,6 +36,12 @@ type Attachment = {
 };
 
 const STATUSES: FeedbackStatus[] = ["baru", "diproses", "selesai", "ditolak"];
+const STATUS_LABEL: Record<FeedbackStatus, string> = {
+  baru: "Baru",
+  diproses: "Sedang diproses",
+  selesai: "Selesai",
+  ditolak: "Ditolak",
+};
 
 export function FeedbackDetail({
   report,
@@ -50,6 +56,7 @@ export function FeedbackDetail({
 }) {
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
   const [urls, setUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -66,7 +73,13 @@ export function FeedbackDetail({
   async function send() {
     if (!body.trim()) return;
     setBusy(true);
-    await addFeedbackComment({ report_id: report.id, body });
+    setNotice("");
+    const result = await addFeedbackComment({ report_id: report.id, body });
+    if ("error" in result) {
+      setNotice("Balasan belum tersimpan. Coba lagi.");
+      setBusy(false);
+      return;
+    }
     setBody("");
     setBusy(false);
     location.reload();
@@ -74,7 +87,13 @@ export function FeedbackDetail({
 
   async function setStatus(status: FeedbackStatus) {
     setBusy(true);
-    await updateFeedbackStatus({ report_id: report.id, status });
+    setNotice("");
+    const result = await updateFeedbackStatus({ report_id: report.id, status });
+    if ("error" in result) {
+      setNotice("Status belum berubah. Coba lagi.");
+      setBusy(false);
+      return;
+    }
     setBusy(false);
     location.reload();
   }
@@ -117,23 +136,28 @@ export function FeedbackDetail({
       )}
 
       {isOwner && (
-        <div className="flex flex-wrap gap-2">
-          {STATUSES.map((s) => (
-            <button
-              key={s}
-              disabled={busy || s === report.status}
-              onClick={() => setStatus(s)}
-              className={`rounded-lg border px-3 py-1.5 text-xs ${
-                s === report.status
-                  ? "border-amber-400 bg-amber-400/20 text-amber-200"
-                  : "border-white/10 text-white/60 hover:bg-white/5"
-              }`}
-            >
-              {s}
-            </button>
-          ))}
+        <div>
+          <p className="mb-2 text-xs font-medium text-white/50">Status laporan</p>
+          <div className="flex flex-wrap gap-2">
+            {STATUSES.map((s) => (
+              <button
+                key={s}
+                disabled={busy || s === report.status}
+                onClick={() => setStatus(s)}
+                className={`rounded-lg border px-3 py-1.5 text-xs ${
+                  s === report.status
+                    ? "border-amber-400 bg-amber-400/20 text-amber-200"
+                    : "border-white/10 text-white/60 hover:bg-white/5"
+                }`}
+              >
+                {STATUS_LABEL[s]}
+              </button>
+            ))}
+          </div>
         </div>
       )}
+
+      {notice && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">{notice}</p>}
 
       <div className="flex flex-col gap-3 border-t border-white/10 pt-3">
         <h3 className="text-xs uppercase tracking-wide text-white/40">Diskusi</h3>
@@ -145,7 +169,9 @@ export function FeedbackDetail({
             <p className="whitespace-pre-wrap">{c.body}</p>
           </div>
         ))}
+        <label htmlFor="feedback-reply" className="sr-only">Balasan laporan</label>
         <textarea
+          id="feedback-reply"
           className="min-h-20 rounded-lg border border-white/10 bg-white/5 px-3 py-2"
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -156,7 +182,7 @@ export function FeedbackDetail({
           onClick={send}
           className="self-start rounded-lg bg-white/90 px-4 py-2 font-medium text-black disabled:opacity-40"
         >
-          Kirim
+          {busy ? "Menyimpan…" : "Kirim Balasan"}
         </button>
       </div>
     </div>

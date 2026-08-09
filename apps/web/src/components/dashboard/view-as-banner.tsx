@@ -35,7 +35,7 @@ export function ViewAsBanner({ current }: { current: Role | null }) {
           : "bg-white/[0.02] border-white/[0.05]",
       )}
     >
-      <span className="flex items-center gap-1.5 text-white/40 whitespace-nowrap">
+      <span className="flex items-center gap-1.5 text-white/60 whitespace-nowrap">
         <Eye size={13} />
         {previewing ? "Melihat sebagai" : "Lihat sebagai"}
       </span>
@@ -51,7 +51,7 @@ export function ViewAsBanner({ current }: { current: Role | null }) {
               "rounded px-2 py-0.5 font-medium whitespace-nowrap transition-colors disabled:opacity-50",
               current === r
                 ? "bg-amber-500/20 text-amber-200"
-                : "text-white/45 hover:bg-white/[0.05] hover:text-white/75",
+                : "text-white/60 hover:bg-white/[0.05] hover:text-white/85",
             )}
           >
             {ROLE_LABELS[r]}
