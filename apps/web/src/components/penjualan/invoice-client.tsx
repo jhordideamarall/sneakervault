@@ -939,6 +939,9 @@ function FormModal({
                 }
                 placeholder="cth: Budi Hartanto"
               />
+              <p className="mt-1 text-[11px] text-white/40">
+                Nama manual otomatis disimpan ke Master Data Customer saat invoice disimpan.
+              </p>
             </div>
           </div>
 

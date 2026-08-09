@@ -618,6 +618,8 @@ export type PayrollRunRow = {
   deductions: number;
   net_amount: number;
   status: string;
+  payment_status: "paid" | "payable";
+  liability_settled_at: string | null;
   notes: string | null;
   bank_account_id: string | null;
   bank_account_name: string | null;
@@ -631,6 +633,13 @@ export type PayrollRunRow = {
     deductions: number;
     net_salary: number;
     notes: string | null;
+    components: Array<{
+      id: string;
+      name: string;
+      kind: "earning" | "deduction";
+      amount: number;
+      sort_order: number;
+    }>;
   }>;
 };
 
@@ -639,7 +648,7 @@ export async function getPayrollRuns(): Promise<PayrollRunRow[]> {
   const supabase = await createClient();
   const { data } = await (supabase as any)
     .from("payroll_runs")
-    .select("id, period_month, payment_date, bank_account_id, gross_amount, deductions, net_amount, status, notes, created_at, bank_accounts:bank_account_id(name), payroll_lines(id, employee_id, base_salary, allowances, deductions, net_salary, notes, employees:employee_id(full_name))")
+    .select("id, period_month, payment_date, bank_account_id, gross_amount, deductions, net_amount, status, payment_status, liability_settled_at, notes, created_at, bank_accounts:bank_account_id(name), payroll_lines(id, employee_id, base_salary, allowances, deductions, net_salary, notes, employees:employee_id(full_name), payroll_line_components(id, name, kind, amount, sort_order))")
     .order("period_month", { ascending: false });
   return ((data as Array<{
     id: string;
@@ -649,6 +658,8 @@ export async function getPayrollRuns(): Promise<PayrollRunRow[]> {
     deductions: number;
     net_amount: number;
     status: string;
+    payment_status: "paid" | "payable";
+    liability_settled_at: string | null;
     notes: string | null;
     bank_account_id: string | null;
     created_at: string;
@@ -662,6 +673,13 @@ export async function getPayrollRuns(): Promise<PayrollRunRow[]> {
       net_salary: number;
       notes: string | null;
       employees: { full_name: string } | null;
+      payroll_line_components: Array<{
+        id: string;
+        name: string;
+        kind: "earning" | "deduction";
+        amount: number;
+        sort_order: number;
+      }> | null;
     }> | null;
   }> | null) ?? []).map((run) => ({
     id: run.id,
@@ -671,6 +689,8 @@ export async function getPayrollRuns(): Promise<PayrollRunRow[]> {
     deductions: Number(run.deductions ?? 0),
     net_amount: Number(run.net_amount ?? 0),
     status: run.status,
+    payment_status: run.payment_status,
+    liability_settled_at: run.liability_settled_at,
     notes: run.notes,
     bank_account_id: run.bank_account_id,
     bank_account_name: run.bank_accounts?.name ?? null,
@@ -684,6 +704,12 @@ export async function getPayrollRuns(): Promise<PayrollRunRow[]> {
       deductions: Number(line.deductions ?? 0),
       net_salary: Number(line.net_salary ?? 0),
       notes: line.notes,
+      components: (line.payroll_line_components ?? [])
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((component) => ({
+          ...component,
+          amount: Number(component.amount ?? 0),
+        })),
     })),
   }));
 }
@@ -3534,26 +3560,78 @@ export type GeneralLedgerReportRow = {
   account_code: string;
   account_name: string;
   account_type: AccountBalance["type"];
-  total_debit: number;
-  total_credit: number;
-  balance: number;
+  entry_date: string;
+  entry_number: string;
+  entry_description: string;
+  line_description: string | null;
+  source_type: string;
+  debit: number;
+  credit: number;
+  opening_balance: number;
+  running_balance: number;
 };
 
 export async function getGeneralLedgerReport(
   from?: string,
   to?: string,
 ): Promise<GeneralLedgerReportRow[]> {
-  const rows = await getAccountBalances({ from: from?.slice(0, 10), to: to?.slice(0, 10) });
-  return rows
-    .filter((row) => row.total_debit > 0 || row.total_credit > 0 || row.balance !== 0)
-    .map((row) => ({
-      account_code: row.code,
-      account_name: row.name,
-      account_type: row.type,
-      total_debit: row.total_debit,
-      total_credit: row.total_credit,
-      balance: row.balance,
-    }));
+  const fromDate = from?.slice(0, 10);
+  const toDate = to?.slice(0, 10);
+  const openingTo = fromDate
+    ? new Date(`${fromDate}T00:00:00.000Z`)
+    : null;
+  if (openingTo) openingTo.setUTCDate(openingTo.getUTCDate() - 1);
+
+  const [entries, openingBalances] = await Promise.all([
+    getJournalEntries({ from: fromDate, to: toDate, limit: 5000 }),
+    getAccountBalances({
+      to: openingTo ? openingTo.toISOString().slice(0, 10) : undefined,
+    }),
+  ]);
+  const accountMap = new Map(
+    openingBalances.map((account) => [account.account_id, account]),
+  );
+  const running = new Map(
+    openingBalances.map((account) => [account.account_id, account.balance]),
+  );
+
+  const flattened = entries
+    .filter((entry) => entry.status === "posted")
+    .flatMap((entry) =>
+      entry.lines.map((line) => ({ entry, line })),
+    )
+    .sort(
+      (a, b) =>
+        a.line.account_code.localeCompare(b.line.account_code) ||
+        a.entry.entry_date.localeCompare(b.entry.entry_date) ||
+        a.entry.entry_number.localeCompare(b.entry.entry_number),
+    );
+
+  return flattened.map(({ entry, line }) => {
+    const account = accountMap.get(line.account_id);
+    const opening = account?.balance ?? 0;
+    const previous = running.get(line.account_id) ?? opening;
+    const delta =
+      account?.normal_balance === "credit"
+        ? line.credit - line.debit
+        : line.debit - line.credit;
+    const next = previous + delta;
+    running.set(line.account_id, next);
+    return {
+      account_code: line.account_code,
+      account_name: line.account_name,
+      account_type: account?.type ?? "asset",
+      entry_date: entry.entry_date,
+      entry_number: entry.entry_number,
+      entry_description: entry.description,
+      line_description: line.description,
+      source_type: entry.source_type,
+      debit: line.debit,
+      credit: line.credit,
+      opening_balance: opening,
+      running_balance: next,
+    };
+  });
 }
 
 export type JournalReportRow = {
@@ -3653,6 +3731,7 @@ export async function getSalesReport(
 }
 
 export type StockMovementReportRow = {
+  product_id: string;
   movement_date: string;
   product_label: string;
   sku: string;
@@ -3662,6 +3741,9 @@ export type StockMovementReportRow = {
   adjustment: number;
   unit_cost: number;
   reference_type: string | null;
+  opening_balance: number;
+  running_balance: number;
+  closing_balance: number;
 };
 
 export async function getStockMovementReport(
@@ -3670,46 +3752,105 @@ export async function getStockMovementReport(
 ): Promise<StockMovementReportRow[]> {
   await requireOwnerOrFinance();
   const supabase = await createClient();
-  let query = supabase
+  const fromIso = from ?? "0001-01-01T00:00:00.000Z";
+  const toIso = to ?? new Date().toISOString();
+  const [{ data: products }, { data: movements }] = await Promise.all([
+    supabase
+      .from("products")
+      .select("id, brand, model, color, size, sku, quantity")
+      .eq("is_active", true)
+      .order("brand")
+      .order("model")
+      .limit(500),
+    supabase
     .from("stock_movements")
-    .select("created_at, type, quantity, unit_cost, reference_type, products:product_id(brand, model, color, size, sku)")
-    .order("created_at", { ascending: false })
-    .limit(800);
-  if (from) query = query.gte("created_at", from);
-  if (to) query = query.lte("created_at", to);
-  const { data } = await query;
-  return ((data as unknown as Array<{
+      .select("product_id, created_at, type, quantity, unit_cost, reference_type")
+      .gte("created_at", fromIso)
+      .order("created_at", { ascending: true })
+      .limit(5000),
+  ]);
+
+  type Product = {
+    id: string;
+    brand: string;
+    model: string;
+    color: string | null;
+    size: number | null;
+    sku: string;
+    quantity: number;
+  };
+  type Movement = {
+    product_id: string;
     created_at: string;
     type: string;
     quantity: number;
     unit_cost: number;
     reference_type: string | null;
-    products: {
-      brand: string;
-      model: string;
-      color: string | null;
-      size: number | null;
-      sku: string;
-    } | null;
-  }> | null) ?? []).map((row) => {
-    const qty = Number(row.quantity ?? 0);
-    const inbound = ["inbound", "return_in"].includes(row.type);
-    const outbound = ["outbound", "return_out"].includes(row.type);
-    const product = row.products;
-    return {
-      movement_date: row.created_at,
-      product_label: product
-        ? `${product.brand} ${product.model}${product.color ? ` ${product.color}` : ""} • Size ${product.size ?? "-"}`
-        : "Produk tidak ditemukan",
-      sku: product?.sku ?? "-",
-      type: row.type,
-      qty_in: inbound ? qty : 0,
-      qty_out: outbound ? qty : 0,
-      adjustment: !inbound && !outbound ? qty : 0,
-      unit_cost: Number(row.unit_cost ?? 0),
-      reference_type: row.reference_type,
-    };
-  });
+  };
+  const delta = (movement: Movement) => {
+    const quantity = Number(movement.quantity ?? 0);
+    if (["inbound", "return_in"].includes(movement.type)) return quantity;
+    if (["outbound", "return_out"].includes(movement.type)) return -quantity;
+    return quantity;
+  };
+
+  return ((products as Product[] | null) ?? []).flatMap((product) => {
+    const allSinceFrom = ((movements as Movement[] | null) ?? []).filter(
+      (movement) => movement.product_id === product.id,
+    );
+    const opening =
+      Number(product.quantity ?? 0) -
+      allSinceFrom.reduce((sum, movement) => sum + delta(movement), 0);
+    const periodMovements = allSinceFrom.filter(
+      (movement) => movement.created_at <= toIso,
+    );
+    const closing =
+      opening + periodMovements.reduce((sum, movement) => sum + delta(movement), 0);
+    const productLabel = `${product.brand} ${product.model}${
+      product.color ? ` ${product.color}` : ""
+    } • Size ${product.size ?? "-"}`;
+    let running = opening;
+
+    if (periodMovements.length === 0) {
+      return [{
+        product_id: product.id,
+        movement_date: fromIso,
+        product_label: productLabel,
+        sku: product.sku,
+        type: "saldo_periode",
+        qty_in: 0,
+        qty_out: 0,
+        adjustment: 0,
+        unit_cost: 0,
+        reference_type: null,
+        opening_balance: opening,
+        running_balance: opening,
+        closing_balance: closing,
+      }];
+    }
+
+    return periodMovements.map((movement) => {
+      const quantity = Number(movement.quantity ?? 0);
+      const inbound = ["inbound", "return_in"].includes(movement.type);
+      const outbound = ["outbound", "return_out"].includes(movement.type);
+      running += delta(movement);
+      return {
+        product_id: product.id,
+        movement_date: movement.created_at,
+        product_label: productLabel,
+        sku: product.sku,
+        type: movement.type,
+        qty_in: inbound ? quantity : 0,
+        qty_out: outbound ? quantity : 0,
+        adjustment: !inbound && !outbound ? quantity : 0,
+        unit_cost: Number(movement.unit_cost ?? 0),
+        reference_type: movement.reference_type,
+        opening_balance: opening,
+        running_balance: running,
+        closing_balance: closing,
+      };
+    });
+  }) as StockMovementReportRow[];
 }
 
 export type ArApReportRow = {
@@ -3724,7 +3865,10 @@ export type ArApReportRow = {
   status: string;
 };
 
-export async function getArApReport(): Promise<ArApReportRow[]> {
+export async function getArApReport(
+  from?: string,
+  to?: string,
+): Promise<ArApReportRow[]> {
   await requireOwnerOrFinance();
   const [ar, ap] = await Promise.all([
     getOutstandingSalesInvoices(),
@@ -3753,7 +3897,12 @@ export async function getArApReport(): Promise<ArApReportRow[]> {
       remaining: row.remaining,
       status: "outstanding",
     })),
-  ].sort((a, b) => b.remaining - a.remaining);
+  ]
+    .filter((row) => {
+      const date = row.document_date;
+      return (!from || date >= from.slice(0, 10)) && (!to || date <= to.slice(0, 10));
+    })
+    .sort((a, b) => b.remaining - a.remaining);
 }
 
 export async function getStockValue(): Promise<{ items: number; cost: number; retail: number }> {
@@ -4151,61 +4300,45 @@ export type StockCardRow = {
   inbound: number;
   outbound: number;
   adjustment: number;
+  opening_qty: number;
+  closing_qty: number;
   current_qty: number;
   last_movement_at: string | null;
 };
 
-export async function getStockCardReport(): Promise<StockCardRow[]> {
-  await requireOwnerOrFinance();
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("products")
-    .select("id, brand, model, size, sku, barcode, quantity, stock_movements(type, quantity, created_at)")
-    .eq("is_active", true)
-    .order("brand", { ascending: true })
-    .order("model", { ascending: true })
-    .limit(300);
-
-  return ((data as unknown as Array<{
-    id: string;
-    brand: string;
-    model: string;
-    size: number;
-    sku: string;
-    barcode: string;
-    quantity: number;
-    stock_movements: Array<{
-      type: string;
-      quantity: number;
-      created_at: string;
-    }> | null;
-  }> | null) ?? []).map((product) => {
-    const movements = product.stock_movements ?? [];
-    const inbound = movements
-      .filter((movement) => ["inbound", "return_in"].includes(movement.type))
-      .reduce((sum, movement) => sum + Number(movement.quantity ?? 0), 0);
-    const outbound = movements
-      .filter((movement) => ["outbound", "return_out"].includes(movement.type))
-      .reduce((sum, movement) => sum + Number(movement.quantity ?? 0), 0);
-    const adjustment = movements
-      .filter((movement) => movement.type === "adjustment")
-      .reduce((sum, movement) => sum + Number(movement.quantity ?? 0), 0);
-    const lastMovement = movements
-      .map((movement) => movement.created_at)
-      .sort()
-      .at(-1) ?? null;
-    return {
-      product_id: product.id,
-      product_label: `${product.brand} ${product.model} • Size ${Number(product.size)}`,
-      sku: product.sku,
-      barcode: product.barcode,
-      inbound,
-      outbound,
-      adjustment,
-      current_qty: Number(product.quantity ?? 0),
-      last_movement_at: lastMovement,
+export async function getStockCardReport(
+  from?: string,
+  to?: string,
+): Promise<StockCardRow[]> {
+  const movements = await getStockMovementReport(from, to);
+  const byProduct = new Map<string, StockCardRow>();
+  for (const movement of movements) {
+    const current = byProduct.get(movement.product_id) ?? {
+      product_id: movement.product_id,
+      product_label: movement.product_label,
+      sku: movement.sku,
+      barcode: "",
+      inbound: 0,
+      outbound: 0,
+      adjustment: 0,
+      opening_qty: movement.opening_balance,
+      closing_qty: movement.closing_balance,
+      current_qty: movement.closing_balance,
+      last_movement_at: null,
     };
-  });
+    current.inbound += movement.qty_in;
+    current.outbound += movement.qty_out;
+    current.adjustment += movement.adjustment;
+    current.closing_qty = movement.closing_balance;
+    current.current_qty = movement.closing_balance;
+    if (movement.type !== "saldo_periode") {
+      current.last_movement_at = movement.movement_date;
+    }
+    byProduct.set(movement.product_id, current);
+  }
+  return [...byProduct.values()].sort((a, b) =>
+    a.product_label.localeCompare(b.product_label),
+  );
 }
 
 // ─── Returns ───────────────────────────────────────────────

@@ -29,7 +29,7 @@ export const dynamic = "force-dynamic";
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; month?: string }>;
+  searchParams: Promise<{ date?: string; month?: string; from?: string; to?: string }>;
 }) {
   const sp = await searchParams;
 
@@ -39,7 +39,15 @@ export default async function ReportsPage({
   let to: string;
   let periodLabel: string;
 
-  if (sp.date) {
+  if (sp.from && sp.to) {
+    from = wibStartOfDay(sp.from);
+    to = wibEndOfDay(sp.to);
+    periodLabel = `${new Date(`${sp.from}T00:00:00Z`).toLocaleDateString("id-ID", {
+      day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
+    })} — ${new Date(`${sp.to}T00:00:00Z`).toLocaleDateString("id-ID", {
+      day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
+    })}`;
+  } else if (sp.date) {
     from = wibStartOfDay(sp.date);
     to = wibEndOfDay(sp.date);
     const [y, m, d] = sp.date.split("-").map(Number);
@@ -58,16 +66,31 @@ export default async function ReportsPage({
     periodLabel = "Bulan ini";
   }
 
-  const filterKey = sp.date || sp.month || "all";
+  const filterKey = `${sp.from ?? ""}-${sp.to ?? ""}-${sp.date ?? ""}-${sp.month ?? ""}`;
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
         <div>
           <h1 className="text-2xl font-bold text-white/90">Executive Summary</h1>
           <p className="text-sm text-white/40 mt-1">{periodLabel}</p>
         </div>
-        <ReportsExport />
+        <div className="flex flex-wrap items-end gap-2">
+          <form className="flex flex-wrap items-end gap-2" method="get">
+            <label className="text-xs text-white/45">
+              <span className="mb-1 block">Dari tanggal</span>
+              <input className="h-9 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white" type="date" name="from" defaultValue={from.slice(0, 10)} />
+            </label>
+            <label className="text-xs text-white/45">
+              <span className="mb-1 block">Sampai tanggal</span>
+              <input className="h-9 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white" type="date" name="to" defaultValue={to.slice(0, 10)} />
+            </label>
+            <button type="submit" className="h-9 rounded-md bg-white px-4 text-sm font-medium text-black hover:bg-white/90">
+              Terapkan Periode
+            </button>
+          </form>
+          <ReportsExport from={from} to={to} periodLabel={periodLabel} />
+        </div>
       </div>
 
       <Suspense key={`cards-${filterKey}`} fallback={<CardsSkeleton />}>
@@ -90,8 +113,8 @@ export default async function ReportsPage({
         <ChannelAndExpenseTables from={from} to={to} />
       </Suspense>
 
-      <Suspense fallback={<TableSkeleton />}>
-        <StockCardTable />
+      <Suspense key={`stock-card-${filterKey}`} fallback={<TableSkeleton />}>
+        <StockCardTable from={from} to={to} />
       </Suspense>
     </div>
   );
@@ -112,7 +135,7 @@ async function MandatoryReportsSection({
       getJournalReport(from, to),
       getSalesReport(from, to),
       getStockMovementReport(from, to),
-      getArApReport(),
+      getArApReport(from, to),
     ]);
 
   return (
@@ -391,18 +414,19 @@ async function ChannelAndExpenseTables({ from, to }: { from: string; to: string 
   );
 }
 
-async function StockCardTable() {
-  const rows = await getStockCardReport();
+async function StockCardTable({ from, to }: { from: string; to: string }) {
+  const rows = await getStockCardReport(from, to);
   return (
     <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
       <div className="border-b border-white/[0.04] px-6 py-4">
         <p className="text-sm font-medium text-white/80">Kartu Stok</p>
-        <p className="text-[11px] text-white/30">Ringkasan pergerakan inbound, outbound, adjustment, dan stok akhir</p>
+        <p className="text-[11px] text-white/30">Saldo awal, mutasi periode terpilih, dan saldo akhir per produk</p>
       </div>
       <table className="w-full">
         <thead>
           <tr className="border-b border-white/[0.04] text-[11px] uppercase tracking-wider text-white/30">
             <th className="px-6 py-3 text-left font-medium">Produk</th>
+            <th className="px-6 py-3 text-right font-medium">Awal</th>
             <th className="px-6 py-3 text-right font-medium">Masuk</th>
             <th className="px-6 py-3 text-right font-medium">Keluar</th>
             <th className="px-6 py-3 text-right font-medium">Adjust</th>
@@ -411,13 +435,14 @@ async function StockCardTable() {
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <tr><td colSpan={5} className="px-6 py-8 text-center text-sm text-white/25">Belum ada kartu stok.</td></tr>
+            <tr><td colSpan={6} className="px-6 py-8 text-center text-sm text-white/25">Belum ada kartu stok.</td></tr>
           ) : rows.slice(0, 25).map((row) => (
             <tr key={row.product_id} className="border-b border-white/[0.02]">
               <td className="px-6 py-3">
                 <p className="text-sm text-white/75">{row.product_label}</p>
                 <p className="font-mono text-[11px] text-white/30">{row.sku}</p>
               </td>
+              <td className="px-6 py-3 text-right text-xs font-semibold text-white/80">{row.opening_qty}</td>
               <td className="px-6 py-3 text-right text-xs text-white/50">{row.inbound}</td>
               <td className="px-6 py-3 text-right text-xs text-white/50">{row.outbound}</td>
               <td className="px-6 py-3 text-right text-xs text-white/50">{row.adjustment}</td>

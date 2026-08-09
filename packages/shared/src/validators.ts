@@ -622,11 +622,18 @@ export const employeeInputSchema = z.object({
 
 export type EmployeeInput = z.infer<typeof employeeInputSchema>;
 
+export const payrollComponentInputSchema = z.object({
+  name: z.string().trim().min(1, "Nama komponen wajib diisi").max(80),
+  kind: z.enum(["earning", "deduction"]),
+  amount: z.coerce.number().nonnegative(),
+});
+
 export const payrollLineInputSchema = z.object({
   employee_id: z.string().uuid(),
   base_salary: z.coerce.number().nonnegative(),
   allowances: z.coerce.number().nonnegative().default(0),
   deductions: z.coerce.number().nonnegative().default(0),
+  components: z.array(payrollComponentInputSchema).optional().default([]),
   notes: z.string().trim().optional(),
 });
 
@@ -640,6 +647,7 @@ export const payrollRunInputSchema = z.object({
 
 export type PayrollRunInput = z.infer<typeof payrollRunInputSchema>;
 export type PayrollLineInput = z.infer<typeof payrollLineInputSchema>;
+export type PayrollComponentInput = z.infer<typeof payrollComponentInputSchema>;
 
 // ─── Fixed Assets ─────────────────────────────────────────
 export const fixedAssetMethodEnum = z.enum(["straight_line", "double_declining"]);

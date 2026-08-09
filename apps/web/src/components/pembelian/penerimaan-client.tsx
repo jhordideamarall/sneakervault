@@ -311,8 +311,9 @@ export function PenerimaanClient({
         <strong>(2)</strong> hitung ulang HPP rata-rata per SKU,{" "}
         <strong>(3)</strong> set status Pembelian Barang menjadi <em>Receiving</em> (parsial) atau{" "}
         <em>Completed</em> (full).{" "}
-        <strong>Saat Pembelian Barang selesai, Faktur Pembelian otomatis dibuat</strong> sehingga tidak perlu input ulang.
-        Tinggal cek dan lanjut ke <strong>Bayar Vendor</strong>.
+        <strong>Saat Pembelian Barang selesai, Faktur Pembelian kredit otomatis dibuat</strong> sehingga tidak perlu input ulang.
+        Pembelian tunai/DP yang sudah dibayar saat persetujuan tidak memotong kas/bank lagi.
+        Untuk sisa kredit, cek faktur lalu lanjut ke <strong>Bayar Vendor</strong>.
         Untuk koreksi salah input, hapus Faktur Pembelian lebih dulu, lalu hapus dokumen RCV di Riwayat Penerimaan.
       </QuickTip>
 

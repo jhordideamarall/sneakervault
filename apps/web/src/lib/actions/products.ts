@@ -165,7 +165,7 @@ const createProductSchema = z.object({
 });
 
 export async function createProduct(input: unknown) {
-  const profile = await requireRole(["owner", "admin_gudang"]);
+  const profile = await requireRole(["owner", "admin_gudang", "finance"]);
   const parsed = createProductSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 

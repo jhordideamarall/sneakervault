@@ -38,22 +38,28 @@ export function MandatoryReportsClient({
       <div className="divide-y divide-white/[0.04]">
         <ReportBlock
           title="Laporan Buku Besar"
-          description="Ringkasan debit, kredit, dan saldo per akun COA."
-          columns={["Kode", "Akun", "Tipe", "Debit", "Kredit", "Saldo"]}
+          description="Seluruh detail transaksi per akun, dari saldo awal sampai saldo berjalan."
+          columns={["Kode", "Akun", "Tanggal", "No Jurnal", "Deskripsi", "Sumber", "Saldo Awal", "Debit", "Kredit", "Saldo Berjalan"]}
           rows={data.generalLedger.map((row) => [
             row.account_code,
             row.account_name,
-            row.account_type,
-            row.total_debit,
-            row.total_credit,
-            row.balance,
+            formatDate(row.entry_date),
+            row.entry_number,
+            row.line_description || row.entry_description,
+            row.source_type,
+            row.opening_balance,
+            row.debit,
+            row.credit,
+            row.running_balance,
           ])}
           preview={data.generalLedger.map((row) => [
             row.account_code,
-            row.account_name,
-            formatRupiah(row.total_debit),
-            formatRupiah(row.total_credit),
-            formatRupiah(row.balance),
+            formatDate(row.entry_date),
+            row.entry_number,
+            row.line_description || row.entry_description,
+            formatRupiah(row.debit),
+            formatRupiah(row.credit),
+            formatRupiah(row.running_balance),
           ])}
           periodLabel={periodLabel}
         />
@@ -104,16 +110,19 @@ export function MandatoryReportsClient({
         />
         <ReportBlock
           title="Laporan Stock / Kartu Stock"
-          description="Mutasi barang masuk, keluar, adjustment, dan referensi transaksi."
-          columns={["Tanggal", "Produk", "SKU", "Tipe", "Masuk", "Keluar", "Adjustment", "HPP", "Referensi"]}
+          description="Kartu stok per produk: saldo awal, setiap mutasi, saldo berjalan, dan saldo akhir periode."
+          columns={["Tanggal", "Produk", "SKU", "Tipe", "Saldo Awal", "Masuk", "Keluar", "Adjustment", "Saldo Berjalan", "Saldo Akhir", "HPP", "Referensi"]}
           rows={data.stockMovements.map((row) => [
             formatDate(row.movement_date),
             row.product_label,
             row.sku,
             row.type,
+            row.opening_balance,
             row.qty_in,
             row.qty_out,
             row.adjustment,
+            row.running_balance,
+            row.closing_balance,
             row.unit_cost,
             row.reference_type ?? "",
           ])}
@@ -121,17 +130,16 @@ export function MandatoryReportsClient({
             formatDate(row.movement_date),
             row.product_label,
             row.sku,
-            `${row.qty_in}/${row.qty_out}/${row.adjustment}`,
-            row.reference_type ?? "-",
+            `${row.opening_balance} → ${row.running_balance}`,
+            `Akhir ${row.closing_balance}`,
           ])}
           periodLabel={periodLabel}
         />
         <ReportBlock
-          title="Laporan Utang Piutang"
-          description="Outstanding AR/AP berdasarkan invoice belum lunas."
-          columns={["Jenis", "Pihak", "Dokumen", "Tanggal", "Jatuh Tempo", "Total", "Dibayar", "Sisa"]}
-          rows={data.arAp.map((row) => [
-            row.type,
+          title="Laporan Piutang Customer (AR)"
+          description="Piutang belum lunas, dipisahkan dan dikelompokkan berdasarkan customer."
+          columns={["Customer", "Dokumen", "Tanggal", "Jatuh Tempo", "Total", "Dibayar", "Sisa"]}
+          rows={data.arAp.filter((row) => row.type === "Piutang").map((row) => [
             row.party_name,
             row.document_number,
             formatDate(row.document_date),
@@ -140,14 +148,34 @@ export function MandatoryReportsClient({
             row.paid_amount,
             row.remaining,
           ])}
-          preview={data.arAp.map((row) => [
-            row.type,
+          preview={data.arAp.filter((row) => row.type === "Piutang").map((row) => [
             row.party_name,
             row.document_number,
             formatRupiah(row.remaining),
             row.due_date ? formatDate(row.due_date) : "-",
           ])}
-          periodLabel="Outstanding saat ini"
+          periodLabel={periodLabel}
+        />
+        <ReportBlock
+          title="Laporan Utang Supplier (AP)"
+          description="Utang belum lunas, dipisahkan dan dikelompokkan berdasarkan supplier."
+          columns={["Supplier", "Dokumen", "Tanggal", "Jatuh Tempo", "Total", "Dibayar", "Sisa"]}
+          rows={data.arAp.filter((row) => row.type === "Utang").map((row) => [
+            row.party_name,
+            row.document_number,
+            formatDate(row.document_date),
+            row.due_date ? formatDate(row.due_date) : "-",
+            row.total,
+            row.paid_amount,
+            row.remaining,
+          ])}
+          preview={data.arAp.filter((row) => row.type === "Utang").map((row) => [
+            row.party_name,
+            row.document_number,
+            formatRupiah(row.remaining),
+            row.due_date ? formatDate(row.due_date) : "-",
+          ])}
+          periodLabel={periodLabel}
         />
       </div>
     </div>
