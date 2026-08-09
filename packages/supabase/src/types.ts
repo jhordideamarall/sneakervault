@@ -3249,6 +3249,10 @@ export type Database = {
         Returns: Json
       }
       cleanup_old_chat_attachments: { Args: never; Returns: undefined }
+      create_manual_bank_transaction_atomic: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
       create_stock_movement: {
         Args: {
           p_notes?: string

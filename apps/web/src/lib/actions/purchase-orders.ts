@@ -116,36 +116,26 @@ export async function createPurchaseOrder(input: unknown) {
 }
 
 export async function approvePurchaseOrder(id: string) {
-  const profile = await requireRole([...ROLES]);
+  await requireRole([...ROLES]);
   const supabase = await createClient();
-
-  const { data: po, error: getErr } = await supabase
-    .from("purchase_orders")
-    .select("status")
-    .eq("id", id)
-    .single();
-  if (getErr || !po) return { error: "PO tidak ditemukan" };
-  if (po.status !== "draft")
-    return { error: "Hanya PO status Draft yang bisa disetujui" };
-
-  const { error } = await supabase
-    .from("purchase_orders")
-    .update({
-      status: "approved",
-      approved_by: profile.id,
-      approved_at: new Date().toISOString(),
-    })
-    .eq("id", id);
+  const { data, error } = await (supabase as any).rpc(
+    "approve_purchase_order_atomic",
+    { p_po_id: id },
+  );
   if (error) return { error: error.message };
 
-  await logActivity({
-    user_id: profile.id,
-    action: "approve",
-    entity_type: "purchase_order",
-    entity_id: id,
-  });
-  revalidatePath("/pembelian/purchase-order");
-  return { success: true };
+  for (const path of [
+    "/pembelian/purchase-order",
+    "/pembelian/faktur",
+    "/pembelian/pembayaran",
+    "/kas-bank/akun",
+    "/kas-bank/mutasi",
+    "/buku-besar/journal",
+    "/laporan-keuangan",
+  ]) {
+    revalidatePath(path);
+  }
+  return { success: true, data };
 }
 
 export async function cancelPurchaseOrder(id: string, reason?: string) {
@@ -175,6 +165,19 @@ export async function cancelPurchaseOrder(id: string, reason?: string) {
     return {
       error:
         "Pembelian Barang sudah memiliki Penerimaan Barang. Gunakan alur Hapus berurutan untuk koreksi data.",
+    };
+  }
+
+  const { count: invoiceCount, error: invoiceError } = await supabase
+    .from("purchase_invoices")
+    .select("id", { count: "exact", head: true })
+    .eq("po_id", id)
+    .neq("status", "cancelled");
+  if (invoiceError) return { error: invoiceError.message };
+  if (Number(invoiceCount ?? 0) > 0) {
+    return {
+      error:
+        "Pembelian Barang sudah memiliki Faktur/Pembayaran saat disetujui. Hapus Pembayaran Vendor lalu Faktur Pembelian terlebih dahulu agar saldo bank dan jurnal dibalik dengan aman.",
     };
   }
 

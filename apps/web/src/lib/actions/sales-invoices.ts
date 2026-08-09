@@ -30,6 +30,30 @@ function computeTotals(args: ComputeArgs): { subtotal: number; total: number } {
   return { subtotal, total: Math.max(0, total) };
 }
 
+async function resolveInvoiceCustomer(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  input: { customer_id?: string | null; customer_name: string; channel: string },
+) {
+  if (input.customer_id) return { customerId: input.customer_id };
+
+  const customerName = input.customer_name.trim();
+  const { data, error } = await (supabase as any).rpc(
+    "resolve_customer_for_invoice",
+    {
+      p_name: customerName,
+      p_channel: input.channel,
+    },
+  );
+  if (error || !data) {
+    return {
+      error:
+        error?.message ??
+        "Nama customer tidak dapat disimpan ke Master Data Pelanggan",
+    };
+  }
+  return { customerId: data as string };
+}
+
 export async function loadSalesInvoiceDetailAction(id: string) {
   await requireRole([...ROLES]);
   const { getSalesInvoiceById } = await import("@/lib/queries");
@@ -51,6 +75,8 @@ export async function createSalesInvoice(
   }
 
   const supabase = await createClient();
+  const customer = await resolveInvoiceCustomer(supabase, parsed.data);
+  if (customer.error) return { error: { _form: [customer.error] } };
 
   // Resolve product snapshots (label + hpp)
   const productIds = parsed.data.lines.map((l) => l.product_id);
@@ -98,8 +124,8 @@ export async function createSalesInvoice(
     .from("sales_invoices")
     .insert({
       invoice_number: invNum,
-      customer_id: parsed.data.customer_id || null,
-      customer_name: parsed.data.customer_name,
+      customer_id: customer.customerId,
+      customer_name: parsed.data.customer_name.trim(),
       channel: parsed.data.channel,
       invoice_date: parsed.data.invoice_date,
       due_date: parsed.data.due_date || null,
@@ -199,6 +225,7 @@ export async function createSalesInvoice(
   });
 
   revalidatePath("/penjualan/invoice");
+  revalidatePath("/customers");
   revalidatePath("/inventory");
   revalidatePath("/buku-besar/journal");
   return { data: invoice };
@@ -327,6 +354,9 @@ export async function updateSalesInvoice(id: string, input: unknown) {
   if (lock.error) return { error: { _form: [lock.error] } };
 
   const supabase = await createClient();
+  const customer = await resolveInvoiceCustomer(supabase, parsed.data);
+  if (customer.error) return { error: { _form: [customer.error] } };
+
   const { data: existing } = await supabase
     .from("sales_invoices")
     .select("status")
@@ -348,8 +378,8 @@ export async function updateSalesInvoice(id: string, input: unknown) {
   await supabase
     .from("sales_invoices")
     .update({
-      customer_id: parsed.data.customer_id || null,
-      customer_name: parsed.data.customer_name,
+      customer_id: customer.customerId,
+      customer_name: parsed.data.customer_name.trim(),
       channel: parsed.data.channel,
       invoice_date: parsed.data.invoice_date,
       due_date: parsed.data.due_date || null,
@@ -390,5 +420,6 @@ export async function updateSalesInvoice(id: string, input: unknown) {
     entity_id: id,
   });
   revalidatePath("/penjualan/invoice");
+  revalidatePath("/customers");
   return { success: true };
 }

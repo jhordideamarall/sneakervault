@@ -95,3 +95,21 @@ export async function deactivateEmployee(id: string) {
   revalidateEmployees();
   return { success: true };
 }
+
+export async function reactivateEmployee(id: string) {
+  const profile = await requireRole([...ROLES]);
+  const supabase = await createClient();
+  const { error } = await (supabase as any)
+    .from("employees")
+    .update({ is_active: true, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  await logActivity({
+    user_id: profile.id,
+    action: "reactivate",
+    entity_type: "employee",
+    entity_id: id,
+  });
+  revalidateEmployees();
+  return { success: true };
+}

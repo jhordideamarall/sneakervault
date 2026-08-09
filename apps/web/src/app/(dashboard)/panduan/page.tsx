@@ -218,7 +218,8 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         efek: [
           "Draft Pembelian Barang belum menambah stok.",
           "Barang baru dari Pembelian Barang dibuat ke inventory saat Penerimaan Barang.",
-          "Jika pembayaran/DP dipilih, kas/bank dan hutang mengikuti status Pembelian Barang dan faktur.",
+          "Bayar Lunas/DP memotong kas/bank tepat saat Pembelian Barang disetujui.",
+          "Penerimaan barang tidak memotong lagi nilai Lunas/DP yang sudah dibayar.",
         ],
         koreksi: [
           "Batalkan Pembelian Barang hanya jika supplier batal order dan belum ada Penerimaan Barang; alasan wajib diisi.",
@@ -333,7 +334,7 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         fungsi: "Membuat dan mengelola tagihan customer, termasuk invoice dari marketplace.",
         aturan: [
           "Draft belum menurunkan stok; Terbitkan untuk membuat transaksi berlaku.",
-          "Customer dan item wajib jelas.",
+          "Customer dan item wajib jelas; nama manual otomatis disimpan/ditautkan ke Master Data Customer.",
           "Invoice marketplace tidak dianggap lunas sebelum settlement/penerimaan dicatat.",
         ],
         efek: [
@@ -682,6 +683,26 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         ],
       },
       {
+        menu: "Data Karyawan & Penggajian",
+        akses: "Owner, Finance",
+        fungsi: "Mengelola karyawan, memproses payroll terpilih, slip individual, dan Hutang Gaji.",
+        aturan: [
+          "Payroll baru selalu kosong; tambah karyawan satu per satu.",
+          "Komponen pendapatan/potongan dapat diberi nama sendiri: gaji, harian, lembur, THR, bonus, BPJS, PPh, keterlambatan, dan lainnya.",
+          "Pilih akun bayar untuk pembayaran langsung, atau kosongkan untuk mencatat Hutang Gaji.",
+        ],
+        efek: [
+          "Payroll membentuk beban gaji, potongan, dan pembayaran atau Hutang Gaji secara atomik.",
+          "Slip PDF diunduh per karyawan dan menampilkan seluruh komponen.",
+          "Bayar Hutang Gaji memotong kas/bank dan hanya dapat dilakukan satu kali.",
+        ],
+        koreksi: [
+          "Edit payroll sebelum Hutang Gaji dilunasi.",
+          "Payroll yang Hutang Gajinya sudah lunas dikunci untuk menjaga mutasi bank dan jurnal.",
+          "Karyawan nonaktif dapat dipulihkan dengan tombol Aktifkan.",
+        ],
+      },
+      {
         menu: "Tutup Buku",
         akses: "Owner, Finance",
         fungsi: "Mengunci periode akuntansi agar data lama tidak berubah.",
@@ -703,8 +724,9 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         akses: "Owner, Finance",
         fungsi: "Melihat penjualan, channel, fee, expense, stok, dan barang aging.",
         aturan: [
-          "Gunakan untuk monitoring operasional, bukan laporan akuntansi formal.",
+          "Pilih Dari/Sampai tanggal sebelum membaca atau export laporan.",
           "Angka channel marketplace paling akurat setelah settlement masuk.",
+          "Buku Besar harus ditinjau sampai baris transaksi dan saldo berjalan, bukan hanya total akun.",
         ],
         efek: [
           "Tidak membuat transaksi.",
@@ -723,6 +745,8 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
           "Laporan bergantung pada jurnal yang balance.",
           "HPP harus terisi agar Laba Rugi akurat.",
           "Bank dan settlement harus direkonsiliasi sebelum dipakai untuk keputusan final.",
+          "Laba Tahun Berjalan pada Neraca sama dengan Laba Rugi sejak 1 Januari sampai tanggal Neraca.",
+          "Prive dibaca langsung dari akun 3.4, bukan angka rekonsiliasi residual.",
         ],
         efek: [
           "Tidak mengubah data.",
@@ -1085,7 +1109,7 @@ export default function PanduanPage() {
           </Sub>
           <Sub icon={<ClipboardList size={15} />} title="Stock Opname">
             Hitung fisik berkala. Buat sesi → input jumlah fisik → sistem hitung <b>selisih (variance)</b> vs sistem →
-            status Review → <b>Owner/Finance</b> mengunci hasil perbandingan. Hasil opname tidak otomatis menyesuaikan stok; export PDF/Excel dipakai sebagai dasar koreksi terpisah.
+            status Review → <b>Owner</b> menyetujui adjustment. Finance dapat memulai, menghitung, dan submit review dari tombol Stock Opname di Inventory.
           </Sub>
           <Sub icon={<PackageMinus size={15} />} title="Packing / Outbound">
             Scan barang yang dikirim untuk pesanan → stok turun → masuk halaman <b>Terjual</b>. Status: Packing → Dikirim → Selesai.
@@ -1105,9 +1129,9 @@ export default function PanduanPage() {
       >
         <Steps
           steps={[
-            { title: "Pembelian Barang Supplier", desc: "Pilih vendor + tambah item. Pembayaran: Kredit / Bayar Lunas / DP (pilih akun bank). Status Draft → Disetujui." },
-            { title: "Terima Barang (Penerimaan)", desc: "Saat barang datang, terima Pembelian Barang (boleh sebagian). Sistem membuat dokumen RCV; stok dan HPP diperbarui otomatis." },
-            { title: "Faktur Pembelian", desc: "Catat tagihan vendor (hutang/AP). Status Belum Dibayar → Sebagian → Lunas. Jurnal otomatis." },
+            { title: "Pembelian Barang Supplier", desc: "Pilih vendor + item. Kredit belum dibayar; Bayar Lunas/DP memotong akun bank tepat saat status Draft disetujui." },
+            { title: "Terima Barang (Penerimaan)", desc: "Terima barang (boleh sebagian). Stok/HPP diperbarui; pembayaran Lunas/DP tidak dipotong kedua kali." },
+            { title: "Faktur Pembelian", desc: "Faktur Lunas/DP terhubung sejak approval; faktur kredit otomatis terbentuk saat penerimaan selesai." },
             { title: "Bayar Vendor", desc: "Lunasi faktur dari kas/bank. Saldo bank turun, hutang berkurang, jurnal pembayaran otomatis." },
           ]}
         />
@@ -1227,16 +1251,28 @@ export default function PanduanPage() {
             Jurnal otomatis dari transaksi tidak boleh diedit langsung karena sumber angkanya ada di modul operasional.
           </Note>
         </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <Sub icon={<Users size={15} />} title="Data Karyawan">
+            Tambah, Edit, Nonaktifkan, atau Aktifkan kembali karyawan. Data ini menjadi pilihan pada payroll.
+          </Sub>
+          <Sub icon={<Receipt size={15} />} title="Penggajian & Slip Individual">
+            Payroll dimulai kosong → tambah karyawan satu per satu → isi komponen pendapatan/potongan → pilih akun bayar atau Hutang Gaji.
+            Gunakan menu Slip untuk download PDF per karyawan; gunakan Bayar Hutang untuk pelunasan berikutnya.
+          </Sub>
+        </div>
       </Section>
 
       {/* 10. Laporan */}
       <Section id="laporan" icon={<FileBarChart size={20} />} title="10 · Laporan Keuangan" subtitle="Real-time dari jurnal.">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 text-[13px] text-white/60">
           {[
-            ["Neraca", "Posisi aset, liabilitas, ekuitas"],
+            ["Buku Besar Detail", "Seluruh transaksi, saldo awal, dan saldo berjalan per akun"],
+            ["Kartu Stock", "Saldo awal, mutasi, saldo berjalan, dan saldo akhir per produk"],
+            ["Piutang / Utang", "AR customer dan AP supplier tersedia terpisah"],
+            ["Neraca", "Posisi aset, liabilitas, ekuitas, dan laba YTD"],
             ["Laba Rugi", "Pendapatan − HPP − beban = laba"],
             ["Arus Kas", "Aliran kas operasi/investasi/pendanaan"],
-            ["Perubahan Ekuitas", "Mutasi modal & laba ditahan"],
+            ["Perubahan Ekuitas", "Laba dari P&L; Prive langsung dari akun 3.4"],
             ["Laporan Operasional", "Penjualan, bestseller, laba per model"],
             ["Overview / Finance", "Ringkasan revenue, profit MTD, nilai stok"],
           ].map(([t, d]) => (
@@ -1245,6 +1281,12 @@ export default function PanduanPage() {
               <p className="text-white/45">{d}</p>
             </div>
           ))}
+        </div>
+        <div className="mt-3">
+          <Note>
+            Pilih <b>Dari tanggal</b> dan <b>Sampai tanggal</b>, lalu klik <b>Terapkan Periode</b> sebelum export PDF/Excel.
+            Label dan isi export mengikuti periode yang dipilih.
+          </Note>
         </div>
       </Section>
 
