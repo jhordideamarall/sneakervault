@@ -9,6 +9,7 @@ import {
 } from "@sneakervault/ui";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
+import { formatMonth } from "@/lib/format";
 import { 
   Building2, 
   Plus, 
@@ -19,7 +20,6 @@ import {
   User, 
   Edit2,
   Trash2,
-  ChevronRight,
 } from "lucide-react";
 
 type Supplier = {
@@ -141,10 +141,10 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
                 <Truck size={24} />
               </div>
               <div className="flex gap-1">
-                <Button variant="ghost" size="sm" onClick={() => startEdit(s)} className="h-8 w-8 p-0 text-white/20 hover:text-white hover:bg-white/5">
+                <Button variant="ghost" size="sm" onClick={() => startEdit(s)} aria-label={`Ubah supplier ${s.name}`} title={`Ubah ${s.name}`} className="h-8 w-8 p-0 text-white/20 hover:text-white hover:bg-white/5">
                   <Edit2 size={14} />
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => handleDelete(s.id)} className="h-8 w-8 p-0 text-white/20 hover:text-red-400 hover:bg-red-500/5">
+                <Button variant="ghost" size="sm" onClick={() => handleDelete(s.id)} aria-label={`Nonaktifkan supplier ${s.name}`} title={`Nonaktifkan ${s.name}`} className="h-8 w-8 p-0 text-white/20 hover:text-red-400 hover:bg-red-500/5">
                   <Trash2 size={14} />
                 </Button>
               </div>
@@ -153,7 +153,7 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
             <div className="space-y-4">
               <div>
                 <h3 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors">{s.name}</h3>
-                <div className="mt-1 flex items-center gap-1.5 text-xs text-white/40">
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-white/60">
                   <User size={12} />
                   {s.contact_person ?? "Tanpa kontak person"}
                 </div>
@@ -172,10 +172,8 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
             </div>
             
             <div className="mt-5 flex items-center justify-between pt-4 border-t border-white/[0.04]">
-               <span className="text-[10px] text-white/20 font-bold uppercase tracking-widest">Sejak: {new Date(s.created_at).toLocaleDateString("id-ID", { month: 'short', year: 'numeric' })}</span>
-               <div className="flex items-center gap-1 text-[10px] font-bold text-sky-400/60 uppercase group-hover:text-sky-400 transition-colors">
-                  Detail <ChevronRight size={10} />
-               </div>
+               <span className="text-[10px] text-white/60 font-bold uppercase tracking-widest">Sejak: {formatMonth(s.created_at) || "Belum tercatat"}</span>
+               <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-300">Aktif</span>
             </div>
           </Card>
         ))}

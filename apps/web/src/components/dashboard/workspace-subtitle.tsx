@@ -57,7 +57,7 @@ export function WorkspaceSubtitle({ role, userId }: { role: Role; userId: string
   }, [fetchInsights]);
 
   return (
-    <p className="mt-1 text-sm text-white/40">
+    <p className="mt-1 text-sm text-white/60">
       <span className="capitalize">{role.replace("_", " ")}</span>
       {insights.length > 0 && (
         <span> · {insights.map((i, idx) => (

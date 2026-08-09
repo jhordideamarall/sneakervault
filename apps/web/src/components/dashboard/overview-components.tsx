@@ -18,8 +18,8 @@ export async function WarehouseConditionSection() {
       
       <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
         <div className="mb-4">
-          <h3 className="text-sm font-semibold text-white/70">Nilai Aset (HPP)</h3>
-          <p className="text-[10px] text-white/30 uppercase tracking-widest mt-0.5">Total Modal Mengendap</p>
+          <h3 className="text-sm font-semibold text-white/70">Nilai Stok Operasional (HPP)</h3>
+          <p className="text-[10px] text-white/30 uppercase tracking-widest mt-0.5">Stok Fisik × HPP Rata-Rata</p>
         </div>
         <p className="text-3xl font-black text-white tabular-nums"><span className="text-xl font-semibold text-white/40 mr-1">Rp</span>{stats.totalValue.toLocaleString('id-ID')}</p>
       </div>

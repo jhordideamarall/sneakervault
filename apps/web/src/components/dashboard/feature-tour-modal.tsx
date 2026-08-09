@@ -86,7 +86,7 @@ export function FeatureTourModal({
 
         <div className="grid gap-0 md:grid-cols-[180px_1fr]">
           <aside className="border-b border-white/[0.06] bg-white/[0.02] p-4 md:border-b-0 md:border-r">
-            <div className="mb-3 text-xs font-medium text-white/45">
+            <div className="mb-3 text-xs font-medium text-white/65">
               Langkah {index + 1} dari {steps.length}
             </div>
             <div className="space-y-2">
@@ -99,7 +99,7 @@ export function FeatureTourModal({
                     "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs transition-colors",
                     stepIndex === index
                       ? "bg-white/[0.08] text-white"
-                      : "text-white/45 hover:bg-white/[0.04] hover:text-white/70",
+                      : "text-white/65 hover:bg-white/[0.04] hover:text-white/90",
                   )}
                 >
                   <span
@@ -107,7 +107,7 @@ export function FeatureTourModal({
                       "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px]",
                       stepIndex === index
                         ? "border-amber-300/40 bg-amber-300/15 text-amber-100"
-                        : "border-white/[0.08] text-white/35",
+                        : "border-white/[0.08] text-white/65",
                     )}
                   >
                     {stepIndex + 1}

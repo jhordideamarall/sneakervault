@@ -20,6 +20,14 @@ const actionLabels: Record<string, string> = {
   scan_out: "Scan Keluar",
   status_change: "Ubah Status",
   create: "Buat Baru",
+  create_and_issue: "Buat & Terbitkan Invoice",
+  approve: "Setujui",
+  receive: "Terima Barang",
+  hard_delete: "Hapus Permanen",
+  deactivate: "Nonaktifkan",
+  reactivate: "Aktifkan Kembali",
+  delete_request: "Minta Hapus",
+  bulk_import: "Import Massal",
   update: "Update Data",
   finalize_session: "Selesai Packing",
   cancel_session: "Batalkan Sesi",
@@ -43,6 +51,14 @@ const actionDots: Record<string, string> = {
   scan_out: "bg-indigo-500",
   status_change: "bg-amber-500",
   create: "bg-emerald-500",
+  create_and_issue: "bg-emerald-500",
+  approve: "bg-sky-500",
+  receive: "bg-blue-500",
+  hard_delete: "bg-red-500",
+  deactivate: "bg-white/30",
+  reactivate: "bg-emerald-500",
+  delete_request: "bg-red-400",
+  bulk_import: "bg-violet-500",
   cancel_session: "bg-red-500",
   initiate_return: "bg-purple-500",
   process_return: "bg-emerald-600",
@@ -198,7 +214,7 @@ export function RightSidebar({
       <div className="mx-5 border-t border-white/[0.06] flex-shrink-0" />
 
       {/* Activity Log Header - fixed above scroll */}
-      <p className="flex-shrink-0 text-[11px] font-bold uppercase tracking-widest text-white/30 px-6 pt-4 pb-2">
+      <p className="flex-shrink-0 text-[11px] font-bold uppercase tracking-widest text-white/60 px-6 pt-4 pb-2">
         {filter.date ? "Aktivitas Hari Itu" : filterIncludesNow ? "Aktivitas Terbaru" : "Aktivitas Bulan Itu"}
       </p>
 
@@ -212,7 +228,7 @@ export function RightSidebar({
 
           <div className="space-y-4">
             {activities.length === 0 ? (
-              <p className="text-xs text-white/40 px-2 italic text-center py-4">Belum ada aktivitas</p>
+              <p className="text-xs text-white/60 px-2 italic text-center py-4">Belum ada aktivitas</p>
             ) : (
               activities.map((a) => (
                 <ActivityItem key={a.id} activity={a} nowDayWIB={nowDayWIB} />
@@ -241,11 +257,11 @@ function ActivityItem({ activity: a, nowDayWIB }: { activity: ActivityEntry; now
                 <p className="text-[12px] font-bold text-white/90 truncate group-hover:text-white transition-colors">
                   {a.profiles?.full_name ?? "System"}
                 </p>
-                <span className="flex-shrink-0 text-[8px] uppercase tracking-tighter text-white/40 font-black border border-white/10 px-1.5 py-0.5 rounded bg-white/[0.03]">
+                <span className="flex-shrink-0 text-[8px] uppercase tracking-tighter text-white/65 font-black border border-white/10 px-1.5 py-0.5 rounded bg-white/[0.03]">
                   {primaryRole}
                 </span>
               </div>
-              <p className="text-[10px] text-white/30 font-medium">
+              <p className="text-[10px] text-white/60 font-medium">
                 {(() => {
                   const d = new Date(a.created_at);
                   const activityDayWIB = new Date(d.getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10);
@@ -288,7 +304,7 @@ function renderSimpleContent(a: ActivityEntry) {
     return (
       <div className="space-y-0.5">
         <p className="text-white/90 font-bold">{text("brand")} {text("model")}</p>
-        <p className="text-[9px] text-white/40 uppercase tracking-tighter">
+        <p className="text-[9px] text-white/65 uppercase tracking-tighter">
           SKU: <span className="text-white/60">{text("sku", "-")}</span> · Size: <span className="text-white/60">{text("size", "-")}</span>
         </p>
         <div className="flex items-center gap-2 mt-1">
@@ -303,7 +319,7 @@ function renderSimpleContent(a: ActivityEntry) {
     return (
       <div className="space-y-0.5">
         <p className="text-white/90 font-bold">{text("brand")} {text("model")}</p>
-        <p className="text-[9px] text-white/40 uppercase tracking-tighter">
+        <p className="text-[9px] text-white/65 uppercase tracking-tighter">
           Size: <span className="text-white/60">{text("size", "-")}</span> · <span className="text-white/60">{text("color")}</span>
         </p>
       </div>
@@ -337,7 +353,7 @@ function renderSimpleContent(a: ActivityEntry) {
         if (typeof val === 'object' || key === 'id' || key === 'note' || key === 'brand' || key === 'model') return null;
         return (
           <div key={key} className="flex gap-2">
-            <span className="text-white/30 capitalize font-bold">{key.replace('_', ' ')}:</span>
+            <span className="text-white/60 capitalize font-bold">{key.replace('_', ' ')}:</span>
             <span className="text-white/60 font-bold">{String(val)}</span>
           </div>
         );
@@ -426,7 +442,7 @@ function MiniCalendar() {
 
       <div className="grid grid-cols-7 mb-2">
         {days.map((d, i) => (
-          <span key={i} className="text-center text-[10px] font-bold text-white/40">{d}</span>
+          <span key={i} className="text-center text-[10px] font-bold text-white/60">{d}</span>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-y-1">
@@ -469,11 +485,11 @@ function MiniCalendar() {
       <div className="flex items-center gap-3 mt-3 px-1">
         <div className="flex items-center gap-1">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          <span className="text-[9px] text-white/30">Penjualan</span>
+          <span className="text-[9px] text-white/60">Penjualan</span>
         </div>
         <div className="flex items-center gap-1">
           <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-          <span className="text-[9px] text-white/30">Retur</span>
+          <span className="text-[9px] text-white/60">Retur</span>
         </div>
       </div>
     </div>

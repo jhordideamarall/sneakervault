@@ -35,7 +35,7 @@ export default async function FinanceLayout({
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-sm font-medium text-white">{profile.full_name}</p>
-              <p className="text-[11px] capitalize text-white/40">
+              <p className="text-[11px] capitalize text-white/60">
                 {roles.includes("owner") ? "Owner" : "Finance"}
               </p>
             </div>

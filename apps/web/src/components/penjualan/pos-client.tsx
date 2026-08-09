@@ -19,6 +19,7 @@ import { SALES_INVOICE_STATUS_LABELS } from "@sneakervault/shared";
 import type { BankAccountRow, CustomerRow, PosSaleRow } from "@/lib/queries";
 import {
   PosProductCard,
+  posModelLabel,
   type PosGroup,
   type PosProduct,
 } from "./pos-product-card";
@@ -191,7 +192,7 @@ export function PosClient({
       customer_name: customerName,
       payment_label: PAYMENT_LABELS[payment.payment_method] ?? "Lainnya",
       lines: cart.map((l) => ({
-        name: `${l.product.brand} ${l.product.model}${l.product.color ? ` ${l.product.color}` : ""} · ${l.product.size_label ?? l.product.size ?? "-"}`,
+        name: `${l.product.brand} ${posModelLabel(l.product.brand, l.product.model)}${l.product.color ? ` ${l.product.color}` : ""} · ${l.product.size_label ?? l.product.size ?? "-"}`,
         qty: l.qty,
         price: l.unit_price,
       })),
@@ -250,6 +251,7 @@ export function PosClient({
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-white/25" />
             <input
+              aria-label="Cari produk POS"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Cari produk, brand, warna…"
@@ -259,6 +261,7 @@ export function PosClient({
           <div className="relative hidden w-44 sm:block">
             <ScanBarcode className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-white/25" />
             <input
+              aria-label="Scan barcode atau SKU"
               ref={barcodeRef}
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
@@ -271,6 +274,7 @@ export function PosClient({
             type="button"
             onClick={() => setSettingsOpen(true)}
             title="Pengaturan struk"
+            aria-label="Buka pengaturan struk"
             className="grid size-12 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white/35 transition-colors hover:bg-white/[0.08] hover:text-white/80"
           >
             <Settings2 className="size-4" />
@@ -289,7 +293,7 @@ export function PosClient({
                     "h-8 whitespace-nowrap rounded-lg px-4 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95",
                     brand === b
                       ? "bg-white text-black shadow-md"
-                      : "text-white/40 hover:bg-white/[0.05] hover:text-white/80",
+                      : "text-white/65 hover:bg-white/[0.05] hover:text-white/90",
                   )}
                 >
                   {b === "all" ? "Semua" : b}
@@ -302,10 +306,10 @@ export function PosClient({
         {recentSales.length > 0 ? (
           <div className="border-t border-white/[0.04] px-4 py-3">
             <div className="mb-2 flex items-center justify-between">
-              <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/35">
+              <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/60">
                 Riwayat POS Terbaru
               </div>
-              <div className="text-[10px] font-bold text-white/25">
+              <div className="text-[10px] font-bold text-white/60">
                 {recentSales.length} transaksi
               </div>
             </div>
@@ -320,7 +324,7 @@ export function PosClient({
                         <div className="truncate font-mono text-[11px] font-black text-white/80">
                           {sale.invoice_number}
                         </div>
-                        <div className="mt-0.5 truncate text-xs text-white/45">
+                        <div className="mt-0.5 truncate text-xs text-white/60">
                           {sale.customer_name}
                         </div>
                       </div>
@@ -336,7 +340,7 @@ export function PosClient({
                       </span>
                     </div>
                     <div className="mt-2 flex items-end justify-between gap-3">
-                      <div className="text-[10px] leading-relaxed text-white/35">
+                      <div className="text-[10px] leading-relaxed text-white/60">
                         {formatDate(sale.invoice_date)}
                         <br />
                         {sale.line_count} item
@@ -363,14 +367,14 @@ export function PosClient({
               {products.length === 0 ? (
                 <>
                   <p className="text-sm font-bold text-white/80">Belum ada produk di sistem</p>
-                  <p className="mt-1 max-w-xs text-xs text-white/40">
+                  <p className="mt-1 max-w-xs text-xs text-white/60">
                     Tambahkan stok lewat Gudang → Barang Masuk, atau import data di Pengaturan → Sinkronisasi Data.
                   </p>
                 </>
               ) : (
                 <>
                   <p className="text-sm font-bold text-white/80">Produk tidak ditemukan</p>
-                  <p className="mt-1 text-xs text-white/40">Coba ubah kata kunci atau brand.</p>
+                  <p className="mt-1 text-xs text-white/60">Coba ubah kata kunci atau brand.</p>
                 </>
               )}
             </div>
@@ -404,7 +408,7 @@ export function PosClient({
 
         <div className="flex-1 overflow-y-auto p-3">
           {cart.length === 0 ? (
-            <div className="flex h-64 flex-col items-center justify-center text-white/20">
+            <div className="flex h-64 flex-col items-center justify-center text-white/60">
               <Package className="mb-3 size-10 stroke-[1.25px]" />
               <p className="text-[10px] font-black uppercase tracking-[0.3em]">Keranjang kosong</p>
             </div>
@@ -431,9 +435,9 @@ export function PosClient({
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[11px] font-black uppercase leading-tight text-white/90">
-                      {l.product.brand} {l.product.model}
+                      {l.product.brand} {posModelLabel(l.product.brand, l.product.model)}
                     </p>
-                    <p className="mt-0.5 text-[11px] font-black tabular-nums tracking-tighter text-white/35">
+                    <p className="mt-0.5 text-[11px] font-black tabular-nums tracking-tighter text-white/60">
                       Size {l.product.size_label ?? l.product.size ?? "-"} · {rp(l.unit_price)}
                     </p>
                   </div>
@@ -441,6 +445,7 @@ export function PosClient({
                     <button
                       type="button"
                       onClick={() => setQty(l.product.id, l.qty - 1)}
+                      aria-label={`Kurangi jumlah ${l.product.brand} ${posModelLabel(l.product.brand, l.product.model)}`}
                       className="grid size-6 place-items-center rounded-lg text-white/35 hover:bg-white/[0.08] hover:text-white"
                     >
                       <Minus className="size-3" />
@@ -451,6 +456,7 @@ export function PosClient({
                     <button
                       type="button"
                       onClick={() => setQty(l.product.id, l.qty + 1)}
+                      aria-label={`Tambah jumlah ${l.product.brand} ${posModelLabel(l.product.brand, l.product.model)}`}
                       className="grid size-6 place-items-center rounded-lg text-white/35 hover:bg-white/[0.08] hover:text-white"
                     >
                       <Plus className="size-3" />
@@ -471,7 +477,7 @@ export function PosClient({
           />
 
           <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-black uppercase tracking-widest text-white/30">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-black uppercase tracking-widest text-white/60">
               Diskon
             </span>
             <NumberInput
@@ -485,7 +491,7 @@ export function PosClient({
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] font-black uppercase tracking-widest text-white/30">
+              <span className="text-[10px] font-black uppercase tracking-widest text-white/60">
                 Subtotal
               </span>
               <span className="text-xs font-black tabular-nums text-white/50">

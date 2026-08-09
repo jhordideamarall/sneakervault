@@ -1,0 +1,50 @@
+# Operator Usability & Production UAT
+
+**Status:** [x] In Progress | [ ] Done | [ ] Blocked
+**Sprint:** Client UAT Correction — Usability Round 2
+**Tanggal Mulai:** 2026-08-09
+**Tanggal Selesai:** -
+
+## Tasks
+- [x] Audit seluruh halaman aplikasi melalui browser headless tanpa mengganggu Arc pengguna.
+- [x] Perbaiki tampilan Retur, POS, Supplier, Finance, Feedback, Activity Log, laporan, dan Sinkronisasi Data yang membingungkan operator.
+- [x] Tingkatkan kontras komponen bersama dan halaman kunci sampai tidak ada temuan aksesibilitas serius/kritis pada 10 halaman audit.
+- [x] Tambahkan backfill Master Pelanggan untuk invoice manual historis.
+- [x] Ganti akun bank QA sebagai default dengan alur Kas Toko/BCA tanpa menghapus histori.
+- [x] Uji migration baru dua kali di PostgreSQL disposable untuk membuktikan idempotensi.
+- [x] Uji 55 layar lokal, 7 layar pada viewport 1280 px, dan alur POS sampai form pembayaran tanpa submit.
+- [ ] Push feature branch melalui PR dan deploy aplikasi serta migration ke production.
+- [ ] Ulangi browser UAT production dan buat tutorial screenshot final dengan nama bersih.
+- [ ] Balas dan selesaikan UAT-0001 setelah seluruh bukti production hijau.
+
+## Verification Evidence
+- Local production build: passed.
+- ESLint: 0 errors; 64 existing warnings.
+- Browser sweep: 55 screenshots, 54 page/form results, 0 console errors, 0 page errors.
+- Responsive sweep at 1280×900: 0 document-level horizontal overflow.
+- Accessibility audit: 10 key pages, 0 serious/critical nodes after fixes.
+- POS: product can be added to cart and payment form opens; checkout was intentionally not submitted.
+- Database migrations: customer backfill and QA bank replacement both pass repeat/idempotency checks in disposable PostgreSQL.
+
+## Blockers
+- None. Production deploy and final UAT are pending in this same task.
+
+## Files Modified
+- `artifacts/050-operator-usability-production-uat/status.md`
+- `apps/web/src/app/(dashboard)/activity-log/page.tsx`
+- `apps/web/src/app/(dashboard)/feedback/page.tsx`
+- `apps/web/src/app/(dashboard)/reports/page.tsx`
+- `apps/web/src/app/finance/layout.tsx`
+- `apps/web/src/app/finance/page.tsx`
+- `apps/web/src/components/dashboard/*`
+- `apps/web/src/components/feedback/feedback-detail.tsx`
+- `apps/web/src/components/penjualan/pos-client.tsx`
+- `apps/web/src/components/penjualan/pos-payment-modal.tsx`
+- `apps/web/src/components/penjualan/pos-product-card.tsx`
+- `apps/web/src/components/reports/mandatory-reports-client.tsx`
+- `apps/web/src/components/returns/returns-client.tsx`
+- `apps/web/src/components/settings/data-sync-client.tsx`
+- `apps/web/src/components/suppliers/suppliers-client.tsx`
+- `apps/web/src/lib/queries/index.ts`
+- `apps/web/supabase/migrations/20260809084700_backfill_manual_invoice_customers.sql`
+- `apps/web/supabase/migrations/20260809091500_replace_qa_default_bank_account.sql`

@@ -28,6 +28,20 @@ export type PosGroup = {
   variants: PosProduct[];
 };
 
+/** Prevent imported rows such as brand=Adidas, model="Adidas Samba" from
+ * rendering as "Adidas Adidas Samba" without mutating the master data. */
+export function posModelLabel(brand: string, model: string) {
+  const cleanBrand = brand.trim();
+  const cleanModel = model.trim();
+  const prefix = `${cleanBrand.toLocaleLowerCase("id-ID")} `;
+
+  if (cleanBrand && cleanModel.toLocaleLowerCase("id-ID").startsWith(prefix)) {
+    return cleanModel.slice(cleanBrand.length).trim() || cleanModel;
+  }
+
+  return cleanModel;
+}
+
 /**
  * One card per model+color. Sneaker sizes are tap-to-add chips.
  */
@@ -40,6 +54,7 @@ export function PosProductCard({
 }) {
   const out = group.totalStock <= 0;
   const initials = (group.brand || "?").slice(0, 2).toUpperCase();
+  const modelLabel = posModelLabel(group.brand, group.model);
   const sizes = [...group.variants].sort(
     (a, b) => Number(a.size ?? 0) - Number(b.size ?? 0),
   );
@@ -58,16 +73,16 @@ export function PosProductCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={group.image}
-            alt={`${group.brand} ${group.model}`}
+            alt={`${group.brand} ${modelLabel}`}
             loading="lazy"
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             {initials === "?" ? (
-              <Package className="size-8 text-white/10" />
+              <Package aria-hidden="true" className="size-8 text-white/20" />
             ) : (
-              <span className="text-3xl font-black tracking-tighter text-white/10">
+              <span aria-hidden="true" className="text-3xl font-black tracking-tighter text-white/60">
                 {initials}
               </span>
             )}
@@ -91,12 +106,12 @@ export function PosProductCard({
         <div>
           <h3
             className="line-clamp-2 min-h-[2rem] text-[12px] font-black uppercase leading-tight tracking-tight text-white/90"
-            title={`${group.brand} ${group.model}`}
+            title={`${group.brand} ${modelLabel}`}
           >
-            {group.brand} {group.model}
+            {group.brand} {modelLabel}
           </h3>
           <div className="mt-1 flex items-center justify-between gap-2">
-            <span className="truncate text-[10px] font-bold uppercase tracking-tight text-white/35">
+            <span className="truncate text-[10px] font-bold uppercase tracking-tight text-white/60">
               {group.color ?? "—"}
             </span>
             <span className="shrink-0 text-[13px] font-black tabular-nums tracking-tighter text-white">
@@ -106,7 +121,7 @@ export function PosProductCard({
         </div>
 
         <div className="mt-auto border-t border-white/[0.05] pt-2.5">
-          <div className="flex h-8 flex-nowrap gap-1.5 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex max-h-[4.25rem] flex-wrap gap-1.5 overflow-y-auto pr-1">
             {sizes.map((v) => {
               const disabled = v.quantity <= 0;
               const sizeLabel =
@@ -121,6 +136,7 @@ export function PosProductCard({
                   disabled={disabled}
                   onClick={() => onAdd(v)}
                   title={`Size ${sizeLabel} · stok ${v.quantity}`}
+                  aria-label={`${group.brand} ${modelLabel}, size ${sizeLabel}, stok ${v.quantity}`}
                   className={cn(
                     "h-7 min-w-[38px] shrink-0 rounded-lg px-2 text-[11px] font-black tabular-nums transition-all active:scale-95",
                     disabled
