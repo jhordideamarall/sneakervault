@@ -1,0 +1,538 @@
+{
+  "generatedAt": "2026-08-09",
+  "productionProject": "jogqvffdjtjqdnflvubi",
+  "migrations": [
+    {
+      "filename": "20260510024012_backend_audit_fixes.sql",
+      "version": "20260510024012",
+      "source": "production-history",
+      "bytes": 1070,
+      "sha256": "86cb51ebe54e2f7c8dcfdcebf8a29685d185144a88f45d7e6eb0afde32176a70"
+    },
+    {
+      "filename": "20260510030352_seed_employee_helper.sql",
+      "version": "20260510030352",
+      "source": "production-history",
+      "bytes": 624,
+      "sha256": "aa3e6b05ac27f83ffa1e178a2ec70b099322086d579ed8daabe1257f810a578b"
+    },
+    {
+      "filename": "20260510033537_overview_performance_indexes.sql",
+      "version": "20260510033537",
+      "source": "production-history",
+      "bytes": 229,
+      "sha256": "ff046429b6473b1bf6758ae3aeb5e3333acfbf752c5be1edc462be4c27b5c668"
+    },
+    {
+      "filename": "20260510170032_internal_mail_presence.sql",
+      "version": "20260510170032",
+      "source": "production-history",
+      "bytes": 1345,
+      "sha256": "c62566e6e080a075c60f5c9efdcde9b58b9ab8720c5d53793a5edc8456d81d42"
+    },
+    {
+      "filename": "20260510175718_refine_chat_schema.sql",
+      "version": "20260510175718",
+      "source": "production-history",
+      "bytes": 406,
+      "sha256": "c14239b6b892f816c0f479c783027d48186d317ac9421ce46a305d1c9f0291a2"
+    },
+    {
+      "filename": "20260510180616_setup_chat_storage.sql",
+      "version": "20260510180616",
+      "source": "production-history",
+      "bytes": 773,
+      "sha256": "b9264267cbbf2ce9bd2f1a3e0b9290b6798044acc436644df869b2b4f083d91a"
+    },
+    {
+      "filename": "20260510201648_mail_notification_hardening.sql",
+      "version": "20260510201648",
+      "source": "production-history",
+      "bytes": 7939,
+      "sha256": "d9f58b0b9d27e09e8541e7b44b159ce3cabd956f2431cef83645cd93762fe38e"
+    },
+    {
+      "filename": "20260510204122_tighten_internal_messages_rls_roles.sql",
+      "version": "20260510204122",
+      "source": "production-history",
+      "bytes": 610,
+      "sha256": "fe1aa548d692750e0b4c66ca335ec3b9f11b2db378021053312c264b93f872f1"
+    },
+    {
+      "filename": "20260510204158_chat_attachment_cleanup_cron.sql",
+      "version": "20260510204158",
+      "source": "production-history",
+      "bytes": 980,
+      "sha256": "e839ce9e7caace4f87f349613d282c8ec0d90175ba5fdfdccf97e8d4e71c53ff"
+    },
+    {
+      "filename": "20260510204213_chat_rate_limit.sql",
+      "version": "20260510204213",
+      "source": "production-history",
+      "bytes": 1008,
+      "sha256": "102e1bb91e5176d0cdb2954d9bbf27d74059ce3c892995b4b7d8151393ce6543"
+    },
+    {
+      "filename": "20260510204311_revoke_internal_function_execute.sql",
+      "version": "20260510204311",
+      "source": "production-history",
+      "bytes": 251,
+      "sha256": "8e282183c6bd7cec3c114dc2b4034471de02842c6afd7b8b5dcee08f587849fe"
+    },
+    {
+      "filename": "20260510204319_restrict_chat_storage_listing.sql",
+      "version": "20260510204319",
+      "source": "production-history",
+      "bytes": 366,
+      "sha256": "de6c47fb9e17cc4c2ff1fa9ad56ab27934f41592df998ef527fa0435381bc5b4"
+    },
+    {
+      "filename": "20260510204327_fix_chat_storage_select_policy.sql",
+      "version": "20260510204327",
+      "source": "production-history",
+      "bytes": 397,
+      "sha256": "46215aec50d4166077b0f78769d7d19fff86f995c9e5da2c9a7eb3191ca1167f"
+    },
+    {
+      "filename": "20260510205713_enable_realtime_all_tables.sql",
+      "version": "20260510205713",
+      "source": "production-history",
+      "bytes": 463,
+      "sha256": "8a21fe6d7079b3b355b4338ab3ad8673aef4f9a5be3a163341955558957d78cd"
+    },
+    {
+      "filename": "20260510222742_storage_update_policy.sql",
+      "version": "20260510222742",
+      "source": "production-history",
+      "bytes": 302,
+      "sha256": "550eca4e95715addce7f4904ab31fd6b6d2cf9d532a88e6ab7a5eadde602c2b2"
+    },
+    {
+      "filename": "20260511142514_phase1_enums.sql",
+      "version": "20260511142514",
+      "source": "production-history",
+      "bytes": 194,
+      "sha256": "48cc3ce4c6b779cb01524e16cf7acff944bed74465e7c9122b8cea0bdc640134"
+    },
+    {
+      "filename": "20260511142536_phase1_meeting2.sql",
+      "version": "20260511142536",
+      "source": "production-history",
+      "bytes": 5946,
+      "sha256": "c3973c85038648adbb635d274bf87011ae0e0991c612c645f3e7c39528b661c5"
+    },
+    {
+      "filename": "20260511142546_phase2_customers.sql",
+      "version": "20260511142546",
+      "source": "production-history",
+      "bytes": 1798,
+      "sha256": "ed68b775498f46f4732c6d0de27f1b8041bce51d049e988dbeae95e877c05af4"
+    },
+    {
+      "filename": "20260511142712_phase2_purchase_cycle.sql",
+      "version": "20260511142712",
+      "source": "production-history",
+      "bytes": 11851,
+      "sha256": "7410dffa0f6dd79186d4b650b44ecfa79573acae2c0f6e702cb8582beace1e13"
+    },
+    {
+      "filename": "20260511142803_phase3_sales_kasbank.sql",
+      "version": "20260511142803",
+      "source": "production-history",
+      "bytes": 14137,
+      "sha256": "2b9a83accc5a2fad90df47354cb1e31355c347c0a7765044b758459bcf162d36"
+    },
+    {
+      "filename": "20260511142844_phase4_buku_besar.sql",
+      "version": "20260511142844",
+      "source": "production-history",
+      "bytes": 11124,
+      "sha256": "4c0d7c1d9da9fd6fc6f0116197b9e164f4cc7fba722035deb892b21698156404"
+    },
+    {
+      "filename": "20260513203213_phase5_po_payment_terms.sql",
+      "version": "20260513203213",
+      "source": "production-history",
+      "bytes": 793,
+      "sha256": "1d18c3295ed657c52e4a62d5e0534c4fa8aaaa69885fbc131e63bd24e0e2b611"
+    },
+    {
+      "filename": "20260513204704_phase6_perf_indexes_for_foreign_keys.sql",
+      "version": "20260513204704",
+      "source": "production-history",
+      "bytes": 4690,
+      "sha256": "54cd537fef121f6caa4dc50a2d3c932831c02a06608492d0f2772bcf9ca94106"
+    },
+    {
+      "filename": "20260513204738_phase6_security_hardening_rpc.sql",
+      "version": "20260513204738",
+      "source": "production-history",
+      "bytes": 2315,
+      "sha256": "7142502f7fcde19f9450b8f89dff26acceb5d6e064b694354b4bff7012398769"
+    },
+    {
+      "filename": "20260513204823_phase6_security_hardening_rpc_v2_revoke_public.sql",
+      "version": "20260513204823",
+      "source": "production-history",
+      "bytes": 3756,
+      "sha256": "2c16a97d17a1174c45d0c3050bcc1338c225a326487111b45653e9855db40b7d"
+    },
+    {
+      "filename": "20260513204908_phase6_explicit_table_grants_lockdown.sql",
+      "version": "20260513204908",
+      "source": "production-history",
+      "bytes": 1749,
+      "sha256": "6ab200c9509008d56d6a86fe77885b96bcec092829cbb825c646670f85c128ab"
+    },
+    {
+      "filename": "20260601143729_expenses_foundation.sql",
+      "version": "20260601143729",
+      "source": "production-history",
+      "bytes": 14540,
+      "sha256": "0506ec857a85dd9a5c0f1df8163ddfcf65040ec37344d11d1b411e1228e3d1d8"
+    },
+    {
+      "filename": "20260601143809_pdf_scope_gap_remaining.sql",
+      "version": "20260601143809",
+      "source": "production-history",
+      "bytes": 8348,
+      "sha256": "8d56b488e492dbad2c7d7a56c1f47f5071a269df24fc490a60469c6dd74d0703"
+    },
+    {
+      "filename": "20260601143924_pdf_scope_gap_fk_indexes.sql",
+      "version": "20260601143924",
+      "source": "production-history",
+      "bytes": 1116,
+      "sha256": "d08b5a87a33bd185b5ceb3bcdcf6822cb6641e1809194928684dd152596b60df"
+    },
+    {
+      "filename": "20260602100905_operational_hardening_no_reset.sql",
+      "version": "20260602100905",
+      "source": "production-history",
+      "bytes": 6698,
+      "sha256": "a76150d63eb142323092f8a1f278389bcb0f028853ee96f0024fc31434920e01"
+    },
+    {
+      "filename": "20260602103228_atomic_pos_checkout.sql",
+      "version": "20260602103228",
+      "source": "production-history",
+      "bytes": 10119,
+      "sha256": "352b97eb16b7783a390d498c0aa31c8652ec9c672ae55af9406f708c8305440e"
+    },
+    {
+      "filename": "20260602110621_seed_chart_of_accounts.sql",
+      "version": "20260602110621",
+      "source": "production-history",
+      "bytes": 4780,
+      "sha256": "ffb51d24d366270b665d3442832a0cf48746b8bd6069be1132b8cbbe8b13ca2e"
+    },
+    {
+      "filename": "20260602132429_perf_drop_duplicate_indexes.sql",
+      "version": "20260602132429",
+      "source": "production-history",
+      "bytes": 805,
+      "sha256": "40cadc92644dd6d0389479f7a289f6f2f65e1cfd58178ca73528662b66785ccd"
+    },
+    {
+      "filename": "20260602133233_product_photos_bucket.sql",
+      "version": "20260602133233",
+      "source": "production-history",
+      "bytes": 934,
+      "sha256": "9cd285604b5ec61331f2f26f9032f87378aec8233282c2443c719514c6b59bc2"
+    },
+    {
+      "filename": "20260602134246_perf_wrap_rls_initplan.sql",
+      "version": "20260602134246",
+      "source": "production-history",
+      "bytes": 1960,
+      "sha256": "1c5a8f587a3e8c8533cf0ca3964e31d83213601d7c940eff088aad761f8ae0fd"
+    },
+    {
+      "filename": "20260612085342_marketplace_add_tokopedia_channel.sql",
+      "version": "20260612085342",
+      "source": "production-history",
+      "bytes": 72,
+      "sha256": "50942f650ce3df913b56747dd8d4737148c6aa8758cd87e23686a6df7417e7ae"
+    },
+    {
+      "filename": "20260612085525_marketplace_sync_foundation.sql",
+      "version": "20260612085525",
+      "source": "production-history",
+      "bytes": 9810,
+      "sha256": "927939f3d47bfa02d7424fb27498cc2ece4e47aca4e00862c8ee2657f1e372a0"
+    },
+    {
+      "filename": "20260612091135_settle_marketplace_atomic.sql",
+      "version": "20260612091135",
+      "source": "production-history",
+      "bytes": 5145,
+      "sha256": "b6ec0c1fac7892bf5113c3adb1b977fa46582bb9ce87dc9374104d8f17330f38"
+    },
+    {
+      "filename": "20260612110254_realtime_signal_tables.sql",
+      "version": "20260612110254",
+      "source": "production-history",
+      "bytes": 492,
+      "sha256": "b6221697625e2e9377634d32e79d7750ba8f807b52a30a8242b3e74e422e9b26"
+    },
+    {
+      "filename": "20260612112246_po_manual_new_product_lines.sql",
+      "version": "20260612112246",
+      "source": "production-history",
+      "bytes": 531,
+      "sha256": "ac15f9b31ccef518b4d4024d70fb84cfc74d59c376556db5712debc8fcc93288"
+    },
+    {
+      "filename": "20260612175852_settlement_single_step_customer_payment.sql",
+      "version": "20260612175852",
+      "source": "production-history",
+      "bytes": 6795,
+      "sha256": "eaca3714eb42ac1d5ea53cd37590981ee5023384197493c32b3c7f2f9726762b"
+    },
+    {
+      "filename": "20260612180645_marketplace_rpc_temp_table_cleanup.sql",
+      "version": "20260612180645",
+      "source": "production-history",
+      "bytes": 12249,
+      "sha256": "fa020365d1fae46bc10ab685005887bdac2be16622ef467e64471fea1b8087da"
+    },
+    {
+      "filename": "20260613115539_feedback_tables.sql",
+      "version": "20260613115539",
+      "source": "production-history",
+      "bytes": 5215,
+      "sha256": "4707282db45d52f2f6c1df671aaf8734827a728467cf8c4dad51cb1f9934783e"
+    },
+    {
+      "filename": "20260613115609_feedback_storage.sql",
+      "version": "20260613115609",
+      "source": "production-history",
+      "bytes": 1192,
+      "sha256": "71ed737e5c792e9a9c41944c0c54b61491832e1d0837954b9b7788b4eb51b202"
+    },
+    {
+      "filename": "20260613123239_feedback_bucket_limits.sql",
+      "version": "20260613123239",
+      "source": "production-history",
+      "bytes": 183,
+      "sha256": "13606be8e3fa8ffe80adbd2edf44c3abb99f7becfc0a22f2bb14a548e127d84a"
+    },
+    {
+      "filename": "20260613131631_inventory_perf_queries.sql",
+      "version": "20260613131631",
+      "source": "production-history",
+      "bytes": 4277,
+      "sha256": "b273e46502d4fcdd6595d99c4eecb445008424a4046526f1d7c9ab3a3915cee3"
+    },
+    {
+      "filename": "20260613131717_inventory_perf_queries_search_path.sql",
+      "version": "20260613131717",
+      "source": "production-history",
+      "bytes": 406,
+      "sha256": "561427dee7408111ef2f51a9724d9f1fb631bd599490a54ca4814bcabdc560e0"
+    },
+    {
+      "filename": "20260613133600_accounting_perf_queries.sql",
+      "version": "20260613133600",
+      "source": "production-history",
+      "bytes": 11195,
+      "sha256": "08e2657d47504f516a0555c0e8b7bf18e11b2b771c828fd885ce558f9d8c3004"
+    },
+    {
+      "filename": "20260613191434_size_label_freetext.sql",
+      "version": "20260613191434",
+      "source": "production-history",
+      "bytes": 4311,
+      "sha256": "4a40f525db8dc73ea2672b7a00671652a8d5dba6220f0617ef12c6f783c44ac9"
+    },
+    {
+      "filename": "20260613191635_import_role_finance.sql",
+      "version": "20260613191635",
+      "source": "production-history",
+      "bytes": 5745,
+      "sha256": "79fc5ff0a79027c0bc8a2e81e6df2b0a60af1c6b05d348ba2ab4ca6f7518614a"
+    },
+    {
+      "filename": "20260613194917_sku_map_role_finance.sql",
+      "version": "20260613194917",
+      "source": "production-history",
+      "bytes": 379,
+      "sha256": "becdc4548fbe402f00e999d37181daf5fea25043561762be26ca3234d8ae0c83"
+    },
+    {
+      "filename": "20260613194932_inventory_search_size_label.sql",
+      "version": "20260613194932",
+      "source": "production-history",
+      "bytes": 2646,
+      "sha256": "c77642bd077df5312f97f22bc1d188d4018f78f774f6f1a5d4cd2c3a78e77b2e"
+    },
+    {
+      "filename": "20260613200933_multichannel_prices.sql",
+      "version": "20260613200933",
+      "source": "production-history",
+      "bytes": 677,
+      "sha256": "2d2d0fb891025f1dc6e3737136c167a1c75b8f7dab59a47466a25928924c0fe8"
+    },
+    {
+      "filename": "20260613203425_sku_anchor_variants.sql",
+      "version": "20260613203425",
+      "source": "production-history",
+      "bytes": 2817,
+      "sha256": "a18e95105ca79efd1e2306c5c2e97d43c46396a75e67576e99db2d2b19b587f4"
+    },
+    {
+      "filename": "20260613204914_size_label_normalize.sql",
+      "version": "20260613204914",
+      "source": "production-history",
+      "bytes": 466,
+      "sha256": "4989bcca1ae59de3080871700e90a13082a68baa8eab53b2b75613272063c0d6"
+    },
+    {
+      "filename": "20260613214901_products_unique_numeric_size.sql",
+      "version": "20260613214901",
+      "source": "production-history",
+      "bytes": 154,
+      "sha256": "f31191ec1c9aa9ed0f63044b66a6e08afe7776e546bf152283e6f3533fe683aa"
+    },
+    {
+      "filename": "20260627122908_parse_us_size_labels.sql",
+      "version": "20260627122908",
+      "source": "production-history",
+      "bytes": 1002,
+      "sha256": "253ec6fbb582c229bd8a227ab38f146c6f246bbcfd2f521a5b7c5d693d1865d9"
+    },
+    {
+      "filename": "20260627123645_inventory_channel_prices.sql",
+      "version": "20260627123645",
+      "source": "production-history",
+      "bytes": 2991,
+      "sha256": "a6f10fcdf51c787486bf63117e2702a84c232a19c352ae651d1b18dd6ae95ed7"
+    },
+    {
+      "filename": "20260627125947_normalize_compact_half_sizes.sql",
+      "version": "20260627125947",
+      "source": "production-history",
+      "bytes": 1552,
+      "sha256": "de2d92672c5680a1f473bfd1b056adb442502beb4858c5807fe3d99c23e73756"
+    },
+    {
+      "filename": "20260627142826_marketplace_cancel_fee_hardening.sql",
+      "version": "20260627142826",
+      "source": "production-history",
+      "bytes": 5910,
+      "sha256": "53bb2f1a13ed2dac84840b8b679e741db4b13ef1c6557f3eda3ef8e1a7fc7cd4"
+    },
+    {
+      "filename": "20260627223540_pre_order_foundation.sql",
+      "version": "20260627223540",
+      "source": "production-history",
+      "bytes": 11186,
+      "sha256": "5c59522ca2f9f33a2d3b7dc4d7be0b24f2294c58f6ef5a1c76de39d03756c8e5"
+    },
+    {
+      "filename": "20260628140254_packing_preorder_reservation_link.sql",
+      "version": "20260628140254",
+      "source": "production-history",
+      "bytes": 156,
+      "sha256": "21ec86e699d96a4315b6f3579dfdf56d6d3d620933561e90b094843679c6fbca"
+    },
+    {
+      "filename": "20260628221849_marketplace_order_no_stock.sql",
+      "version": "20260628221849",
+      "source": "production-history",
+      "bytes": 132,
+      "sha256": "b18d8d5ff65c69db4b9aef018629ab29b24efa7447d19cfad3db9d98368e4cfa"
+    },
+    {
+      "filename": "20260713194949_client_accounting_revision.sql",
+      "version": "20260713194949",
+      "source": "production-history",
+      "bytes": 14924,
+      "sha256": "ae26d06bdf1b76431ccd776394f2303a0b573923075d74eae2282d00e101a25d"
+    },
+    {
+      "filename": "20260713210218_user_feature_tour_states.sql",
+      "version": "20260713210218",
+      "source": "production-history",
+      "bytes": 1326,
+      "sha256": "5bc58dc9e87ff9884a34ae007899c6d30bbacb72d73d732338013e68c09bbb67"
+    },
+    {
+      "filename": "20260713211116_tighten_feature_tour_rls.sql",
+      "version": "20260713211116",
+      "source": "production-history",
+      "bytes": 1091,
+      "sha256": "5173f0853b4ce660ffff78354ec0e0b00e23a60c75db62fd9479bbe0b1ec5ee5"
+    },
+    {
+      "filename": "20260713211251_restrict_feature_tour_grants.sql",
+      "version": "20260713211251",
+      "source": "production-history",
+      "bytes": 175,
+      "sha256": "c5442886cd5aed1c6d039d96cdd3cbd6fd73e2ecdacc48c96389400a5540a84b"
+    },
+    {
+      "filename": "20260719085336_cancel_pos_checkout.sql",
+      "version": "20260719085336",
+      "source": "production-history",
+      "bytes": 7094,
+      "sha256": "0b7fe36320f03613ab42940021d7e331c56553f3a05c49ea2241ddcbb0dd2586"
+    },
+    {
+      "filename": "20260719085438_update_payroll_run_atomic.sql",
+      "version": "20260719085438",
+      "source": "production-history",
+      "bytes": 10644,
+      "sha256": "b154105c01dce009aca4d22dd33aebcab3df18b8d36ac88ab325d0e997ef2a41"
+    },
+    {
+      "filename": "20260719085447_fixed_asset_account_selection.sql",
+      "version": "20260719085447",
+      "source": "production-history",
+      "bytes": 593,
+      "sha256": "2f2511704a0e9ec5f56f8551d6a57b02f6b3b1fd4a5adc03ead95af4f23394bc"
+    },
+    {
+      "filename": "20260719131645_purchase_receipts_and_atomic_receive.sql",
+      "version": "20260719131645",
+      "source": "production-history",
+      "bytes": 28226,
+      "sha256": "1fbcf6f1f1f6533018fdf414d708a7492e24bfb809fd445b5e2784d4bdfbb1b8"
+    },
+    {
+      "filename": "20260719131934_transaction_hard_delete_rpcs.sql",
+      "version": "20260719131934",
+      "source": "production-history",
+      "bytes": 33651,
+      "sha256": "eed3e52e130b2ad4741fe3aadb380aef6e4c8e9f90ce46852041752da00f6f9c"
+    },
+    {
+      "filename": "20260726120234_logistics_reservation_size_integrity.sql",
+      "version": "20260726120234",
+      "source": "pending-reviewed",
+      "bytes": 27971,
+      "sha256": "dcf3a8238255750d1a3988e720659f05746667bafb4645aac9d5629adb49b0a8"
+    },
+    {
+      "filename": "20260726120800_bank_coa_posting_integrity.sql",
+      "version": "20260726120800",
+      "source": "pending-reviewed",
+      "bytes": 22451,
+      "sha256": "1e35c61ce98e581d69bc37f0edc13935b95905c04a68c726edc2ded9284573a8"
+    },
+    {
+      "filename": "20260726123156_manual_bank_transaction_atomic.sql",
+      "version": "20260726123156",
+      "source": "pending-reviewed",
+      "bytes": 10803,
+      "sha256": "eff41278dd41b36000000dac7d11653ab5babfa82579d11ba5e7a90ad6263ed2"
+    },
+    {
+      "filename": "20260808233901_uat_0001_finance_workflows.sql",
+      "version": "20260808233901",
+      "source": "pending-reviewed",
+      "bytes": 35141,
+      "sha256": "6b73008b94be4a41698baa29605b9db2f319526963b97b3254d58c97c5184604"
+    }
+  ]
+}

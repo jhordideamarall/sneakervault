@@ -21,6 +21,7 @@ import {
   Search,
   ShieldAlert,
   Clock,
+  ClipboardList,
 } from "lucide-react";
 import { createProduct } from "@/lib/actions/products";
 import { createClient } from "@sneakervault/supabase/client";
@@ -212,6 +213,10 @@ export function InventoryClient({
   const canEditPrice = canEditPriceFn(roleList);
   const canEditInventory =
     roleList.includes("owner") || roleList.includes("admin_gudang");
+  const canCreateProduct =
+    canEditInventory || roleList.includes("finance");
+  const canUseStockOpname =
+    canEditInventory || roleList.includes("finance");
   const canChangeCondition = canChangeProductCondition(roleList);
 
   useLiveRefresh(["products"]);
@@ -321,8 +326,18 @@ export function InventoryClient({
             pdfLabel="Produk PDF"
             excelLabel="Produk Excel"
           />
+          {canUseStockOpname && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => router.push("/inventory/opname")}
+            >
+              <ClipboardList size={14} />
+              Stock Opname
+            </Button>
+          )}
           {canEditInventory && <BulkImportButton />}
-          {canEditInventory && (
+          {canCreateProduct && (
             <Button size="sm" onClick={() => setShowAdd(true)}>
               + Tambah Produk
             </Button>

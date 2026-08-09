@@ -102,9 +102,11 @@ function SectionTable({
 export function NeracaClient({
   initialBalances,
   initialTo,
+  initialNetIncome,
 }: {
   initialBalances: AccountBalance[];
   initialTo: string;
+  initialNetIncome: number;
 }) {
   const router = useRouter();
   const [toDate, setToDate] = useState(initialTo);
@@ -122,13 +124,8 @@ export function NeracaClient({
     [initialBalances],
   );
 
-  // Net income = Revenue − COGS − Expenses (closes to equity at period end)
-  const netIncome = useMemo(() => {
-    const rev = sumLeaves(initialBalances.filter((a) => a.type === "revenue"));
-    const cogs = sumLeaves(initialBalances.filter((a) => a.type === "cogs"));
-    const exp = sumLeaves(initialBalances.filter((a) => a.type === "expense"));
-    return rev - cogs - exp;
-  }, [initialBalances]);
+  // Must equal YTD P&L for the same year and selected closing date.
+  const netIncome = initialNetIncome;
 
   const totalEquityWithIncome = totalEquity + netIncome;
   const totalLiabEquity = totalLiab + totalEquityWithIncome;

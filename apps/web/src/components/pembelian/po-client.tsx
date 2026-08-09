@@ -466,7 +466,10 @@ export function PurchaseOrderClient({
         toast.push(typeof r.error === "string" ? r.error : "Gagal", "error");
         return;
       }
-      toast.push("Pembelian Barang disetujui dan siap diterima gudang", "success");
+      toast.push(
+        "Pembelian Barang disetujui; pembayaran tunai/DP sudah memotong kas/bank dan barang siap diterima",
+        "success",
+      );
       close();
       router.refresh();
     });
@@ -583,7 +586,8 @@ export function PurchaseOrderClient({
         tone="info"
       >
         <strong>1. Buat Pembelian Barang</strong> → <strong>2. Setujui</strong> → <strong>3. Penerimaan Barang</strong> (stok dan HPP otomatis, lalu{" "}
-        <strong>Faktur Pembelian dibuat saat Pembelian Barang selesai diterima</strong>) → <strong>4. Bayar Vendor</strong>.
+        Untuk tunai/DP, faktur dan pembayaran dibuat saat <strong>Pembelian Barang disetujui</strong>.
+        Untuk kredit, lanjut <strong>Terima Barang → Faktur Pembelian → Bayar Vendor</strong>.
         <br />
         <span className="mt-1 inline-block text-[12px] text-white/55">
           <strong>Pembelian Barang supplier berbeda dari Pre Order customer.</strong>{" "}
@@ -1639,7 +1643,7 @@ function PaymentSection({
         <div>
           <h4 className="text-sm font-semibold text-white">Pembayaran ke Vendor</h4>
           <p className="text-[11px] text-white/40 mt-0.5">
-            Pilih cara bayar saat membuat Pembelian Barang. Saat barang diterima,
+            Pilih cara bayar saat membuat Pembelian Barang. Saat disetujui,
             sistem otomatis mencatat sesuai pilihan ini.
           </p>
         </div>
@@ -1656,7 +1660,7 @@ function PaymentSection({
           active={form.payment_type === "cash"}
           onClick={() => selectPayment("cash")}
           title="Bayar Lunas"
-          desc="Bayar penuh saat barang diterima"
+          desc="Bayar penuh saat Pembelian Barang disetujui"
         />
         <PayOption
           active={form.payment_type === "dp"}

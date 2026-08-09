@@ -3,11 +3,16 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, FieldLabel, Input, NumberInput } from "@sneakervault/ui";
-import { createEmployee, deactivateEmployee } from "@/lib/actions/employees";
+import {
+  createEmployee,
+  deactivateEmployee,
+  reactivateEmployee,
+  updateEmployee,
+} from "@/lib/actions/employees";
 import { useToast } from "@/components/toast";
 import type { EmployeeRow } from "@/lib/queries";
 import { formatRupiah } from "@/lib/format";
-import { Plus, Users } from "lucide-react";
+import { Pencil, Plus, RotateCcw, Users } from "lucide-react";
 
 const emptyForm = {
   employee_code: "",
@@ -28,19 +33,46 @@ export function EmployeesClient({ employees }: { employees: EmployeeRow[] }) {
   const [pending, startTransition] = useTransition();
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   function save() {
     startTransition(async () => {
-      const result = await createEmployee(form);
+      const result = editingId
+        ? await updateEmployee(editingId, form)
+        : await createEmployee(form);
       if (result.error) {
         toast.push(Object.values(result.error).flat().join(", "), "error");
         return;
       }
-      toast.push("Karyawan ditambahkan", "success");
+      toast.push(editingId ? "Data karyawan diperbarui" : "Karyawan ditambahkan", "success");
       setForm(emptyForm);
+      setEditingId(null);
       setFormOpen(false);
       router.refresh();
     });
+  }
+
+  function openCreate() {
+    setEditingId(null);
+    setForm(emptyForm);
+    setFormOpen(true);
+  }
+
+  function openEdit(employee: EmployeeRow) {
+    setEditingId(employee.id);
+    setForm({
+      employee_code: employee.employee_code ?? "",
+      full_name: employee.full_name,
+      job_title: employee.job_title ?? "",
+      department: employee.department ?? "",
+      base_salary: employee.base_salary,
+      bank_account_name: employee.bank_account_name ?? "",
+      bank_account_number: employee.bank_account_number ?? "",
+      tax_id: employee.tax_id ?? "",
+      hire_date: employee.hire_date ?? "",
+      is_active: employee.is_active,
+    });
+    setFormOpen(true);
   }
 
   function archive(id: string) {
@@ -51,6 +83,18 @@ export function EmployeesClient({ employees }: { employees: EmployeeRow[] }) {
         return;
       }
       toast.push("Karyawan dinonaktifkan", "success");
+      router.refresh();
+    });
+  }
+
+  function restore(id: string) {
+    startTransition(async () => {
+      const result = await reactivateEmployee(id);
+      if (result.error) {
+        toast.push(result.error, "error");
+        return;
+      }
+      toast.push("Karyawan diaktifkan kembali", "success");
       router.refresh();
     });
   }
@@ -69,7 +113,7 @@ export function EmployeesClient({ employees }: { employees: EmployeeRow[] }) {
             </p>
           </div>
         </div>
-        <Button type="button" onClick={() => setFormOpen((open) => !open)}>
+        <Button type="button" onClick={openCreate}>
           <Plus size={16} />
           Karyawan Baru
         </Button>
@@ -77,6 +121,11 @@ export function EmployeesClient({ employees }: { employees: EmployeeRow[] }) {
 
       {formOpen ? (
         <Card className="grid gap-3 p-5 md:grid-cols-4">
+          <div className="md:col-span-4">
+            <h2 className="font-semibold text-white">
+              {editingId ? "Edit Data Karyawan" : "Karyawan Baru"}
+            </h2>
+          </div>
           <div>
             <FieldLabel>Kode</FieldLabel>
             <Input value={form.employee_code} onChange={(e) => setForm({ ...form, employee_code: e.target.value })} />
@@ -110,9 +159,9 @@ export function EmployeesClient({ employees }: { employees: EmployeeRow[] }) {
             <Input type="date" value={form.hire_date} onChange={(e) => setForm({ ...form, hire_date: e.target.value })} />
           </div>
           <div className="md:col-span-4 flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setFormOpen(false)}>Batal</Button>
+            <Button type="button" variant="secondary" onClick={() => { setFormOpen(false); setEditingId(null); }}>Batal</Button>
             <Button type="button" disabled={pending || !form.full_name.trim()} onClick={save}>
-              Simpan
+              {editingId ? "Simpan Perubahan" : "Simpan"}
             </Button>
           </div>
         </Card>
@@ -126,6 +175,7 @@ export function EmployeesClient({ employees }: { employees: EmployeeRow[] }) {
               <th className="px-4 py-3">Jabatan</th>
               <th className="px-4 py-3">Departemen</th>
               <th className="px-4 py-3 text-right">Gaji Pokok</th>
+              <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3 text-right">Aksi</th>
             </tr>
           </thead>
@@ -141,12 +191,24 @@ export function EmployeesClient({ employees }: { employees: EmployeeRow[] }) {
                 <td className="px-4 py-3 text-white/60">{employee.job_title ?? "—"}</td>
                 <td className="px-4 py-3 text-white/60">{employee.department ?? "—"}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-white">{formatRupiah(employee.base_salary)}</td>
+                <td className="px-4 py-3 text-white/60">
+                  {employee.is_active ? "Aktif" : "Nonaktif"}
+                </td>
                 <td className="px-4 py-3 text-right">
-                  {employee.is_active ? (
-                    <Button size="sm" variant="ghost" disabled={pending} onClick={() => archive(employee.id)}>
-                      Nonaktif
+                  <div className="inline-flex items-center gap-1">
+                    <Button size="sm" variant="ghost" disabled={pending} onClick={() => openEdit(employee)}>
+                      <Pencil size={14} /> Edit
                     </Button>
-                  ) : null}
+                    {employee.is_active ? (
+                      <Button size="sm" variant="ghost" disabled={pending} onClick={() => archive(employee.id)}>
+                        Nonaktif
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="ghost" disabled={pending} onClick={() => restore(employee.id)}>
+                        <RotateCcw size={14} /> Aktifkan
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

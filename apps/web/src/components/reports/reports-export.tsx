@@ -32,21 +32,29 @@ function firstRelation<T>(value: MaybeRelation<T>): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
 }
 
-export function ReportsExport() {
+export function ReportsExport({
+  from,
+  to,
+  periodLabel,
+}: {
+  from: string;
+  to: string;
+  periodLabel: string;
+}) {
   const toast = useToast();
 
   async function handleExport(format: "pdf" | "excel") {
     toast.push("Menyiapkan laporan...", "info");
     const supabase = createClient();
 
-    // Fetch all data in parallel
+    // Fetch transactional data only for the selected reporting period.
     const [productsRes, packingItemsRes, sessionsRes, returnsRes, invoicesRes, expensesRes] = await Promise.all([
       supabase.from("products").select("id, brand, model, size, quantity, hpp, sell_price, first_inbound_at").eq("is_active", true),
-      supabase.from("packing_items").select("sell_price, unit_hpp, created_at, products(brand, model), packing_sessions!inner(status, platform)").in("packing_sessions.status", ["shipped", "completed", "has_return"]),
-      supabase.from("packing_sessions").select("id, platform, status, created_at").in("status", ["packing", "shipped", "completed", "has_return"]),
-      supabase.from("returns").select("id, status, return_type, created_at"),
-      supabase.from("sales_invoices").select("channel, subtotal, discount, shipping, marketplace_fee, settlement_fee_actual, settlement_status, total, status, sales_invoice_lines(qty, unit_cost)").neq("status", "cancelled"),
-      supabase.from("expenses").select("amount, status, expense_categories:category_id(name, account_code)").eq("status", "paid"),
+      supabase.from("packing_items").select("sell_price, unit_hpp, created_at, products(brand, model), packing_sessions!inner(status, platform)").in("packing_sessions.status", ["shipped", "completed", "has_return"]).gte("created_at", from).lte("created_at", to),
+      supabase.from("packing_sessions").select("id, platform, status, created_at").in("status", ["packing", "shipped", "completed", "has_return"]).gte("created_at", from).lte("created_at", to),
+      supabase.from("returns").select("id, status, return_type, created_at").gte("created_at", from).lte("created_at", to),
+      supabase.from("sales_invoices").select("channel, subtotal, discount, shipping, marketplace_fee, settlement_fee_actual, settlement_status, total, status, sales_invoice_lines(qty, unit_cost)").neq("status", "cancelled").gte("invoice_date", from.slice(0, 10)).lte("invoice_date", to.slice(0, 10)),
+      supabase.from("expenses").select("amount, status, expense_categories:category_id(name, account_code)").eq("status", "paid").gte("expense_date", from.slice(0, 10)).lte("expense_date", to.slice(0, 10)),
     ]);
 
     const products = productsRes.data ?? [];
@@ -234,7 +242,7 @@ export function ReportsExport() {
     const exportParams = {
       title: "Executive Summary Report",
       sections: [inventorySection, financialSection, operationalSection, channelSection, expenseSection],
-      period: new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" }),
+      period: periodLabel,
     };
 
     if (format === "pdf") {
