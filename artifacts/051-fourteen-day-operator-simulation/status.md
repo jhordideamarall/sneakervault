@@ -47,8 +47,8 @@ di lingkungan disposable; production dibatasi pada pemeriksaan read-only.
 - [x] Stok akhir cocok dengan ledger dan tidak pernah negatif.
 - [x] Kas/bank, utang, piutang, payroll, serta jurnal saling cocok.
 - [x] Neraca seimbang dan laba berjalan cocok dengan laporan laba rugi.
-- [ ] Screenshot dan tutorial bergambar 14 hari tersedia di Downloads.
-- [ ] Lint, type-check, build, serta regression terkait lulus setelah audit akhir.
+- [x] Screenshot dan tutorial bergambar 14 hari tersedia di Downloads.
+- [x] Lint, type-check, build, serta regression terkait lulus setelah audit akhir.
 - [ ] Production smoke read-only lulus setelah perubahan terdeploy (jika ada).
 
 ## Temuan
@@ -135,7 +135,14 @@ di lingkungan disposable; production dibatasi pada pemeriksaan read-only.
   project `jogqvffdjtjqdnflvubi`; status `selesai` dan daftar permintaan client
   dijadikan acceptance criteria lanjutan Hari 07–14.
 - Screenshot tutorial privat sementara tersimpan di
-  `/private/tmp/dewinst-14-day-operator-2026-08-09/` dengan nama bersih `00`–`86`.
+  `/private/tmp/dewinst-14-day-operator-2026-08-09/` dengan nama bersih `00`–`87`.
+- Modul lengkap 117 halaman, Modul Gudang 43 halaman, Modul Kasir 23 halaman,
+  dan Modul Finance 55 halaman tersedia di
+  `/Users/jhordideamarall/Downloads/Dewinst-Modul-Operasional-14-Hari-2026-08-09/`;
+  seluruh PDF A4 landscape sudah dirender-sampling dan ZIP 47 MB lulus integrity
+  check tanpa `__MACOSX`/`.DS_Store`.
+- Gate final: TypeScript lulus, ESLint 0 error/0 warning, production build lulus,
+  serta smoke ulang 51 route dan Activity Log lulus pada build terakhir.
 
 ## Blockers
 
