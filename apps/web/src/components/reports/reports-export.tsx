@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@sneakervault/ui";
 import { exportToPDF, exportToExcel, type ReportSection } from "@/lib/export";
 import { createClient } from "@sneakervault/supabase/client";
@@ -42,8 +43,21 @@ export function ReportsExport({
   periodLabel: string;
 }) {
   const toast = useToast();
+  const [exporting, setExporting] = useState<"pdf" | "excel" | null>(null);
 
   async function handleExport(format: "pdf" | "excel") {
+    if (exporting) return;
+    setExporting(format);
+    try {
+      await runExport(format);
+    } catch {
+      toast.push("Laporan belum dapat dibuat. Coba lagi.", "error");
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  async function runExport(format: "pdf" | "excel") {
     toast.push("Menyiapkan laporan...", "info");
     const supabase = createClient();
 
@@ -52,10 +66,22 @@ export function ReportsExport({
       supabase.from("products").select("id, brand, model, size, quantity, hpp, sell_price, first_inbound_at").eq("is_active", true),
       supabase.from("packing_items").select("sell_price, unit_hpp, created_at, products(brand, model), packing_sessions!inner(status, platform)").in("packing_sessions.status", ["shipped", "completed", "has_return"]).gte("created_at", from).lte("created_at", to),
       supabase.from("packing_sessions").select("id, platform, status, created_at").in("status", ["packing", "shipped", "completed", "has_return"]).gte("created_at", from).lte("created_at", to),
-      supabase.from("returns").select("id, status, return_type, created_at").gte("created_at", from).lte("created_at", to),
+      supabase.from("returns").select("id, status, type, created_at").gte("created_at", from).lte("created_at", to),
       supabase.from("sales_invoices").select("channel, subtotal, discount, shipping, marketplace_fee, settlement_fee_actual, settlement_status, total, status, sales_invoice_lines(qty, unit_cost)").neq("status", "cancelled").gte("invoice_date", from.slice(0, 10)).lte("invoice_date", to.slice(0, 10)),
       supabase.from("expenses").select("amount, status, expense_categories:category_id(name, account_code)").eq("status", "paid").gte("expense_date", from.slice(0, 10)).lte("expense_date", to.slice(0, 10)),
     ]);
+
+    if (
+      productsRes.error ||
+      packingItemsRes.error ||
+      sessionsRes.error ||
+      returnsRes.error ||
+      invoicesRes.error ||
+      expensesRes.error
+    ) {
+      toast.push("Sebagian data laporan belum dapat dibaca. Muat ulang lalu coba lagi.", "error");
+      return;
+    }
 
     const products = productsRes.data ?? [];
     const items = (packingItemsRes.data ?? []) as unknown as PackingItemExport[];
@@ -255,8 +281,12 @@ export function ReportsExport({
 
   return (
     <div className="flex gap-2">
-      <Button variant="secondary" size="sm" onClick={() => handleExport("pdf")}>Export PDF</Button>
-      <Button variant="secondary" size="sm" onClick={() => handleExport("excel")}>Export Excel</Button>
+      <Button disabled={exporting !== null} variant="secondary" size="sm" onClick={() => handleExport("pdf")}>
+        {exporting === "pdf" ? "Menyiapkan PDF…" : "Export PDF"}
+      </Button>
+      <Button disabled={exporting !== null} variant="secondary" size="sm" onClick={() => handleExport("excel")}>
+        {exporting === "excel" ? "Menyiapkan Excel…" : "Export Excel"}
+      </Button>
     </div>
   );
 }
