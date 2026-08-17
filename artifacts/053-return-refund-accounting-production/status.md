@@ -1,9 +1,9 @@
 # Return Refund Accounting — Production
 
-**Status:** [x] In Progress | [ ] Done | [ ] Blocked
+**Status:** [ ] In Progress | [x] Done | [ ] Blocked
 **Sprint:** UAT Production Follow-up
 **Tanggal Mulai:** 2026-08-17
-**Tanggal Selesai:** -
+**Tanggal Selesai:** 2026-08-17
 
 ## Tasks
 - [x] Audit flow retur, rekening bank/kas, COA, laporan laba rugi, role, dan migration history
@@ -14,8 +14,8 @@
 - [x] Tambahkan akses Finance ke halaman retur dan perbaiki tampilan contra-revenue di laba rugi
 - [x] Jalankan regression SQL, database lint, type-check, lint, build, dan diff review
 - [x] Apply migration ke Supabase production SneakerVault
-- [ ] Commit, push feature branch, dan deploy Vercel production
-- [ ] Verifikasi production dan dokumentasikan URL/release
+- [x] Commit, push feature branch, dan deploy Vercel production
+- [x] Verifikasi production dan dokumentasikan URL/release
 
 ## Keputusan
 - Tambah COA `4.1.90 Retur Penjualan`, tipe revenue dengan normal balance debit.
@@ -49,6 +49,12 @@
   settings 6, fiscal periods 12, dan rekening 3.
 - Data transaksi UAT tetap bersih: products, returns, stock movements, bank
   transactions, dan journal entries masing-masing 0.
+- Feature branch `feat/return-refund-accounting` dipush dengan commit utama
+  `9ef881c`; draft PR [#25](https://github.com/jhordideamarall/sneakervault/pull/25)
+  dibuat terhadap `main`.
+- Vercel production deployment `dpl_DtVJGM5FPEyZwtYhLW36D3ZtWsos` berstatus
+  `READY`; build TypeScript dan seluruh route berhasil.
+- URL production: [https://dewinst.vercel.app](https://dewinst.vercel.app).
 
 ## Files Modified
 - `artifacts/053-return-refund-accounting-production/status.md`
