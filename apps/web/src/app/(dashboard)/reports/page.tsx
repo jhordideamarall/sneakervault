@@ -9,6 +9,7 @@ import {
   getMarketplaceCostReport,
   getProfitByChannelReport,
   getProfitReport,
+  getReturnReport,
   getSalesReport,
   getStockCardReport,
   getStockMovementReport,
@@ -129,11 +130,12 @@ async function MandatoryReportsSection({
   to: string;
   periodLabel: string;
 }) {
-  const [generalLedger, journals, sales, stockMovements, arAp] =
+  const [generalLedger, journals, sales, returns, stockMovements, arAp] =
     await Promise.all([
       getGeneralLedgerReport(from, to),
       getJournalReport(from, to),
       getSalesReport(from, to),
+      getReturnReport(from, to),
       getStockMovementReport(from, to),
       getArApReport(from, to),
     ]);
@@ -141,7 +143,7 @@ async function MandatoryReportsSection({
   return (
     <MandatoryReportsClient
       periodLabel={periodLabel}
-      data={{ generalLedger, journals, sales, stockMovements, arAp }}
+      data={{ generalLedger, journals, sales, returns, stockMovements, arAp }}
     />
   );
 }

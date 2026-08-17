@@ -3939,6 +3939,127 @@ export async function getArApReport(
     .sort((a, b) => b.remaining - a.remaining);
 }
 
+export type ReturnReportRow = {
+  created_at: string;
+  order_id: string;
+  platform: string;
+  original_product: string;
+  original_sku: string;
+  original_size: string;
+  type: "exchange_size" | "refund";
+  reason: string;
+  status: "pending" | "verified" | "processed" | "cancelled";
+  verified_at: string | null;
+  processed_at: string | null;
+  replacement_product: string | null;
+  replacement_sku: string | null;
+  replacement_size: string | null;
+  refund_amount: number | null;
+  refund_date: string | null;
+  refund_account: string | null;
+  refund_reference_no: string | null;
+};
+
+export async function getReturnReport(
+  from?: string,
+  to?: string,
+): Promise<ReturnReportRow[]> {
+  await requireOwnerOrFinance();
+  const supabase = await createClient();
+  let query = supabase
+    .from("returns")
+    .select(`
+      created_at, type, reason, status, verified_at, processed_at,
+      original_size, new_size,
+      refund_amount, refund_date, refund_reference_no,
+      refund_account:refund_bank_account_id(name, bank_name),
+      packing_items!inner(
+        packing_sessions(platform, platform_order_id)
+      ),
+      original:original_product_id(brand, model, sku, size, size_label),
+      replacement:new_product_id(brand, model, sku, size, size_label)
+    `)
+    .order("created_at", { ascending: false })
+    .limit(1000);
+  if (from) query = query.gte("created_at", from);
+  if (to) query = query.lte("created_at", to);
+
+  const { data } = await query;
+  type ProductRelation = {
+    brand: string;
+    model: string;
+    sku: string;
+    size: number | null;
+    size_label: string | null;
+  };
+  type ReturnRelation = {
+    created_at: string;
+    type: ReturnReportRow["type"];
+    reason: string;
+    status: ReturnReportRow["status"];
+    verified_at: string | null;
+    processed_at: string | null;
+    original_size: number;
+    new_size: number | null;
+    refund_amount: number | null;
+    refund_date: string | null;
+    refund_reference_no: string | null;
+    refund_account: MaybeRelation<{
+      name: string;
+      bank_name: string | null;
+    }>;
+    packing_items: MaybeRelation<{
+      packing_sessions: MaybeRelation<{
+        platform: string;
+        platform_order_id: string | null;
+      }>;
+    }>;
+    original: MaybeRelation<ProductRelation>;
+    replacement: MaybeRelation<ProductRelation>;
+  };
+
+  return ((data as unknown as ReturnRelation[] | null) ?? []).map((row) => {
+    const packingItem = firstRelation(row.packing_items);
+    const session = firstRelation(packingItem?.packing_sessions ?? null);
+    const original = firstRelation(row.original);
+    const replacement = firstRelation(row.replacement);
+    const refundAccount = firstRelation(row.refund_account);
+    return {
+      created_at: row.created_at,
+      order_id: session?.platform_order_id ?? "Tanpa order ID",
+      platform: session?.platform ?? "Lainnya",
+      original_product: original
+        ? `${original.brand} ${original.model}`
+        : "Produk tidak ditemukan",
+      original_sku: original?.sku ?? "-",
+      original_size: original?.size_label ?? String(row.original_size),
+      type: row.type,
+      reason: row.reason,
+      status: row.status,
+      verified_at: row.verified_at,
+      processed_at: row.processed_at,
+      replacement_product: replacement
+        ? `${replacement.brand} ${replacement.model}`
+        : null,
+      replacement_sku: replacement?.sku ?? null,
+      replacement_size:
+        replacement?.size_label ??
+        (replacement?.size != null
+          ? String(replacement.size)
+          : row.new_size != null
+            ? String(row.new_size)
+            : null),
+      refund_amount:
+        row.refund_amount == null ? null : Number(row.refund_amount),
+      refund_date: row.refund_date,
+      refund_account: refundAccount
+        ? `${refundAccount.name}${refundAccount.bank_name ? ` • ${refundAccount.bank_name}` : ""}`
+        : null,
+      refund_reference_no: row.refund_reference_no,
+    };
+  });
+}
+
 export async function getStockValue(): Promise<{ items: number; cost: number; retail: number }> {
   await requireOwnerOrFinance();
   const supabase = await createClient();
@@ -4383,12 +4504,13 @@ export async function getReturns(status?: string): Promise<unknown[]> {
     .select(`
       *,
       packing_items(
-        id, barcode_scanned,
+        id, barcode_scanned, sell_price,
         packing_sessions(id, platform_order_id, platform),
         products(id, brand, model, size, size_label, sku)
       ),
       original:original_product_id(brand, model, size, size_label),
-      new:new_product_id(brand, model, size, size_label)
+      new:new_product_id(brand, model, size, size_label),
+      refund_bank:refund_bank_account_id(id, name, bank_name, type)
     `)
     .order("created_at", { ascending: false });
 

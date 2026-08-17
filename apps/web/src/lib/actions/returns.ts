@@ -5,6 +5,7 @@ import { initiateReturnSchema, processReturnSchema } from "@sneakervault/shared"
 import { requireRole } from "./auth";
 import { logActivity } from "./activity-log";
 import { notifyEvent } from "./notify";
+import { revalidatePath } from "next/cache";
 
 export async function initiateReturn(input: unknown) {
   const profile = await requireRole(["owner", "admin_online"]);
@@ -115,7 +116,7 @@ export async function verifyReturn(returnId: string) {
 }
 
 export async function processReturn(input: unknown) {
-  const profile = await requireRole(["owner", "admin_gudang", "admin_online"]);
+  const profile = await requireRole(["owner", "finance", "admin_gudang", "admin_online"]);
   const parsed = processReturnSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
@@ -127,26 +128,44 @@ export async function processReturn(input: unknown) {
     .maybeSingle();
   if (!retBefore) return { error: { _form: ["Return tidak ditemukan"] } };
 
-  const { data: result, error: processError } = await supabase.rpc(
-    "process_return_atomic",
-    {
-      p_return_id: parsed.data.return_id,
-      p_new_product_id: parsed.data.new_product_id ?? null,
-    },
-  );
-  if (processError) return { error: { _form: [processError.message] } };
+  const roles = (profile.roles ?? []) as string[];
+  if (
+    retBefore.type === "refund" &&
+    !roles.includes("owner") &&
+    !roles.includes("finance")
+  ) {
+    return { error: { _form: ["Refund uang hanya dapat diselesaikan Owner atau Finance"] } };
+  }
 
-  await logActivity({
-    user_id: profile.id,
-    action: "process_return",
-    entity_type: "return",
-    entity_id: parsed.data.return_id,
-    new_data: {
-      type: retBefore.type,
-      new_product_id: parsed.data.new_product_id,
-      atomic_result: result,
-    },
-  });
+  if (
+    retBefore.type === "refund" &&
+    (!parsed.data.refund_bank_account_id ||
+      !parsed.data.refund_amount ||
+      !parsed.data.refund_date)
+  ) {
+    return {
+      error: {
+        _form: ["Rekening, nominal, dan tanggal refund wajib diisi"],
+      },
+    };
+  }
+
+  const { data: result, error: processError } = retBefore.type === "refund"
+    ? await supabase.rpc("process_return_atomic", {
+        p_return_id: parsed.data.return_id,
+        // The refund branch does not consume the replacement product. A valid
+        // UUID keeps the generated RPC type precise without weakening SQL.
+        p_new_product_id: retBefore.original_product_id,
+        p_refund_bank_account_id: parsed.data.refund_bank_account_id!,
+        p_refund_amount: parsed.data.refund_amount!,
+        p_refund_date: parsed.data.refund_date!,
+        p_refund_reference_no: parsed.data.refund_reference_no ?? "",
+      })
+    : await supabase.rpc("process_return_atomic", {
+        p_return_id: parsed.data.return_id,
+        p_new_product_id: parsed.data.new_product_id,
+      });
+  if (processError) return { error: { _form: [processError.message] } };
 
   const { data: prodOriginal } = await supabase
     .from("products")
@@ -166,5 +185,11 @@ export async function processReturn(input: unknown) {
     { actorId: profile.id }
   );
 
-  return { success: true };
+  revalidatePath("/returns");
+  revalidatePath("/kas-bank");
+  revalidatePath("/buku-besar/journal");
+  revalidatePath("/laporan-keuangan");
+  revalidatePath("/reports");
+
+  return { success: true, data: result };
 }

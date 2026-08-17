@@ -4,15 +4,19 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   ArrowRight,
   ClipboardList,
+  Landmark,
   PackageCheck,
+  Plus,
   RefreshCcw,
   RotateCcw,
   Search,
   ShieldCheck,
+  Sparkles,
   Undo2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { initiateReturn, processReturn, verifyReturn } from "@/lib/actions/returns";
+import { createBankAccount } from "@/lib/actions/bank-accounts";
 import {
   Alert,
   Badge,
@@ -27,6 +31,8 @@ import {
 import { useToast } from "@/components/toast";
 import { RETURN_STATUS_LABELS as statusLabel, RETURN_STATUS_TONES as statusTones } from "@sneakervault/shared";
 import { formatDate as formatDateBase } from "@/lib/format";
+import { formatRupiah } from "@/lib/format";
+import type { BankAccountRow } from "@/lib/queries";
 
 type ReturnRow = Record<string, unknown> & {
   id: string;
@@ -43,7 +49,17 @@ type ReturnRow = Record<string, unknown> & {
   new?: { brand: string; model: string; size: number; size_label?: string | null } | null;
   packing_items?: {
     id: string;
+    sell_price: number;
     packing_sessions?: { platform_order_id: string | null; platform: string } | null;
+  } | null;
+  refund_amount: number | null;
+  refund_date: string | null;
+  refund_reference_no: string | null;
+  refund_bank?: {
+    id: string;
+    name: string;
+    bank_name: string | null;
+    type: BankAccountRow["type"];
   } | null;
 };
 
@@ -70,10 +86,12 @@ function cn(...classes: Array<string | false | null | undefined>) {
 export function ReturnsClient({
   returns,
   returnableItems,
+  bankAccounts,
   roles,
 }: {
   returns: ReturnRow[];
   returnableItems: ReturnableItem[];
+  bankAccounts: BankAccountRow[];
   roles: string[];
 }) {
   const router = useRouter();
@@ -83,7 +101,11 @@ export function ReturnsClient({
 
   const canInitiate = roles.includes("owner") || roles.includes("admin_online");
   const canVerify = roles.includes("owner") || roles.includes("admin_gudang");
-  const canProcess = canVerify;
+  const canProcessExchange =
+    roles.includes("owner") ||
+    roles.includes("admin_gudang") ||
+    roles.includes("admin_online");
+  const canSettleRefund = roles.includes("owner") || roles.includes("finance");
 
   const stats = useMemo(() => {
     const pendingCount = returns.filter((item) => item.status === "pending").length;
@@ -149,8 +171,10 @@ export function ReturnsClient({
       {tab === "list" ? (
         <ReturnsList
           returns={returns}
+          bankAccounts={bankAccounts}
           canVerify={canVerify}
-          canProcess={canProcess}
+          canProcessExchange={canProcessExchange}
+          canSettleRefund={canSettleRefund}
           pending={pending}
           onVerify={(id) => {
             startTransition(async () => {
@@ -163,11 +187,20 @@ export function ReturnsClient({
               router.refresh();
             });
           }}
-          onProcess={(id, type, newProductId) => {
+          onProcess={(id, type, details) => {
             startTransition(async () => {
               const result = await processReturn({
                 return_id: id,
-                new_product_id: type === "exchange_size" ? newProductId : undefined,
+                new_product_id:
+                  type === "exchange_size" ? details?.newProductId : undefined,
+                refund_bank_account_id:
+                  type === "refund" ? details?.refundBankAccountId : undefined,
+                refund_amount:
+                  type === "refund" ? details?.refundAmount : undefined,
+                refund_date:
+                  type === "refund" ? details?.refundDate : undefined,
+                refund_reference_no:
+                  type === "refund" ? details?.refundReferenceNo : undefined,
               });
               if ("error" in result && result.error) {
                 const msg = (result.error as { _form?: string[] })._form?.[0] ?? "Gagal memproses retur";
@@ -176,7 +209,7 @@ export function ReturnsClient({
               }
               toast.push(
                 type === "refund"
-                  ? "Barang refund sudah masuk dan HPP dibalik. Pengembalian uang dicatat terpisah di Kas & Bank."
+                  ? "Refund selesai. Stok, saldo rekening, mutasi bank, dan jurnal sudah diperbarui."
                   : "Tukar size selesai; stok dan jurnal HPP sudah disesuaikan.",
                 "success",
               );
@@ -233,20 +266,35 @@ function StatCard({
 
 function ReturnsList({
   returns,
+  bankAccounts,
   canVerify,
-  canProcess,
+  canProcessExchange,
+  canSettleRefund,
   pending,
   onVerify,
   onProcess,
 }: {
   returns: ReturnRow[];
+  bankAccounts: BankAccountRow[];
   canVerify: boolean;
-  canProcess: boolean;
+  canProcessExchange: boolean;
+  canSettleRefund: boolean;
   pending: boolean;
   onVerify: (id: string) => void;
-  onProcess: (id: string, type: ReturnRow["type"], newProductId?: string) => void;
+  onProcess: (
+    id: string,
+    type: ReturnRow["type"],
+    details?: {
+      newProductId?: string;
+      refundBankAccountId?: string;
+      refundAmount?: number;
+      refundDate?: string;
+      refundReferenceNo?: string;
+    },
+  ) => void;
 }) {
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [refundProcessingId, setRefundProcessingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | ReturnRow["status"]>("all");
   const [query, setQuery] = useState("");
 
@@ -348,18 +396,22 @@ function ReturnsList({
                       </Button>
                     ) : null}
 
-                    {item.status === "verified" && canProcess ? (
-                      item.type === "refund" ? (
-                        <Button size="sm" variant="success" onClick={() => onProcess(item.id, "refund")} disabled={pending}>
+                    {item.status === "verified" && item.type === "refund" && canSettleRefund ? (
+                        <Button size="sm" variant="success" onClick={() => setRefundProcessingId(item.id)} disabled={pending}>
                           <RefreshCcw size={14} strokeWidth={1.8} />
-                          Terima Barang Refund
+                          Selesaikan Refund
                         </Button>
-                      ) : (
+                    ) : null}
+
+                    {item.status === "verified" && item.type === "refund" && !canSettleRefund ? (
+                      <Badge tone="warning">Menunggu Owner / Finance</Badge>
+                    ) : null}
+
+                    {item.status === "verified" && item.type === "exchange_size" && canProcessExchange ? (
                         <Button size="sm" variant="success" onClick={() => setProcessingId(item.id)} disabled={pending}>
                           <ArrowRight size={14} strokeWidth={1.8} />
                           Pilih Size Pengganti
                         </Button>
-                      )
                     ) : null}
                   </div>
                 </div>
@@ -372,6 +424,23 @@ function ReturnsList({
                 <InfoBlock label="Diproses" value={formatDate(item.processed_at)} />
               </div>
 
+              {item.type === "refund" && item.status === "processed" ? (
+                <div className="grid gap-4 border-t border-white/[0.06] px-5 py-4 md:grid-cols-3">
+                  <InfoBlock
+                    label="Nominal Refund"
+                    value={item.refund_amount == null ? "—" : formatRupiah(Number(item.refund_amount))}
+                  />
+                  <InfoBlock
+                    label="Rekening Refund"
+                    value={item.refund_bank?.name ?? "—"}
+                  />
+                  <InfoBlock
+                    label="Referensi"
+                    value={item.refund_reference_no || "—"}
+                  />
+                </div>
+              ) : null}
+
               <div className="border-t border-white/[0.06] px-5 py-4">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-white/30">Alasan Retur</p>
                 <p className="mt-2 text-sm leading-6 text-white/75">{item.reason}</p>
@@ -382,8 +451,21 @@ function ReturnsList({
                   returnRow={item}
                   onCancel={() => setProcessingId(null)}
                   onConfirm={(newProductId) => {
-                    onProcess(item.id, "exchange_size", newProductId);
+                    onProcess(item.id, "exchange_size", { newProductId });
                     setProcessingId(null);
+                  }}
+                  pending={pending}
+                />
+              ) : null}
+
+              {refundProcessingId === item.id && item.type === "refund" ? (
+                <RefundModal
+                  returnRow={item}
+                  bankAccounts={bankAccounts}
+                  onCancel={() => setRefundProcessingId(null)}
+                  onConfirm={(details) => {
+                    onProcess(item.id, "refund", details);
+                    setRefundProcessingId(null);
                   }}
                   pending={pending}
                 />
@@ -495,6 +577,329 @@ function ExchangeModal({
   );
 }
 
+function jakartaToday(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
+function recommendedRefundAccount(
+  accounts: BankAccountRow[],
+  platform: string | undefined,
+): BankAccountRow | undefined {
+  const platformKey = (platform ?? "").trim().toLowerCase();
+  const marketplaceMatch = platformKey
+    ? accounts.find((account) => {
+        if (account.type !== "marketplace_balance") return false;
+        return `${account.name} ${account.bank_name ?? ""}`
+          .toLowerCase()
+          .includes(platformKey);
+      })
+    : undefined;
+
+  return marketplaceMatch ?? accounts.find((account) => account.is_default) ?? accounts[0];
+}
+
+function RefundModal({
+  returnRow,
+  bankAccounts,
+  onCancel,
+  onConfirm,
+  pending,
+}: {
+  returnRow: ReturnRow;
+  bankAccounts: BankAccountRow[];
+  onCancel: () => void;
+  onConfirm: (details: {
+    refundBankAccountId: string;
+    refundAmount: number;
+    refundDate: string;
+    refundReferenceNo?: string;
+  }) => void;
+  pending: boolean;
+}) {
+  const toast = useToast();
+  const [creating, startCreating] = useTransition();
+  const [accounts, setAccounts] = useState(() =>
+    bankAccounts.filter((account) => account.is_active),
+  );
+  const platform = returnRow.packing_items?.packing_sessions?.platform;
+  const recommended = useMemo(
+    () => recommendedRefundAccount(accounts, platform),
+    [accounts, platform],
+  );
+  const [selectedAccountId, setSelectedAccountId] = useState(
+    () => recommendedRefundAccount(bankAccounts.filter((account) => account.is_active), platform)?.id ?? "",
+  );
+  const [amount, setAmount] = useState(
+    String(Number(returnRow.packing_items?.sell_price ?? 0)),
+  );
+  const [refundDate, setRefundDate] = useState(jakartaToday);
+  const [referenceNo, setReferenceNo] = useState("");
+  const [showCreate, setShowCreate] = useState(accounts.length === 0);
+  const [createError, setCreateError] = useState("");
+  const [newAccount, setNewAccount] = useState({
+    name: "",
+    type: "bank" as BankAccountRow["type"],
+    bank_name: "",
+    account_number: "",
+    account_holder: "",
+    opening_balance: "0",
+    is_default: accounts.length === 0,
+  });
+
+  const selectedAccount = accounts.find((account) => account.id === selectedAccountId);
+  const numericAmount = Number(amount);
+  const insufficientBalance =
+    Boolean(selectedAccount) &&
+    Number.isFinite(numericAmount) &&
+    numericAmount > Number(selectedAccount?.current_balance ?? 0);
+  const canSubmit =
+    Boolean(selectedAccountId) &&
+    Number.isFinite(numericAmount) &&
+    numericAmount > 0 &&
+    Boolean(refundDate) &&
+    !insufficientBalance;
+
+  function createInlineAccount() {
+    setCreateError("");
+    if (!newAccount.name.trim()) {
+      setCreateError("Nama rekening wajib diisi");
+      return;
+    }
+
+    startCreating(async () => {
+      const result = await createBankAccount({
+        name: newAccount.name.trim(),
+        type: newAccount.type,
+        bank_name: newAccount.bank_name.trim() || undefined,
+        account_number: newAccount.account_number.trim() || undefined,
+        account_holder: newAccount.account_holder.trim() || undefined,
+        opening_balance: Number(newAccount.opening_balance || 0),
+        currency: "IDR",
+        is_default: newAccount.is_default,
+        notes: "Dibuat dari penyelesaian refund retur",
+      });
+
+      if ("error" in result && result.error) {
+        const error = result.error as Record<string, string[]>;
+        setCreateError(error._form?.[0] ?? Object.values(error)[0]?.[0] ?? "Gagal membuat rekening");
+        return;
+      }
+      if (!("data" in result) || !result.data) {
+        setCreateError("Rekening baru tidak dapat dimuat");
+        return;
+      }
+
+      const created: BankAccountRow = {
+        ...result.data,
+        opening_balance: Number(result.data.opening_balance),
+        current_balance: Number(result.data.current_balance),
+        coa_account_code: null,
+        coa_account_name: null,
+      };
+      setAccounts((current) => [created, ...current]);
+      setSelectedAccountId(created.id);
+      setShowCreate(false);
+      toast.push("Rekening baru dibuat dan langsung dipilih", "success");
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm">
+      <Card className="my-8 w-full max-w-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Selesaikan Refund</h2>
+            <p className="mt-1 text-sm text-white/45">
+              {returnRow.original?.brand} {returnRow.original?.model} • order {returnRow.packing_items?.packing_sessions?.platform_order_id ?? "—"}
+            </p>
+          </div>
+          <Badge tone="success">Refund + Jurnal</Badge>
+        </div>
+
+        <Alert tone="info" className="mt-5">
+          Sistem menyarankan rekening marketplace yang sesuai platform, lalu rekening default. Anda tetap dapat memilih rekening aktif lain atau menambah rekening baru.
+        </Alert>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <div className="flex items-center justify-between gap-3">
+              <FieldLabel htmlFor="refund-bank-account" required>Rekening sumber refund</FieldLabel>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setShowCreate((value) => !value)}>
+                <Plus size={14} />
+                Tambah Rekening
+              </Button>
+            </div>
+            <Select
+              id="refund-bank-account"
+              value={selectedAccountId}
+              onChange={(event) => setSelectedAccountId(event.target.value)}
+            >
+              <option value="">-- Pilih rekening aktif --</option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name} — saldo {formatRupiah(Number(account.current_balance))}
+                  {account.id === recommended?.id ? " — Disarankan" : ""}
+                </option>
+              ))}
+            </Select>
+            {recommended ? (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-emerald-300/80">
+                <Sparkles size={12} /> Saran sistem: {recommended.name}
+              </p>
+            ) : null}
+            {accounts.length === 0 ? (
+              <FieldError message="Belum ada rekening aktif. Tambahkan rekening terlebih dahulu." />
+            ) : null}
+          </div>
+
+          <div>
+            <FieldLabel htmlFor="refund-amount" required>Nominal refund</FieldLabel>
+            <Input
+              id="refund-amount"
+              type="number"
+              min="1"
+              step="1"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+            />
+            <p className="mt-2 text-xs text-white/40">
+              Otomatis dari harga jual item; dapat disesuaikan jika nilai refund berbeda.
+            </p>
+            {insufficientBalance ? (
+              <FieldError message={`Saldo ${selectedAccount?.name ?? "rekening"} tidak mencukupi.`} />
+            ) : null}
+          </div>
+
+          <div>
+            <FieldLabel htmlFor="refund-date" required>Tanggal refund</FieldLabel>
+            <Input
+              id="refund-date"
+              type="date"
+              value={refundDate}
+              onChange={(event) => setRefundDate(event.target.value)}
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <FieldLabel htmlFor="refund-reference">Referensi pembayaran</FieldLabel>
+            <Input
+              id="refund-reference"
+              value={referenceNo}
+              onChange={(event) => setReferenceNo(event.target.value)}
+              placeholder="Contoh: nomor transfer atau refund marketplace"
+            />
+          </div>
+        </div>
+
+        {showCreate ? (
+          <div className="mt-5 rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
+            <div className="mb-4 flex items-center gap-2">
+              <Landmark size={16} className="text-white/60" />
+              <h3 className="text-sm font-semibold text-white/80">Tambah Rekening Baru</h3>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <FieldLabel htmlFor="new-refund-account-name" required>Nama rekening</FieldLabel>
+                <Input
+                  id="new-refund-account-name"
+                  value={newAccount.name}
+                  onChange={(event) => setNewAccount((value) => ({ ...value, name: event.target.value }))}
+                  placeholder="Contoh: Saldo Shopee"
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="new-refund-account-type" required>Tipe</FieldLabel>
+                <Select
+                  id="new-refund-account-type"
+                  value={newAccount.type}
+                  onChange={(event) => setNewAccount((value) => ({ ...value, type: event.target.value as BankAccountRow["type"] }))}
+                >
+                  <option value="bank">Bank</option>
+                  <option value="cash">Kas</option>
+                  <option value="ewallet">E-Wallet</option>
+                  <option value="marketplace_balance">Saldo Marketplace</option>
+                </Select>
+              </div>
+              <div>
+                <FieldLabel htmlFor="new-refund-bank-name">Bank / provider</FieldLabel>
+                <Input
+                  id="new-refund-bank-name"
+                  value={newAccount.bank_name}
+                  onChange={(event) => setNewAccount((value) => ({ ...value, bank_name: event.target.value }))}
+                  placeholder="Contoh: Shopee atau BCA"
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="new-refund-account-number">Nomor rekening</FieldLabel>
+                <Input
+                  id="new-refund-account-number"
+                  value={newAccount.account_number}
+                  onChange={(event) => setNewAccount((value) => ({ ...value, account_number: event.target.value }))}
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="new-refund-account-holder">Atas nama</FieldLabel>
+                <Input
+                  id="new-refund-account-holder"
+                  value={newAccount.account_holder}
+                  onChange={(event) => setNewAccount((value) => ({ ...value, account_holder: event.target.value }))}
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="new-refund-opening-balance">Saldo awal</FieldLabel>
+                <Input
+                  id="new-refund-opening-balance"
+                  type="number"
+                  min="0"
+                  value={newAccount.opening_balance}
+                  onChange={(event) => setNewAccount((value) => ({ ...value, opening_balance: event.target.value }))}
+                />
+              </div>
+            </div>
+            <label className="mt-4 flex items-center gap-2 text-sm text-white/65">
+              <input
+                type="checkbox"
+                checked={newAccount.is_default}
+                onChange={(event) => setNewAccount((value) => ({ ...value, is_default: event.target.checked }))}
+                className="h-4 w-4 rounded border-white/20 bg-white/5"
+              />
+              Jadikan rekening default
+            </label>
+            <FieldError message={createError} />
+            <div className="mt-4 flex justify-end">
+              <Button type="button" size="sm" variant="secondary" onClick={createInlineAccount} disabled={creating}>
+                {creating ? "Membuat..." : "Buat & Pilih Rekening"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-6 flex justify-end gap-3">
+          <Button variant="ghost" onClick={onCancel}>Batal</Button>
+          <Button
+            onClick={() => onConfirm({
+              refundBankAccountId: selectedAccountId,
+              refundAmount: numericAmount,
+              refundDate,
+              refundReferenceNo: referenceNo.trim() || undefined,
+            })}
+            disabled={!canSubmit || pending || creating}
+          >
+            Proses Refund & Jurnal
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function InitiateReturnForm({
   items,
   pending,
@@ -563,7 +968,7 @@ function InitiateReturnForm({
               <p className="mt-2 text-sm text-white/70">
                 {type === "exchange_size"
                   ? "Gudang verifikasi barang dulu, lalu pilih size pengganti sebelum stok keluar lagi."
-                  : "Gudang verifikasi barang, lalu barang masuk kembali dan HPP dibalik. Pengembalian uang wajib dicatat terpisah di Kas & Bank."}
+                  : "Gudang verifikasi barang, lalu Owner/Finance memilih rekening dan menyelesaikan refund beserta stok, mutasi bank, dan jurnal secara otomatis."}
               </p>
             </div>
           </div>
@@ -597,13 +1002,13 @@ function InitiateReturnForm({
             2. Tulis alasan retur sejelas mungkin supaya tim gudang bisa verifikasi fisik lebih cepat.
           </div>
           <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-            3. Setelah status berubah ke "Siap Diproses", admin gudang bisa menjalankan refund atau tukar size.
+            3. Setelah status "Siap Diproses", gudang menangani tukar size; Owner/Finance menyelesaikan refund uang.
           </div>
           <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
             4. Item yang sudah pernah diretur tidak akan muncul lagi di daftar ini.
           </div>
           <div className="rounded-xl border border-amber-400/15 bg-amber-400/[0.04] p-4 text-amber-100/75">
-            5. Untuk refund, proses di halaman ini hanya menerima barang dan membalik HPP. Catat uang keluar sesuai rekening tujuan di Kas &amp; Bank agar audit jelas.
+            5. Untuk refund, pilih rekening existing atau tambah rekening baru. Sistem menyarankan rekening dan membuat mutasi bank serta jurnal otomatis.
           </div>
         </div>
       </Card>

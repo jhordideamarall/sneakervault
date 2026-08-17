@@ -2572,6 +2572,15 @@ export type Database = {
           processed_at: string | null
           processed_by: string | null
           reason: string
+          refund_amount: number | null
+          refund_bank_account_id: string | null
+          refund_bank_transaction_id: string | null
+          refund_date: string | null
+          refund_inventory_journal_entry_id: string | null
+          refund_journal_entry_id: string | null
+          refund_reference_no: string | null
+          refund_settled_at: string | null
+          refund_settled_by: string | null
           status: Database["public"]["Enums"]["return_status"]
           type: Database["public"]["Enums"]["return_type"]
           verified_at: string | null
@@ -2588,6 +2597,15 @@ export type Database = {
           processed_at?: string | null
           processed_by?: string | null
           reason: string
+          refund_amount?: number | null
+          refund_bank_account_id?: string | null
+          refund_bank_transaction_id?: string | null
+          refund_date?: string | null
+          refund_inventory_journal_entry_id?: string | null
+          refund_journal_entry_id?: string | null
+          refund_reference_no?: string | null
+          refund_settled_at?: string | null
+          refund_settled_by?: string | null
           status?: Database["public"]["Enums"]["return_status"]
           type: Database["public"]["Enums"]["return_type"]
           verified_at?: string | null
@@ -2604,6 +2622,15 @@ export type Database = {
           processed_at?: string | null
           processed_by?: string | null
           reason?: string
+          refund_amount?: number | null
+          refund_bank_account_id?: string | null
+          refund_bank_transaction_id?: string | null
+          refund_date?: string | null
+          refund_inventory_journal_entry_id?: string | null
+          refund_journal_entry_id?: string | null
+          refund_reference_no?: string | null
+          refund_settled_at?: string | null
+          refund_settled_by?: string | null
           status?: Database["public"]["Enums"]["return_status"]
           type?: Database["public"]["Enums"]["return_type"]
           verified_at?: string | null
@@ -2634,6 +2661,41 @@ export type Database = {
           {
             foreignKeyName: "returns_processed_by_fkey"
             columns: ["processed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "returns_refund_bank_account_id_fkey"
+            columns: ["refund_bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "returns_refund_bank_transaction_id_fkey"
+            columns: ["refund_bank_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "bank_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "returns_refund_inventory_journal_entry_id_fkey"
+            columns: ["refund_inventory_journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "returns_refund_journal_entry_id_fkey"
+            columns: ["refund_journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "returns_refund_settled_by_fkey"
+            columns: ["refund_settled_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -3479,6 +3541,22 @@ export type Database = {
       }
       parse_size_to_numeric: { Args: { p_label: string }; Returns: number }
       pos_checkout: { Args: { p_payload: Json }; Returns: Json }
+      process_return_atomic:
+        | {
+            Args: { p_new_product_id?: string; p_return_id: string }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_new_product_id: string
+              p_refund_amount: number
+              p_refund_bank_account_id: string
+              p_refund_date: string
+              p_refund_reference_no: string
+              p_return_id: string
+            }
+            Returns: Json
+          }
       receive_purchase_order_atomic: {
         Args: { p_payload: Json }
         Returns: Json

@@ -130,6 +130,10 @@ export const processReturnSchema = z.object({
   return_id: z.string().uuid(),
   new_size: z.coerce.number().positive().optional(),
   new_product_id: z.string().uuid().optional(),
+  refund_bank_account_id: z.string().uuid().optional(),
+  refund_amount: z.coerce.number().positive("Nominal refund harus lebih dari 0").optional(),
+  refund_date: z.string().min(1, "Tanggal refund wajib diisi").optional(),
+  refund_reference_no: z.string().trim().max(100).optional(),
 });
 
 export type InitiateReturnInput = z.infer<typeof initiateReturnSchema>;

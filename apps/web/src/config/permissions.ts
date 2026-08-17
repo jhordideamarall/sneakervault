@@ -20,7 +20,7 @@ export const routePermissions: Record<string, Role[]> = {
   "/inventory/opname": ["owner", "admin_gudang", "finance"],
   "/inbound": ["owner", "admin_gudang"],
   "/outbound": ["owner", "shopkeeper"],
-  "/returns": ["owner", "admin_gudang", "admin_online"],
+  "/returns": ["owner", "admin_gudang", "admin_online", "finance"],
   "/barcode-generate": ["owner", "admin_gudang"],
 
   // Pembelian (Phase 2)
