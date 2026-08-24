@@ -23,8 +23,11 @@ const importRowSchema = z.object({
   // numerik `size` diturunkan trigger DB. coerce agar angka CSV (40) jadi "40".
   size: z.coerce.string().trim().min(1),
   color: z.string().trim().optional(),
-  // Barcode opsional — auto-generate dari SKU + size kalau kosong.
-  barcode: z.string().trim().optional(),
+  // Barcode berasal dari Accurate dan wajib unik untuk setiap variant size.
+  barcode: z.preprocess(
+    (value) => (value == null ? "" : String(value)),
+    z.string().trim().min(1, "Barcode Accurate wajib diisi"),
+  ),
   quantity: z.preprocess(numberInputOrZero, z.coerce.number().int().nonnegative()),
   hpp: z.preprocess(numberInputOrZero, z.coerce.number().nonnegative()),
   sell_price: z.preprocess(numberInputOrZero, z.coerce.number().nonnegative()),
@@ -35,11 +38,6 @@ const importRowSchema = z.object({
   price_tiktok: z.preprocess(numberInputOrUndefined, z.coerce.number().nonnegative().optional()),
   price_tokopedia: z.preprocess(numberInputOrUndefined, z.coerce.number().nonnegative().optional()),
 });
-
-/** Barcode auto-generate: unik per SKU+size, alfanumerik, scannable (Code128). */
-function autoBarcode(sku: string, sizeLabel: string) {
-  return `${sku}-${sizeLabel}`.replace(/[^A-Za-z0-9-]/g, "").toUpperCase().slice(0, 120);
-}
 
 function normalizeNumberInput(value: unknown) {
   if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
@@ -138,7 +136,7 @@ function importPayload(row: ImportProductRow) {
     sku: row.sku,
     size_label: row.size,
     color: row.color || null,
-    barcode: row.barcode?.trim() || autoBarcode(row.sku, row.size),
+    barcode: row.barcode,
     quantity: row.quantity,
     hpp: row.hpp,
     sell_price: row.sell_price,
@@ -334,10 +332,6 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
       continue;
     }
 
-    // Barcode opsional → auto-generate dari SKU + size kalau kosong.
-    parsed.data.barcode =
-      parsed.data.barcode?.trim() || autoBarcode(parsed.data.sku, parsed.data.size);
-
     const sizeNum = seedSizeValue(parsed.data);
     if (sizeNum == null) {
       errors.push({ row: i + 2, reason: "Size harus numerik atau pecahan valid" });
@@ -404,7 +398,7 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
 
   const toInsert: ParsedImportProductRow[] = [];
   for (const row of parsedRows) {
-    if (existingProductKeys.has(row.seedKey) || existingBarcodes.has(row.data.barcode!)) {
+    if (existingProductKeys.has(row.seedKey) || existingBarcodes.has(row.data.barcode)) {
       skipped++;
     } else {
       toInsert.push(row);
@@ -479,9 +473,6 @@ export async function bulkImportMarketplaceProducts(
       });
       continue;
     }
-
-    parsed.data.barcode =
-      parsed.data.barcode?.trim() || autoBarcode(parsed.data.sku, parsed.data.size);
 
     const sizeNum = seedSizeValue(parsed.data);
     if (sizeNum == null) {
@@ -612,7 +603,7 @@ export async function bulkImportMarketplaceProducts(
     const byBarcode = new Map((data ?? []).map((product) => [product.barcode, product.id]));
     inserted += data?.length ?? 0;
     for (const row of batch) {
-      const productId = byBarcode.get(row.data.barcode!);
+      const productId = byBarcode.get(row.data.barcode);
       if (!productId) continue;
       mapRows.push({
         channel: parsedChannel.data,

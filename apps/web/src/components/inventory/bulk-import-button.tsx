@@ -23,7 +23,7 @@ type Result = {
 
 type Source = "internal" | ProductImportChannel;
 
-const REQUIRED_COLUMNS = ["brand", "model", "sku", "size"] as const;
+const REQUIRED_COLUMNS = ["brand", "model", "sku", "size", "barcode"] as const;
 
 const SOURCES: Array<{
   id: Source;
@@ -66,12 +66,12 @@ function sourceDescription(source: Source) {
       <>
         Upload Excel/CSV master produk dengan kolom{" "}
         <span className="font-mono text-white/70">
-          brand, model, sku, size, color, quantity, hpp, sell_price, price_offline,
-          price_website, price_shopee, price_tiktok, price_tokopedia
+          brand, model, sku, size, barcode, color, quantity, hpp, sell_price,
+          price_offline, price_website, price_shopee, price_tiktok, price_tokopedia
         </span>
         . Size boleh pecahan (mis. <span className="font-mono text-white/70">42 2/3</span>).
-        Stok &amp; HPP dibaca sebagai saldo awal. <strong>Barcode auto-generate</strong> dari
-        SKU+size kalau kosong. SKU/barcode yang sudah ada akan dilewati.
+        Stok &amp; HPP dibaca sebagai saldo awal. <strong>Barcode Accurate wajib diisi</strong>{" "}
+        dan harus unik untuk setiap size. SKU/size atau barcode yang sudah ada akan dilewati.
       </>
     );
   }
@@ -104,6 +104,7 @@ export function BulkImportButton() {
         "model",
         "sku",
         "size",
+        "barcode",
         "color",
         "quantity",
         "hpp",
@@ -121,6 +122,7 @@ export function BulkImportButton() {
         "Air Force 1 Low Triple White",
         "DH2920 111",
         "40",
+        "104163",
         "White",
         5,
         596000,
@@ -136,6 +138,7 @@ export function BulkImportButton() {
         "Air Force 1 Low Triple White",
         "DH2920 111",
         "42.5",
+        "104164",
         "White",
         3,
         596000,
@@ -151,6 +154,7 @@ export function BulkImportButton() {
         "Samba OG Cloud White",
         "IE7096",
         "42 2/3",
+        "104165",
         "White",
         2,
         2200000,
@@ -162,6 +166,34 @@ export function BulkImportButton() {
         "",
       ],
     ]);
+    ws["!cols"] = [
+      { wch: 14 },
+      { wch: 34 },
+      { wch: 18 },
+      { wch: 12 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 10 },
+      { wch: 14 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 16 },
+    ];
+    if (ws["!ref"]) ws["!autofilter"] = { ref: ws["!ref"] };
+    // Barcode adalah identifier, bukan angka hitung. Simpan sebagai teks agar nol
+    // di depan tidak hilang saat template dibuka atau diisi ulang di Excel.
+    for (let row = 1; row <= 3; row++) {
+      const address = XLSX.utils.encode_cell({ r: row, c: 4 });
+      const cell = ws[address];
+      if (cell) {
+        cell.t = "s";
+        cell.z = "@";
+        cell.v = String(cell.v);
+      }
+    }
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Products");
     XLSX.writeFile(wb, "sneakervault-import-template.xlsx");
@@ -202,7 +234,7 @@ export function BulkImportButton() {
         if (source === "internal") {
           const rows = XLSX.utils.sheet_to_json(ws) as Record<string, unknown>[];
           if (rows.length === 0) {
-            setStatus({ tone: "error", message: "Tidak ada baris data. Isi minimal satu produk dengan brand, model, sku, size, quantity, hpp, dan harga jual." });
+            setStatus({ tone: "error", message: "Tidak ada baris data. Isi minimal satu produk dengan brand, model, sku, size, barcode Accurate, quantity, hpp, dan harga jual." });
             toast.push("Tidak ada baris data", "error");
             return;
           }
@@ -210,7 +242,7 @@ export function BulkImportButton() {
           if (missing.length > 0) {
             setStatus({
               tone: "error",
-              message: `Format produk tidak diterima. Kolom wajib kurang: ${missing.join(", ")}. Header minimal: brand, model, sku, size. Kolom angka boleh format Rp/1.000.000 dan size boleh 40, 40.5, atau 42 2/3.`,
+              message: `Format produk tidak diterima. Kolom wajib kurang: ${missing.join(", ")}. Header minimal: brand, model, sku, size, barcode. Kolom angka boleh format Rp/1.000.000 dan size boleh 40, 40.5, atau 42 2/3.`,
             });
             toast.push(
               `Ini bukan template produk inventory. Kolom wajib kurang: ${missing.join(", ")}`,
