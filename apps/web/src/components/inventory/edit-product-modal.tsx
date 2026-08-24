@@ -16,7 +16,7 @@ import {
   NumberInput,
 } from "@sneakervault/ui";
 import {
-  addProductVariantToSku,
+  addProductVariantsToSku,
   updateProduct,
 } from "@/lib/actions/products";
 import { useToast } from "@/components/toast";
@@ -63,6 +63,36 @@ type ChannelPriceKey =
   | "price_tiktok"
   | "price_tokopedia";
 
+type AddVariantFormState = {
+  key: string;
+  size_label: string;
+  barcode: string;
+  sell_price: number;
+  price_offline: number;
+  price_website: number;
+  price_shopee: number;
+  price_tiktok: number;
+  price_tokopedia: number;
+  channel_prices_open: boolean;
+  channel_prices_custom: boolean;
+};
+
+function emptyAddVariant(): AddVariantFormState {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    size_label: "",
+    barcode: "",
+    sell_price: 0,
+    price_offline: 0,
+    price_website: 0,
+    price_shopee: 0,
+    price_tiktok: 0,
+    price_tokopedia: 0,
+    channel_prices_open: false,
+    channel_prices_custom: false,
+  };
+}
+
 function collectErrors(error: Record<string, unknown>) {
   const errors: Record<string, string> = {};
   for (const [key, value] of Object.entries(error)) {
@@ -85,8 +115,6 @@ export function EditProductModal({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [mode, setMode] = useState<"edit" | "add-size">("edit");
   const [showEditChannels, setShowEditChannels] = useState(false);
-  const [showAddChannels, setShowAddChannels] = useState(false);
-  const [addChannelsCustom, setAddChannelsCustom] = useState(false);
   const [form, setForm] = useState({
     brand: product.brand,
     model: product.model,
@@ -103,16 +131,9 @@ export function EditProductModal({
     color: product.color ?? "",
     image_url: product.image_url ?? "",
   });
-  const [addForm, setAddForm] = useState({
-    size_label: "",
-    barcode: "",
-    sell_price: 0,
-    price_offline: 0,
-    price_website: 0,
-    price_shopee: 0,
-    price_tiktok: 0,
-    price_tokopedia: 0,
-  });
+  const [addVariants, setAddVariants] = useState<AddVariantFormState[]>([
+    emptyAddVariant(),
+  ]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [addErrors, setAddErrors] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(false);
@@ -182,50 +203,84 @@ export function EditProductModal({
     });
   }
 
-  function updateAddChannel(field: ChannelPriceKey, value: number) {
-    setAddForm((current) => ({
-      ...current,
-      price_website: addChannelsCustom
-        ? current.price_website
-        : current.sell_price,
-      price_shopee: addChannelsCustom
-        ? current.price_shopee
-        : current.sell_price,
-      price_tiktok: addChannelsCustom
-        ? current.price_tiktok
-        : current.sell_price,
-      price_tokopedia: addChannelsCustom
-        ? current.price_tokopedia
-        : current.sell_price,
-      [field]: value,
-    }));
-    setAddChannelsCustom(true);
+  function updateAddVariant(
+    key: string,
+    patch: Partial<Omit<AddVariantFormState, "key">>,
+  ) {
+    setAddVariants((current) =>
+      current.map((variant) =>
+        variant.key === key ? { ...variant, ...patch } : variant,
+      ),
+    );
   }
 
-  function handleAddSize() {
+  function updateAddChannel(
+    key: string,
+    field: ChannelPriceKey,
+    value: number,
+  ) {
+    setAddVariants((current) =>
+      current.map((variant) => {
+        if (variant.key !== key) return variant;
+        return {
+          ...variant,
+          price_website: variant.channel_prices_custom
+            ? variant.price_website
+            : variant.sell_price,
+          price_shopee: variant.channel_prices_custom
+            ? variant.price_shopee
+            : variant.sell_price,
+          price_tiktok: variant.channel_prices_custom
+            ? variant.price_tiktok
+            : variant.sell_price,
+          price_tokopedia: variant.channel_prices_custom
+            ? variant.price_tokopedia
+            : variant.sell_price,
+          [field]: value,
+          channel_prices_custom: true,
+        };
+      }),
+    );
+  }
+
+  function handleAddSizes() {
     setAddErrors({});
     startTransition(async () => {
-      const channelPrice = (field: ChannelPriceKey) =>
-        addChannelsCustom ? addForm[field] : addForm.sell_price;
-      const result = await addProductVariantToSku({
+      const result = await addProductVariantsToSku({
         source_product_id: product.id,
-        variant: {
-          size_label: addForm.size_label,
-          barcode: addForm.barcode,
-          sell_price: canEditPrice ? addForm.sell_price : 0,
-          price_offline: canEditPrice ? addForm.price_offline : 0,
-          price_website: canEditPrice ? channelPrice("price_website") : 0,
-          price_shopee: canEditPrice ? channelPrice("price_shopee") : 0,
-          price_tiktok: canEditPrice ? channelPrice("price_tiktok") : 0,
-          price_tokopedia: canEditPrice ? channelPrice("price_tokopedia") : 0,
-        },
+        variants: addVariants.map((variant) => ({
+          size_label: variant.size_label,
+          barcode: variant.barcode,
+          sell_price: canEditPrice ? variant.sell_price : 0,
+          price_offline: canEditPrice ? variant.price_offline : 0,
+          price_website: canEditPrice
+            ? variant.channel_prices_custom
+              ? variant.price_website
+              : variant.sell_price
+            : 0,
+          price_shopee: canEditPrice
+            ? variant.channel_prices_custom
+              ? variant.price_shopee
+              : variant.sell_price
+            : 0,
+          price_tiktok: canEditPrice
+            ? variant.channel_prices_custom
+              ? variant.price_tiktok
+              : variant.sell_price
+            : 0,
+          price_tokopedia: canEditPrice
+            ? variant.channel_prices_custom
+              ? variant.price_tokopedia
+              : variant.sell_price
+            : 0,
+        })),
       });
       if ("error" in result && result.error) {
         setAddErrors(collectErrors(result.error));
         toast.push("Size baru belum tersimpan", "error");
         return;
       }
-      toast.push(`Size ${addForm.size_label} berhasil ditambahkan`, "success");
+      toast.push(`${addVariants.length} size berhasil ditambahkan`, "success");
       onOpenChange(false);
       router.refresh();
     });
@@ -233,7 +288,12 @@ export function EditProductModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-2xl overflow-y-auto">
+      <DialogContent
+        className={cn(
+          "max-h-[calc(100dvh-2rem)] overflow-y-auto transition-[max-width]",
+          mode === "add-size" ? "max-w-4xl" : "max-w-2xl",
+        )}
+      >
         <DialogHeader>
           <DialogTitle>Kelola Produk</DialogTitle>
           <DialogDescription>
@@ -579,143 +639,229 @@ export function EditProductModal({
           <>
             <div className="space-y-4 pt-1">
               <Alert tone="info">
-                Brand, model, SKU, warna, foto, dan HPP otomatis mengikuti produk ini. Anda hanya perlu mengisi data size baru.
+                Brand, model, SKU, warna, foto, dan HPP otomatis mengikuti produk ini. Isi satu atau beberapa size baru di bawah.
               </Alert>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex items-end justify-between gap-3">
                 <div>
-                  <FieldLabel htmlFor="new-size">Size baru</FieldLabel>
-                  <Input
-                    id="new-size"
-                    value={addForm.size_label}
-                    onChange={(event) =>
-                      setAddForm({ ...addForm, size_label: event.target.value })
-                    }
-                    placeholder="42 atau 42 2/3"
-                    autoFocus
-                  />
-                  <FieldError message={addErrors.size_label} />
-                </div>
-                <div>
-                  <FieldLabel htmlFor="new-barcode">Barcode Accurate</FieldLabel>
-                  <Input
-                    id="new-barcode"
-                    value={addForm.barcode}
-                    onChange={(event) =>
-                      setAddForm({ ...addForm, barcode: event.target.value })
-                    }
-                    placeholder="104163"
-                    className="font-mono"
-                  />
-                  <p className="mt-1 text-[11px] text-white/35">
-                    Akan terkunci setelah disimpan.
+                  <p className="text-xs font-semibold text-white/65">Size baru</p>
+                  <p className="mt-0.5 text-[11px] text-white/35">
+                    Semua baris disimpan sekaligus. Jika ada duplikat, tidak ada yang tersimpan.
                   </p>
-                  <FieldError message={addErrors.barcode} />
                 </div>
+                <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] text-white/45">
+                  {addVariants.length} size
+                </span>
               </div>
 
-              {canEditPrice ? (
-                <div className="space-y-3">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <FieldLabel htmlFor="new-online">Harga Online (Rp)</FieldLabel>
-                      <NumberInput
-                        id="new-online"
-                        min={0}
-                        value={addForm.sell_price}
-                        onValueChange={(value) =>
-                          setAddForm({ ...addForm, sell_price: value })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel htmlFor="new-offline">Harga Offline (Rp)</FieldLabel>
-                      <NumberInput
-                        id="new-offline"
-                        min={0}
-                        value={addForm.price_offline}
-                        onValueChange={(value) =>
-                          setAddForm({ ...addForm, price_offline: value })
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    aria-expanded={showAddChannels}
-                    onClick={() => setShowAddChannels((current) => !current)}
-                    className="flex w-full items-center justify-between rounded-lg border border-white/[0.07] px-3 py-2 text-left text-xs font-medium text-white/55 transition hover:bg-white/[0.03] hover:text-white/75"
+              <div className="space-y-3">
+                {addVariants.map((variant, index) => (
+                  <div
+                    key={variant.key}
+                    className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"
                   >
-                    {addChannelsCustom
-                      ? "Harga marketplace khusus"
-                      : "Harga marketplace mengikuti harga online"}
-                    <ChevronDown
-                      size={14}
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold text-white/55">
+                        Size #{index + 1}
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={addVariants.length === 1}
+                        onClick={() =>
+                          setAddVariants((current) =>
+                            current.filter((item) => item.key !== variant.key),
+                          )
+                        }
+                        aria-label={`Hapus size baru ${index + 1}`}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+
+                    <div
                       className={cn(
-                        "transition-transform",
-                        showAddChannels && "rotate-180",
+                        "grid gap-3",
+                        canEditPrice
+                          ? "sm:grid-cols-2 lg:grid-cols-[minmax(140px,0.75fr)_minmax(200px,1.2fr)_minmax(160px,1fr)_minmax(160px,1fr)]"
+                          : "sm:grid-cols-2",
                       )}
-                    />
-                  </button>
-                  {showAddChannels && (
-                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-[11px] text-white/40">
-                          Ubah hanya jika harga channel memang berbeda.
-                        </p>
-                        {addChannelsCustom && (
-                          <button
-                            type="button"
-                            onClick={() => setAddChannelsCustom(false)}
-                            className="text-[11px] font-medium text-cyan-300/75 hover:text-cyan-200"
-                          >
-                            Samakan dengan harga online
-                          </button>
-                        )}
+                    >
+                      <div>
+                        <FieldLabel htmlFor={`new-size-${variant.key}`}>
+                          Size
+                        </FieldLabel>
+                        <Input
+                          id={`new-size-${variant.key}`}
+                          value={variant.size_label}
+                          onChange={(event) =>
+                            updateAddVariant(variant.key, {
+                              size_label: event.target.value,
+                            })
+                          }
+                          placeholder="42 atau 42 2/3"
+                          autoFocus={index === 0}
+                        />
                       </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {(
-                          [
-                            ["price_website", "Website"],
-                            ["price_shopee", "Shopee"],
-                            ["price_tiktok", "TikTok"],
-                            ["price_tokopedia", "Tokopedia"],
-                          ] as Array<[ChannelPriceKey, string]>
-                        ).map(([field, label]) => (
-                          <div key={field}>
-                            <FieldLabel htmlFor={`new-${field}`}>
-                              {label} (Rp)
+                      <div>
+                        <FieldLabel htmlFor={`new-barcode-${variant.key}`}>
+                          Barcode Accurate
+                        </FieldLabel>
+                        <Input
+                          id={`new-barcode-${variant.key}`}
+                          value={variant.barcode}
+                          onChange={(event) =>
+                            updateAddVariant(variant.key, {
+                              barcode: event.target.value,
+                            })
+                          }
+                          placeholder="104163"
+                          className="font-mono"
+                        />
+                      </div>
+                      {canEditPrice && (
+                        <>
+                          <div>
+                            <FieldLabel htmlFor={`new-online-${variant.key}`}>
+                              Harga Online (Rp)
                             </FieldLabel>
                             <NumberInput
-                              id={`new-${field}`}
+                              id={`new-online-${variant.key}`}
                               min={0}
-                              value={
-                                addChannelsCustom
-                                  ? addForm[field]
-                                  : addForm.sell_price
-                              }
+                              value={variant.sell_price}
                               onValueChange={(value) =>
-                                updateAddChannel(field, value)
+                                updateAddVariant(variant.key, {
+                                  sell_price: value,
+                                })
                               }
                             />
                           </div>
-                        ))}
-                      </div>
+                          <div>
+                            <FieldLabel htmlFor={`new-offline-${variant.key}`}>
+                              Harga Offline (Rp)
+                            </FieldLabel>
+                            <NumberInput
+                              id={`new-offline-${variant.key}`}
+                              min={0}
+                              value={variant.price_offline}
+                              onValueChange={(value) =>
+                                updateAddVariant(variant.key, {
+                                  price_offline: value,
+                                })
+                              }
+                            />
+                          </div>
+                        </>
+                      )}
                     </div>
-                  )}
-                </div>
-              ) : (
+
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11px] text-white/30">
+                        Barcode dikunci setelah produk disimpan.
+                      </p>
+                      {canEditPrice && (
+                        <button
+                          type="button"
+                          aria-expanded={variant.channel_prices_open}
+                          onClick={() =>
+                            updateAddVariant(variant.key, {
+                              channel_prices_open: !variant.channel_prices_open,
+                            })
+                          }
+                          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-medium text-cyan-300/75 transition hover:bg-cyan-400/[0.07] hover:text-cyan-200"
+                        >
+                          {variant.channel_prices_custom
+                            ? "Harga marketplace khusus"
+                            : "Atur harga marketplace"}
+                          <ChevronDown
+                            size={13}
+                            className={cn(
+                              "transition-transform",
+                              variant.channel_prices_open && "rotate-180",
+                            )}
+                          />
+                        </button>
+                      )}
+                    </div>
+
+                    {canEditPrice && variant.channel_prices_open && (
+                      <div className="mt-3 rounded-lg border border-white/[0.06] bg-black/10 p-3">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-[11px] text-white/40">
+                            Ubah hanya jika harga channel berbeda.
+                          </p>
+                          {variant.channel_prices_custom && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateAddVariant(variant.key, {
+                                  channel_prices_custom: false,
+                                })
+                              }
+                              className="text-[11px] font-medium text-cyan-300/75 hover:text-cyan-200"
+                            >
+                              Samakan dengan harga online
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          {(
+                            [
+                              ["price_website", "Website"],
+                              ["price_shopee", "Shopee"],
+                              ["price_tiktok", "TikTok"],
+                              ["price_tokopedia", "Tokopedia"],
+                            ] as Array<[ChannelPriceKey, string]>
+                          ).map(([field, label]) => (
+                            <div key={field}>
+                              <FieldLabel htmlFor={`new-${field}-${variant.key}`}>
+                                {label} (Rp)
+                              </FieldLabel>
+                              <NumberInput
+                                id={`new-${field}-${variant.key}`}
+                                min={0}
+                                value={
+                                  variant.channel_prices_custom
+                                    ? variant[field]
+                                    : variant.sell_price
+                                }
+                                onValueChange={(value) =>
+                                  updateAddChannel(variant.key, field, value)
+                                }
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  disabled={addVariants.length >= 100}
+                  onClick={() =>
+                    setAddVariants((current) => [...current, emptyAddVariant()])
+                  }
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/[0.12] px-4 py-3 text-sm font-medium text-white/55 transition hover:border-cyan-400/30 hover:bg-cyan-400/[0.04] hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Plus size={15} />
+                  Tambah size berikutnya
+                </button>
+              </div>
+
+              {!canEditPrice && (
                 <Alert tone="info">
                   Harga awal disimpan 0 dan dapat dilengkapi Owner/Finance.
                 </Alert>
               )}
 
-              {addErrors.variant && <Alert tone="error">{addErrors.variant}</Alert>}
+              {addErrors.variants && <Alert tone="error">{addErrors.variants}</Alert>}
               {addErrors._form && <Alert tone="error">{addErrors._form}</Alert>}
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="sticky bottom-0 z-10 -mx-2 mt-6 flex justify-end gap-3 border-t border-white/[0.06] bg-[#111111]/95 px-2 pb-1 pt-4 backdrop-blur-xl">
               <Button
                 variant="ghost"
                 onClick={() => onOpenChange(false)}
@@ -724,14 +870,18 @@ export function EditProductModal({
                 Batal
               </Button>
               <Button
-                onClick={handleAddSize}
+                onClick={handleAddSizes}
                 disabled={
                   pending ||
-                  !addForm.size_label.trim() ||
-                  !addForm.barcode.trim()
+                  addVariants.some(
+                    (variant) =>
+                      !variant.size_label.trim() || !variant.barcode.trim(),
+                  )
                 }
               >
-                {pending ? "Menyimpan..." : "Simpan size baru"}
+                {pending
+                  ? "Menyimpan semua..."
+                  : `Simpan ${addVariants.length} size`}
               </Button>
             </div>
           </>

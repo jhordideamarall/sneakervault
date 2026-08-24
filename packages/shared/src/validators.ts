@@ -40,39 +40,46 @@ export const productVariantInputSchema = z.object({
   price_tokopedia: z.coerce.number().nonnegative("Harga Tokopedia tidak boleh negatif"),
 });
 
+const productVariantsArraySchema = z
+  .array(productVariantInputSchema)
+  .min(1, "Minimal satu variant size")
+  .max(100, "Maksimal 100 variant dalam satu penyimpanan");
+
+function validateProductVariantBatch(
+  value: { variants: z.infer<typeof productVariantInputSchema>[] },
+  ctx: z.RefinementCtx,
+) {
+  const sizes = new Set<string>();
+  const barcodes = new Set<string>();
+  value.variants.forEach((variant, index) => {
+    const sizeKey = variant.size_label.replace(/,/g, ".").toLowerCase();
+    if (sizes.has(sizeKey)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Size duplikat dalam daftar variant",
+        path: ["variants", index, "size_label"],
+      });
+    }
+    sizes.add(sizeKey);
+
+    const barcodeKey = variant.barcode.toLowerCase();
+    if (barcodes.has(barcodeKey)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Barcode duplikat dalam daftar variant",
+        path: ["variants", index, "barcode"],
+      });
+    }
+    barcodes.add(barcodeKey);
+  });
+}
+
 export const createProductVariantsBatchSchema = z
   .object({
     sharedProduct: sharedProductSchema,
-    variants: z
-      .array(productVariantInputSchema)
-      .min(1, "Minimal satu variant size")
-      .max(100, "Maksimal 100 variant dalam satu penyimpanan"),
+    variants: productVariantsArraySchema,
   })
-  .superRefine((value, ctx) => {
-    const sizes = new Set<string>();
-    const barcodes = new Set<string>();
-    value.variants.forEach((variant, index) => {
-      const sizeKey = variant.size_label.replace(/,/g, ".").toLowerCase();
-      if (sizes.has(sizeKey)) {
-        ctx.addIssue({
-          code: "custom",
-          message: "Size duplikat dalam daftar variant",
-          path: ["variants", index, "size_label"],
-        });
-      }
-      sizes.add(sizeKey);
-
-      const barcodeKey = variant.barcode.toLowerCase();
-      if (barcodes.has(barcodeKey)) {
-        ctx.addIssue({
-          code: "custom",
-          message: "Barcode duplikat dalam daftar variant",
-          path: ["variants", index, "barcode"],
-        });
-      }
-      barcodes.add(barcodeKey);
-    });
-  });
+  .superRefine(validateProductVariantBatch);
 
 export type SharedProductInput = z.infer<typeof sharedProductSchema>;
 export type ProductVariantInput = z.infer<typeof productVariantInputSchema>;
@@ -80,13 +87,15 @@ export type CreateProductVariantsBatchInput = z.infer<
   typeof createProductVariantsBatchSchema
 >;
 
-export const addProductVariantToSkuSchema = z.object({
-  source_product_id: z.string().uuid(),
-  variant: productVariantInputSchema,
-});
+export const addProductVariantsToSkuSchema = z
+  .object({
+    source_product_id: z.string().uuid(),
+    variants: productVariantsArraySchema,
+  })
+  .superRefine(validateProductVariantBatch);
 
-export type AddProductVariantToSkuInput = z.infer<
-  typeof addProductVariantToSkuSchema
+export type AddProductVariantsToSkuInput = z.infer<
+  typeof addProductVariantsToSkuSchema
 >;
 
 // ─── Product Condition Update ──────────────────────────────

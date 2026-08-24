@@ -7,7 +7,7 @@ import { logActivity } from "./activity-log";
 import { notifyEvent } from "./notify";
 import { createStockMovement } from "./stock-movements";
 import {
-  addProductVariantToSkuSchema,
+  addProductVariantsToSkuSchema,
   createProductVariantsBatchSchema,
   productUpdateSchema,
   productConditionInputSchema,
@@ -220,9 +220,9 @@ export async function createProductVariantsBatch(input: unknown) {
   return { data };
 }
 
-export async function addProductVariantToSku(input: unknown) {
+export async function addProductVariantsToSku(input: unknown) {
   const profile = await requireRole(["owner", "admin_gudang", "finance"]);
-  const parsed = addProductVariantToSkuSchema.safeParse(input);
+  const parsed = addProductVariantsToSkuSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
   const supabase = await createClient();
@@ -242,41 +242,48 @@ export async function addProductVariantToSku(input: unknown) {
     return { error: { _form: ["Produk sumber tidak ditemukan"] } };
   }
 
-  const variant = parsed.data.variant;
+  const payload = parsed.data.variants.map((variant) => ({
+    brand: source.brand,
+    model: source.model,
+    sku: source.sku,
+    color: source.color,
+    image_url: source.image_url,
+    hpp: source.hpp,
+    default_supplier_id: source.default_supplier_id,
+    size_label: variant.size_label,
+    barcode: variant.barcode,
+    sell_price: canEditPrice ? variant.sell_price : 0,
+    price_offline: canEditPrice ? variant.price_offline : 0,
+    price_website: canEditPrice ? variant.price_website : 0,
+    price_shopee: canEditPrice ? variant.price_shopee : 0,
+    price_tiktok: canEditPrice ? variant.price_tiktok : 0,
+    price_tokopedia: canEditPrice ? variant.price_tokopedia : 0,
+    quantity: 0,
+    is_active: true,
+  }));
   const { data, error } = await supabase
     .from("products")
-    .insert({
-      brand: source.brand,
-      model: source.model,
-      sku: source.sku,
-      color: source.color,
-      image_url: source.image_url,
-      hpp: source.hpp,
-      default_supplier_id: source.default_supplier_id,
-      size_label: variant.size_label,
-      barcode: variant.barcode,
-      sell_price: canEditPrice ? variant.sell_price : 0,
-      price_offline: canEditPrice ? variant.price_offline : 0,
-      price_website: canEditPrice ? variant.price_website : 0,
-      price_shopee: canEditPrice ? variant.price_shopee : 0,
-      price_tiktok: canEditPrice ? variant.price_tiktok : 0,
-      price_tokopedia: canEditPrice ? variant.price_tokopedia : 0,
-      quantity: 0,
-      is_active: true,
-    })
-    .select("id, sku, size_label, barcode")
-    .single();
+    .insert(payload)
+    .select("id, sku, size_label, barcode");
 
   if (error) {
     if (error.code === "23505" && error.message.toLowerCase().includes("barcode")) {
-      return { error: { barcode: ["Barcode sudah dipakai produk lain"] } };
+      return {
+        error: {
+          _form: ["Salah satu barcode sudah dipakai. Tidak ada size yang disimpan."],
+        },
+      };
     }
     if (
       error.code === "23505" &&
       (error.message.includes("idx_products_sku_sizenum") ||
         error.message.toLowerCase().includes("sku"))
     ) {
-      return { error: { size_label: ["Size ini sudah terdaftar untuk SKU tersebut"] } };
+      return {
+        error: {
+          _form: ["Salah satu size sudah terdaftar. Tidak ada size yang disimpan."],
+        },
+      };
     }
     return { error: { _form: [error.message] } };
   }
@@ -285,11 +292,11 @@ export async function addProductVariantToSku(input: unknown) {
     user_id: profile.id,
     action: "create",
     entity_type: "product",
-    entity_id: data.id,
+    entity_id: data?.[0]?.id,
     new_data: {
-      sku: data.sku,
-      size_label: data.size_label,
-      barcode: data.barcode,
+      sku: source.sku,
+      variants: data ?? [],
+      created_count: data?.length ?? 0,
       source_product_id: parsed.data.source_product_id,
     },
   });

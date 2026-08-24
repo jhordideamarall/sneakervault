@@ -16,6 +16,7 @@
 - [x] Padatkan form multi-size dengan harga channel di bagian lanjutan
 - [x] Tambahkan alur size baru dari modal edit produk
 - [x] Jalankan regression UI dan deploy follow-up ke production
+- [x] Dukung tambah beberapa size sekaligus dari modal edit
 
 ## Blockers
 - (kosong)
@@ -52,6 +53,7 @@
 - Browser smoke Playwright — lulus untuk batch add multi-size, barcode read-only, antrean cetak multi-produk, ukuran label mm, layout stock opname 390px, input manual, dan pembukaan kamera dengan fake media device; tidak ada page error
 - Follow-up UX: type-check, lint, build, dan `git diff --check` lulus; browser smoke desktop + 390px memastikan tiga baris size tetap ringkas, harga marketplace progressive disclosure, serta modal edit menyediakan tab Tambah size
 - Regression SQL diperluas untuk alur Tambah size dan lulus dalam transaksi rollback; sesudahnya tetap 2 produk, 3 profile, 46 COA, 14 kategori biaya, 6 app settings, 12 periode fiskal, dan 3 rekening bank
+- Follow-up multi-size edit: validator batch, type-check, lint, build, regression SQL dua size dalam transaksi rollback, serta browser smoke desktop + 390px lulus tanpa page error
 
 ## Production Deployment
 
@@ -61,4 +63,5 @@
 - Vercel deployment `dpl_H5rkA5ujBTwNj6jTGqkgK7XG5tjR` berstatus Ready dan dipromosikan ke `https://dewinst.vercel.app`.
 - Browser smoke pada domain production lulus seluruh alur UI di atas tanpa page error.
 - Follow-up deployment `dpl_DmyQ7XrZ4yToMJKeowCcS1uFWQH6` berstatus Ready dan aktif di `https://dewinst.vercel.app`; smoke test production untuk UX ringkas dan Tambah size lulus tanpa mutasi data bisnis.
+- Deployment multi-size edit `dpl_6cWfVgz27TwXPf3r6TGyB61B7D9x` berstatus Ready dan aktif di `https://dewinst.vercel.app`; production smoke memastikan tiga baris size dapat disiapkan sekaligus tanpa menyimpan fixture.
 - `supabase db lint` masih mendeteksi empat error lama pada fungsi marketplace/payroll/POS yang memakai temporary table; fungsi baru tidak menghasilkan temuan.
