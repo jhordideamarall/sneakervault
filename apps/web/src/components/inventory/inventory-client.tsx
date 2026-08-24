@@ -789,11 +789,25 @@ type VariantAddFormState = {
   price_shopee: number;
   price_tiktok: number;
   price_tokopedia: number;
+  channel_prices_open: boolean;
+  channel_prices_custom: boolean;
 };
 
 type VariantPriceKey = Exclude<
   keyof VariantAddFormState,
-  "key" | "size_label" | "barcode"
+  | "key"
+  | "size_label"
+  | "barcode"
+  | "channel_prices_open"
+  | "channel_prices_custom"
+>;
+
+type VariantChannelPriceKey = Extract<
+  VariantPriceKey,
+  | "price_website"
+  | "price_shopee"
+  | "price_tiktok"
+  | "price_tokopedia"
 >;
 
 function emptyVariant(): VariantAddFormState {
@@ -807,6 +821,8 @@ function emptyVariant(): VariantAddFormState {
     price_shopee: 0,
     price_tiktok: 0,
     price_tokopedia: 0,
+    channel_prices_open: false,
+    channel_prices_custom: false,
   };
 }
 
@@ -852,6 +868,35 @@ function AddProductForm({
     );
   }
 
+  function updateVariantChannel(
+    key: string,
+    field: VariantChannelPriceKey,
+    value: number,
+  ) {
+    setVariants((current) =>
+      current.map((variant) => {
+        if (variant.key !== key) return variant;
+        return {
+          ...variant,
+          price_website: variant.channel_prices_custom
+            ? variant.price_website
+            : variant.sell_price,
+          price_shopee: variant.channel_prices_custom
+            ? variant.price_shopee
+            : variant.sell_price,
+          price_tiktok: variant.channel_prices_custom
+            ? variant.price_tiktok
+            : variant.sell_price,
+          price_tokopedia: variant.channel_prices_custom
+            ? variant.price_tokopedia
+            : variant.sell_price,
+          [field]: value,
+          channel_prices_custom: true,
+        };
+      }),
+    );
+  }
+
   async function handlePhotoUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -893,10 +938,26 @@ function AddProductForm({
           barcode: variant.barcode,
           sell_price: canEditPrice ? variant.sell_price : 0,
           price_offline: canEditPrice ? variant.price_offline : 0,
-          price_website: canEditPrice ? variant.price_website : 0,
-          price_shopee: canEditPrice ? variant.price_shopee : 0,
-          price_tiktok: canEditPrice ? variant.price_tiktok : 0,
-          price_tokopedia: canEditPrice ? variant.price_tokopedia : 0,
+          price_website: canEditPrice
+            ? variant.channel_prices_custom
+              ? variant.price_website
+              : variant.sell_price
+            : 0,
+          price_shopee: canEditPrice
+            ? variant.channel_prices_custom
+              ? variant.price_shopee
+              : variant.sell_price
+            : 0,
+          price_tiktok: canEditPrice
+            ? variant.channel_prices_custom
+              ? variant.price_tiktok
+              : variant.sell_price
+            : 0,
+          price_tokopedia: canEditPrice
+            ? variant.channel_prices_custom
+              ? variant.price_tokopedia
+              : variant.sell_price
+            : 0,
         })),
       });
       if ("error" in result && result.error) {
@@ -1061,33 +1122,27 @@ function AddProductForm({
       </div>
 
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-white/45">
               Variant size
             </p>
             <p className="mt-1 text-[11px] text-white/35">
-              Barcode dan seluruh harga jual tersimpan per size.
+              Isi empat data utama per size. Harga marketplace mengikuti harga online kecuali diatur khusus.
             </p>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={() => setVariants((current) => [...current, emptyVariant()])}
-          >
-            <Plus size={14} />
-            Tambah Size
-          </Button>
+          <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] text-white/45">
+            {variants.length} size
+          </span>
         </div>
 
         {variants.map((variant, index) => (
           <div
             key={variant.key}
-            className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4"
+            className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"
           >
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-white/75">Size #{index + 1}</p>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold text-white/55">Size #{index + 1}</p>
               <Button
                 type="button"
                 size="sm"
@@ -1104,7 +1159,14 @@ function AddProductForm({
               </Button>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div
+              className={cn(
+                "grid gap-3",
+                canEditPrice
+                  ? "sm:grid-cols-2 xl:grid-cols-[minmax(100px,0.65fr)_minmax(180px,1.2fr)_minmax(145px,1fr)_minmax(145px,1fr)]"
+                  : "sm:grid-cols-2",
+              )}
+            >
               <div>
                 <FieldLabel htmlFor={`add-size-${variant.key}`}>Size</FieldLabel>
                 <Input
@@ -1127,43 +1189,132 @@ function AddProductForm({
                   placeholder="104163"
                   className="font-mono"
                 />
-                <p className="mt-1 text-[11px] text-white/35">
-                  Barcode akan terkunci setelah disimpan.
-                </p>
               </div>
-            </div>
-
-            {canEditPrice && (
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {(
-                  [
-                    ["sell_price", "Harga Online"],
-                    ["price_offline", "Harga Offline"],
-                    ["price_website", "Website"],
-                    ["price_shopee", "Shopee"],
-                    ["price_tiktok", "TikTok"],
-                    ["price_tokopedia", "Tokopedia"],
-                  ] as Array<[VariantPriceKey, string]>
-                ).map(([field, label]) => (
-                  <div key={field}>
-                    <FieldLabel htmlFor={`${field}-${variant.key}`}>
-                      {label} (Rp)
+              {canEditPrice && (
+                <>
+                  <div>
+                    <FieldLabel htmlFor={`sell-price-${variant.key}`}>
+                      Harga Online (Rp)
                     </FieldLabel>
                     <NumberInput
-                      id={`${field}-${variant.key}`}
+                      id={`sell-price-${variant.key}`}
                       min={0}
                       align="left"
-                      value={variant[field]}
+                      value={variant.sell_price}
                       onValueChange={(value) =>
-                        updateVariant(variant.key, { [field]: value })
+                        updateVariant(variant.key, { sell_price: value })
                       }
                     />
                   </div>
-                ))}
+                  <div>
+                    <FieldLabel htmlFor={`offline-price-${variant.key}`}>
+                      Harga Offline (Rp)
+                    </FieldLabel>
+                    <NumberInput
+                      id={`offline-price-${variant.key}`}
+                      min={0}
+                      align="left"
+                      value={variant.price_offline}
+                      onValueChange={(value) =>
+                        updateVariant(variant.key, { price_offline: value })
+                      }
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] text-white/30">
+                Barcode dikunci setelah produk disimpan.
+              </p>
+              {canEditPrice && (
+                <button
+                  type="button"
+                  aria-expanded={variant.channel_prices_open}
+                  onClick={() =>
+                    updateVariant(variant.key, {
+                      channel_prices_open: !variant.channel_prices_open,
+                    })
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-medium text-cyan-300/75 transition hover:bg-cyan-400/[0.07] hover:text-cyan-200"
+                >
+                  {variant.channel_prices_custom
+                    ? "Harga marketplace khusus"
+                    : "Atur harga marketplace"}
+                  <ChevronDown
+                    size={13}
+                    className={cn(
+                      "transition-transform",
+                      variant.channel_prices_open && "rotate-180",
+                    )}
+                  />
+                </button>
+              )}
+            </div>
+
+            {canEditPrice && variant.channel_prices_open && (
+              <div className="mt-3 rounded-lg border border-white/[0.06] bg-black/10 p-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[11px] text-white/40">
+                    Kosong dari pengaturan khusus = mengikuti harga online.
+                  </p>
+                  {variant.channel_prices_custom && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateVariant(variant.key, {
+                          channel_prices_custom: false,
+                        })
+                      }
+                      className="text-[11px] font-medium text-cyan-300/75 hover:text-cyan-200"
+                    >
+                      Samakan dengan harga online
+                    </button>
+                  )}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {(
+                    [
+                      ["price_website", "Website"],
+                      ["price_shopee", "Shopee"],
+                      ["price_tiktok", "TikTok"],
+                      ["price_tokopedia", "Tokopedia"],
+                    ] as Array<[VariantChannelPriceKey, string]>
+                  ).map(([field, label]) => (
+                    <div key={field}>
+                      <FieldLabel htmlFor={`${field}-${variant.key}`}>
+                        {label} (Rp)
+                      </FieldLabel>
+                      <NumberInput
+                        id={`${field}-${variant.key}`}
+                        min={0}
+                        align="left"
+                        value={
+                          variant.channel_prices_custom
+                            ? variant[field]
+                            : variant.sell_price
+                        }
+                        onValueChange={(value) =>
+                          updateVariantChannel(variant.key, field, value)
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
         ))}
+
+        <button
+          type="button"
+          onClick={() => setVariants((current) => [...current, emptyVariant()])}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/[0.12] px-4 py-3 text-sm font-medium text-white/55 transition hover:border-cyan-400/30 hover:bg-cyan-400/[0.04] hover:text-cyan-200"
+        >
+          <Plus size={15} />
+          Tambah size berikutnya
+        </button>
       </div>
 
       {fieldErrors._form && (

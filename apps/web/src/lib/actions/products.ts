@@ -7,6 +7,7 @@ import { logActivity } from "./activity-log";
 import { notifyEvent } from "./notify";
 import { createStockMovement } from "./stock-movements";
 import {
+  addProductVariantToSkuSchema,
   createProductVariantsBatchSchema,
   productUpdateSchema,
   productConditionInputSchema,
@@ -211,6 +212,85 @@ export async function createProductVariantsBatch(input: unknown) {
       sku: shared.sku,
       variants: data ?? [],
       created_count: data?.length ?? 0,
+    },
+  });
+
+  revalidatePath("/inventory");
+  revalidatePath("/barcode-generate");
+  return { data };
+}
+
+export async function addProductVariantToSku(input: unknown) {
+  const profile = await requireRole(["owner", "admin_gudang", "finance"]);
+  const parsed = addProductVariantToSkuSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+
+  const supabase = await createClient();
+  const canEditPrice =
+    profile.roles?.includes("owner") || profile.roles?.includes("finance");
+
+  const { data: source, error: sourceError } = await supabase
+    .from("products")
+    .select(
+      "brand, model, sku, color, image_url, hpp, default_supplier_id",
+    )
+    .eq("id", parsed.data.source_product_id)
+    .maybeSingle();
+
+  if (sourceError) return { error: { _form: [sourceError.message] } };
+  if (!source) {
+    return { error: { _form: ["Produk sumber tidak ditemukan"] } };
+  }
+
+  const variant = parsed.data.variant;
+  const { data, error } = await supabase
+    .from("products")
+    .insert({
+      brand: source.brand,
+      model: source.model,
+      sku: source.sku,
+      color: source.color,
+      image_url: source.image_url,
+      hpp: source.hpp,
+      default_supplier_id: source.default_supplier_id,
+      size_label: variant.size_label,
+      barcode: variant.barcode,
+      sell_price: canEditPrice ? variant.sell_price : 0,
+      price_offline: canEditPrice ? variant.price_offline : 0,
+      price_website: canEditPrice ? variant.price_website : 0,
+      price_shopee: canEditPrice ? variant.price_shopee : 0,
+      price_tiktok: canEditPrice ? variant.price_tiktok : 0,
+      price_tokopedia: canEditPrice ? variant.price_tokopedia : 0,
+      quantity: 0,
+      is_active: true,
+    })
+    .select("id, sku, size_label, barcode")
+    .single();
+
+  if (error) {
+    if (error.code === "23505" && error.message.toLowerCase().includes("barcode")) {
+      return { error: { barcode: ["Barcode sudah dipakai produk lain"] } };
+    }
+    if (
+      error.code === "23505" &&
+      (error.message.includes("idx_products_sku_sizenum") ||
+        error.message.toLowerCase().includes("sku"))
+    ) {
+      return { error: { size_label: ["Size ini sudah terdaftar untuk SKU tersebut"] } };
+    }
+    return { error: { _form: [error.message] } };
+  }
+
+  await logActivity({
+    user_id: profile.id,
+    action: "create",
+    entity_type: "product",
+    entity_id: data.id,
+    new_data: {
+      sku: data.sku,
+      size_label: data.size_label,
+      barcode: data.barcode,
+      source_product_id: parsed.data.source_product_id,
     },
   });
 

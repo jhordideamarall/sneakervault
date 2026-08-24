@@ -11,6 +11,7 @@ DECLARE
   v_user_id uuid;
   v_product_40 uuid;
   v_product_41 uuid;
+  v_product_42 uuid;
   v_session_id uuid;
   v_prefix text := 'CLIENT-MINOR-' || substr(gen_random_uuid()::text, 1, 8);
   v_result jsonb;
@@ -134,6 +135,41 @@ BEGIN
     AND price_tokopedia = 265;
   IF v_count <> 1 THEN
     RAISE EXCEPTION 'Sibling variant size/prices changed unexpectedly';
+  END IF;
+
+  -- "Tambah size" dari modal edit menyalin detail bersama/HPP dari variant
+  -- sumber dan hanya menerima identitas + harga untuk variant baru.
+  INSERT INTO public.products(
+    brand, model, sku, color, image_url, hpp, default_supplier_id,
+    size_label, barcode, sell_price, price_offline, price_website,
+    price_shopee, price_tiktok, price_tokopedia, quantity, is_active
+  )
+  SELECT
+    source.brand, source.model, source.sku, source.color, source.image_url,
+    source.hpp, source.default_supplier_id, '42', v_prefix || '-42',
+    320, 310, 320, 325, 330, 335, 0, true
+  FROM public.products AS source
+  WHERE source.id = v_product_40
+  RETURNING id INTO v_product_42;
+
+  SELECT count(*) INTO v_count
+  FROM public.products
+  WHERE id = v_product_42
+    AND brand = 'Updated Brand'
+    AND model = 'Updated Model'
+    AND sku = v_prefix || '-UPDATED'
+    AND color = 'Black'
+    AND hpp = 150
+    AND size_label = '42'
+    AND barcode = v_prefix || '-42'
+    AND sell_price = 320
+    AND price_offline = 310
+    AND price_website = 320
+    AND price_shopee = 325
+    AND price_tiktok = 330
+    AND price_tokopedia = 335;
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'Tambah size did not inherit shared fields or keep variant prices';
   END IF;
 
   BEGIN

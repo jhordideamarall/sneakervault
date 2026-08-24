@@ -80,6 +80,15 @@ export type CreateProductVariantsBatchInput = z.infer<
   typeof createProductVariantsBatchSchema
 >;
 
+export const addProductVariantToSkuSchema = z.object({
+  source_product_id: z.string().uuid(),
+  variant: productVariantInputSchema,
+});
+
+export type AddProductVariantToSkuInput = z.infer<
+  typeof addProductVariantToSkuSchema
+>;
+
 // ─── Product Condition Update ──────────────────────────────
 export const productConditionInputSchema = z
   .object({

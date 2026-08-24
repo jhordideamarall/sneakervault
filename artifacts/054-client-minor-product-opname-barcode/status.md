@@ -13,6 +13,9 @@
 - [x] Ubah halaman barcode menjadi antrean cetak multi-produk dengan ukuran mm
 - [x] Hapus action generate/regenerate barcode dan amankan script reset demo
 - [x] Tambahkan regression test serta jalankan type-check, lint, build, dan pemeriksaan database
+- [x] Padatkan form multi-size dengan harga channel di bagian lanjutan
+- [x] Tambahkan alur size baru dari modal edit produk
+- [x] Jalankan regression UI dan deploy follow-up ke production
 
 ## Blockers
 - (kosong)
@@ -47,6 +50,8 @@
 - `supabase db push --dry-run --linked` sebelum deploy — hanya mendeteksi migration baru ini
 - Regression migration + SQL dijalankan terhadap project terhubung dalam transaksi `BEGIN ... ROLLBACK` — lulus; sesudah rollback tetap 2 produk, 3 profile, 46 COA, 14 kategori biaya, 6 app settings, 12 periode fiskal, 3 rekening bank, dan 0 preferensi notifikasi
 - Browser smoke Playwright — lulus untuk batch add multi-size, barcode read-only, antrean cetak multi-produk, ukuran label mm, layout stock opname 390px, input manual, dan pembukaan kamera dengan fake media device; tidak ada page error
+- Follow-up UX: type-check, lint, build, dan `git diff --check` lulus; browser smoke desktop + 390px memastikan tiga baris size tetap ringkas, harga marketplace progressive disclosure, serta modal edit menyediakan tab Tambah size
+- Regression SQL diperluas untuk alur Tambah size dan lulus dalam transaksi rollback; sesudahnya tetap 2 produk, 3 profile, 46 COA, 14 kategori biaya, 6 app settings, 12 periode fiskal, dan 3 rekening bank
 
 ## Production Deployment
 
@@ -55,4 +60,5 @@
 - Verifikasi production: 2 produk dan seluruh akun/config tetap utuh; kedua RPC dan trigger barcode aktif; `anon` tidak memiliki execute dan `authenticated` memiliki execute.
 - Vercel deployment `dpl_H5rkA5ujBTwNj6jTGqkgK7XG5tjR` berstatus Ready dan dipromosikan ke `https://dewinst.vercel.app`.
 - Browser smoke pada domain production lulus seluruh alur UI di atas tanpa page error.
+- Follow-up deployment `dpl_DmyQ7XrZ4yToMJKeowCcS1uFWQH6` berstatus Ready dan aktif di `https://dewinst.vercel.app`; smoke test production untuk UX ringkas dan Tambah size lulus tanpa mutasi data bisnis.
 - `supabase db lint` masih mendeteksi empat error lama pada fungsi marketplace/payroll/POS yang memakai temporary table; fungsi baru tidak menghasilkan temuan.
