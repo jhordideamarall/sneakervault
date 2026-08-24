@@ -3539,6 +3539,10 @@ export type Database = {
         Args: { p_id: string; qty: number }
         Returns: undefined
       }
+      increment_stock_opname_count: {
+        Args: { p_barcode: string; p_session_id: string }
+        Returns: Json
+      }
       parse_size_to_numeric: { Args: { p_label: string }; Returns: number }
       pos_checkout: { Args: { p_payload: Json }; Returns: Json }
       process_return_atomic:
@@ -3622,6 +3626,10 @@ export type Database = {
           p_reason?: string
         }
         Returns: undefined
+      }
+      update_product_variant_and_sku_shared: {
+        Args: { p_patch: Json; p_product_id: string }
+        Returns: Json
       }
     }
     Enums: {

@@ -22,8 +22,10 @@ import {
   ShieldAlert,
   Clock,
   ClipboardList,
+  Plus,
+  Trash2,
 } from "lucide-react";
-import { createProduct } from "@/lib/actions/products";
+import { createProductVariantsBatch } from "@/lib/actions/products";
 import { createClient } from "@sneakervault/supabase/client";
 import { useToast } from "@/components/toast";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -768,18 +770,45 @@ function ChannelPriceCell({
 }
 
 // ─── Add Product Form ───────────────────────────────────────────────────────
-type AddFormState = {
+type SharedAddFormState = {
   brand: string;
   model: string;
   sku: string;
-  size: string;
   color: string;
-  barcode: string;
   hpp: number;
-  sell_price: number;
-  price_offline: number;
   image_url: string;
 };
+
+type VariantAddFormState = {
+  key: string;
+  size_label: string;
+  barcode: string;
+  sell_price: number;
+  price_offline: number;
+  price_website: number;
+  price_shopee: number;
+  price_tiktok: number;
+  price_tokopedia: number;
+};
+
+type VariantPriceKey = Exclude<
+  keyof VariantAddFormState,
+  "key" | "size_label" | "barcode"
+>;
+
+function emptyVariant(): VariantAddFormState {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    size_label: "",
+    barcode: "",
+    sell_price: 0,
+    price_offline: 0,
+    price_website: 0,
+    price_shopee: 0,
+    price_tiktok: 0,
+    price_tokopedia: 0,
+  };
+}
 
 type TransitionFn = (scope: () => void | Promise<void>) => void;
 
@@ -798,20 +827,30 @@ function AddProductForm({
   toast: ReturnType<typeof useToast>;
   router: ReturnType<typeof useRouter>;
 }) {
-  const [form, setForm] = useState<AddFormState>({
+  const [shared, setShared] = useState<SharedAddFormState>({
     brand: "",
     model: "",
     sku: "",
-    size: "",
     color: "",
-    barcode: "",
     hpp: 0,
-    sell_price: 0,
-    price_offline: 0,
     image_url: "",
   });
+  const [variants, setVariants] = useState<VariantAddFormState[]>([
+    emptyVariant(),
+  ]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(false);
+
+  function updateVariant(
+    key: string,
+    patch: Partial<Omit<VariantAddFormState, "key">>,
+  ) {
+    setVariants((current) =>
+      current.map((variant) =>
+        variant.key === key ? { ...variant, ...patch } : variant,
+      ),
+    );
+  }
 
   async function handlePhotoUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -833,25 +872,32 @@ function AddProductForm({
       return;
     }
     const { data } = supabase.storage.from("product-photos").getPublicUrl(path);
-    setForm((f) => ({ ...f, image_url: data.publicUrl }));
+    setShared((current) => ({ ...current, image_url: data.publicUrl }));
     setUploading(false);
   }
 
   function handleSubmit() {
     setFieldErrors({});
     startTransition(async () => {
-      const result = await createProduct({
-        brand: form.brand,
-        model: form.model,
-        sku: form.sku,
-        size_label: form.size,
-        color: form.color,
-        barcode: form.barcode,
-        hpp: canEditPrice ? form.hpp : 0,
-        sell_price: form.sell_price,
-        price_offline: form.price_offline || form.sell_price,
-        image_url: form.image_url.trim() || null,
-        quantity: 0,
+      const result = await createProductVariantsBatch({
+        sharedProduct: {
+          brand: shared.brand,
+          model: shared.model,
+          sku: shared.sku,
+          color: shared.color,
+          hpp: canEditPrice ? shared.hpp : 0,
+          image_url: shared.image_url.trim() || null,
+        },
+        variants: variants.map((variant) => ({
+          size_label: variant.size_label,
+          barcode: variant.barcode,
+          sell_price: canEditPrice ? variant.sell_price : 0,
+          price_offline: canEditPrice ? variant.price_offline : 0,
+          price_website: canEditPrice ? variant.price_website : 0,
+          price_shopee: canEditPrice ? variant.price_shopee : 0,
+          price_tiktok: canEditPrice ? variant.price_tiktok : 0,
+          price_tokopedia: canEditPrice ? variant.price_tokopedia : 0,
+        })),
       });
       if ("error" in result && result.error) {
         const errs: Record<string, string> = {};
@@ -862,22 +908,41 @@ function AddProductForm({
         toast.push("Gagal menambah produk", "error");
         return;
       }
-      toast.push("Produk berhasil ditambahkan", "success");
+      toast.push(`${variants.length} variant size berhasil ditambahkan`, "success");
       onClose();
       router.refresh();
     });
   }
 
+  const sharedIncomplete =
+    !shared.brand.trim() ||
+    !shared.model.trim() ||
+    !shared.sku.trim() ||
+    !shared.color.trim();
+  const variantIncomplete = variants.some(
+    (variant) => !variant.size_label.trim() || !variant.barcode.trim(),
+  );
+
   return (
-    <Card>
-      <h3 className="mb-4 text-sm font-semibold text-white">Tambah Produk Baru</h3>
-      <div className="grid gap-4 sm:grid-cols-3">
+    <Card className="space-y-6">
+      <div>
+        <h3 className="text-base font-semibold text-white">Tambah Produk Banyak Size</h3>
+        <p className="mt-1 text-xs text-white/45">
+          Isi detail colorway satu kali, lalu tambahkan barcode dan harga untuk setiap size.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-white/45">
+          Detail bersama
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <FieldLabel htmlFor="add-brand">Brand</FieldLabel>
           <Input
             id="add-brand"
-            value={form.brand}
-            onChange={(e) => setForm({ ...form, brand: e.target.value })}
+            value={shared.brand}
+            onChange={(e) => setShared({ ...shared, brand: e.target.value })}
             placeholder="Adidas"
           />
         </div>
@@ -885,8 +950,8 @@ function AddProductForm({
           <FieldLabel htmlFor="add-model">Model</FieldLabel>
           <Input
             id="add-model"
-            value={form.model}
-            onChange={(e) => setForm({ ...form, model: e.target.value })}
+            value={shared.model}
+            onChange={(e) => setShared({ ...shared, model: e.target.value })}
             placeholder="Samba White"
           />
         </div>
@@ -894,46 +959,29 @@ function AddProductForm({
           <FieldLabel htmlFor="add-sku">SKU</FieldLabel>
           <Input
             id="add-sku"
-            value={form.sku}
-            onChange={(e) => setForm({ ...form, sku: e.target.value })}
-            placeholder="ADS-SAMBA-WHT-42"
-          />
-        </div>
-        <div>
-          <FieldLabel htmlFor="add-size">Size</FieldLabel>
-          <Input
-            id="add-size"
-            type="text"
-            value={form.size}
-            onChange={(e) => setForm({ ...form, size: e.target.value })}
-            placeholder="42 atau 42 2/3"
+            value={shared.sku}
+            onChange={(e) => setShared({ ...shared, sku: e.target.value })}
+            placeholder="ADS-SAMBA-WHT"
           />
         </div>
         <div>
           <FieldLabel htmlFor="add-color">Warna</FieldLabel>
           <Input
             id="add-color"
-            value={form.color}
-            onChange={(e) => setForm({ ...form, color: e.target.value })}
+            value={shared.color}
+            onChange={(e) => setShared({ ...shared, color: e.target.value })}
             placeholder="Cloud White"
           />
         </div>
-        <div>
-          <FieldLabel htmlFor="add-barcode">Barcode</FieldLabel>
-          <Input
-            id="add-barcode"
-            value={form.barcode}
-            onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-            placeholder="104163"
-          />
         </div>
-        <div className="sm:col-span-3">
+
+        <div>
           <FieldLabel htmlFor="add-image">Foto Produk</FieldLabel>
-          {form.image_url ? (
+          {shared.image_url ? (
             <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.04] p-2.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={form.image_url}
+                src={shared.image_url}
                 alt="Pratinjau"
                 className="size-12 flex-shrink-0 rounded-lg border border-white/10 object-cover"
               />
@@ -953,7 +1001,7 @@ function AddProductForm({
               </label>
               <button
                 type="button"
-                onClick={() => setForm({ ...form, image_url: "" })}
+                onClick={() => setShared({ ...shared, image_url: "" })}
                 className="flex-shrink-0 text-[12px] text-white/40 transition hover:text-rose-300"
               >
                 Hapus
@@ -979,8 +1027,8 @@ function AddProductForm({
               <Input
                 id="add-image"
                 type="url"
-                value={form.image_url}
-                onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                value={shared.image_url}
+                onChange={(e) => setShared({ ...shared, image_url: e.target.value })}
                 placeholder="atau paste link gambar…"
               />
             </div>
@@ -989,9 +1037,8 @@ function AddProductForm({
             Upload dari galeri/HP, atau paste URL gambar.
           </p>
         </div>
-        {canEditPrice && (
-          <>
-            <div>
+        {canEditPrice ? (
+          <div className="max-w-sm">
               <FieldLabel htmlFor="add-hpp">
                 HPP / Modal (Rp)
               </FieldLabel>
@@ -999,54 +1046,142 @@ function AddProductForm({
                 id="add-hpp"
                 align="left"
                 placeholder="0"
-                value={form.hpp}
-                onValueChange={(n) => setForm({ ...form, hpp: n })}
+                value={shared.hpp}
+                onValueChange={(n) => setShared({ ...shared, hpp: n })}
               />
               <p className="mt-1 text-[11px] text-white/40">
-                Modal awal per SKU
+                Satu HPP untuk seluruh size dalam SKU
               </p>
-            </div>
-            <div>
-              <FieldLabel htmlFor="add-price-online">
-                Harga Online (Rp)
-              </FieldLabel>
-              <NumberInput
-                id="add-price-online"
-                align="left"
-                placeholder="0"
-                value={form.sell_price}
-                onValueChange={(n) => setForm({ ...form, sell_price: n })}
-              />
-              <p className="mt-1 text-[11px] text-white/40">
-                Shopee / TikTok / marketplace
-              </p>
-            </div>
-            <div>
-              <FieldLabel htmlFor="add-price-offline">
-                Harga Offline (Rp)
-              </FieldLabel>
-              <NumberInput
-                id="add-price-offline"
-                align="left"
-                placeholder="0"
-                value={form.price_offline}
-                onValueChange={(n) => setForm({ ...form, price_offline: n })}
-              />
-              <p className="mt-1 text-[11px] text-white/40">
-                WA / transfer langsung / website
-              </p>
-            </div>
-          </>
+          </div>
+        ) : (
+          <Alert tone="info">
+            HPP dan harga jual akan disimpan 0. Owner/Finance dapat melengkapinya lewat Edit Produk.
+          </Alert>
         )}
       </div>
+
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/45">
+              Variant size
+            </p>
+            <p className="mt-1 text-[11px] text-white/35">
+              Barcode dan seluruh harga jual tersimpan per size.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => setVariants((current) => [...current, emptyVariant()])}
+          >
+            <Plus size={14} />
+            Tambah Size
+          </Button>
+        </div>
+
+        {variants.map((variant, index) => (
+          <div
+            key={variant.key}
+            className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4"
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-white/75">Size #{index + 1}</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={variants.length === 1}
+                onClick={() =>
+                  setVariants((current) =>
+                    current.filter((item) => item.key !== variant.key),
+                  )
+                }
+                aria-label={`Hapus variant size ${index + 1}`}
+              >
+                <Trash2 size={14} />
+              </Button>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <FieldLabel htmlFor={`add-size-${variant.key}`}>Size</FieldLabel>
+                <Input
+                  id={`add-size-${variant.key}`}
+                  value={variant.size_label}
+                  onChange={(event) =>
+                    updateVariant(variant.key, { size_label: event.target.value })
+                  }
+                  placeholder="42 atau 42 2/3"
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor={`add-barcode-${variant.key}`}>Barcode Accurate</FieldLabel>
+                <Input
+                  id={`add-barcode-${variant.key}`}
+                  value={variant.barcode}
+                  onChange={(event) =>
+                    updateVariant(variant.key, { barcode: event.target.value })
+                  }
+                  placeholder="104163"
+                  className="font-mono"
+                />
+                <p className="mt-1 text-[11px] text-white/35">
+                  Barcode akan terkunci setelah disimpan.
+                </p>
+              </div>
+            </div>
+
+            {canEditPrice && (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {(
+                  [
+                    ["sell_price", "Harga Online"],
+                    ["price_offline", "Harga Offline"],
+                    ["price_website", "Website"],
+                    ["price_shopee", "Shopee"],
+                    ["price_tiktok", "TikTok"],
+                    ["price_tokopedia", "Tokopedia"],
+                  ] as Array<[VariantPriceKey, string]>
+                ).map(([field, label]) => (
+                  <div key={field}>
+                    <FieldLabel htmlFor={`${field}-${variant.key}`}>
+                      {label} (Rp)
+                    </FieldLabel>
+                    <NumberInput
+                      id={`${field}-${variant.key}`}
+                      min={0}
+                      align="left"
+                      value={variant[field]}
+                      onValueChange={(value) =>
+                        updateVariant(variant.key, { [field]: value })
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
       {fieldErrors._form && (
-        <Alert tone="error" className="mt-3">
+        <Alert tone="error">
           {fieldErrors._form}
         </Alert>
       )}
-      <div className="mt-4 flex gap-2">
-        <Button size="sm" disabled={pending} onClick={handleSubmit}>
-          {pending ? "Menyimpan…" : "Simpan"}
+      {fieldErrors.sharedProduct && (
+        <Alert tone="error">{fieldErrors.sharedProduct}</Alert>
+      )}
+      {fieldErrors.variants && <Alert tone="error">{fieldErrors.variants}</Alert>}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          disabled={pending || uploading || sharedIncomplete || variantIncomplete}
+          onClick={handleSubmit}
+        >
+          {pending ? "Menyimpan semua…" : `Simpan ${variants.length} Variant`}
         </Button>
         <Button size="sm" variant="ghost" onClick={onClose}>
           Batal

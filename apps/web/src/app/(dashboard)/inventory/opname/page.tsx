@@ -24,7 +24,7 @@ export default async function StockOpnamePage({
   const roles = profile?.roles ?? [];
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <div>
         <h1 className="text-2xl font-semibold text-white">Stock Opname</h1>
         <p className="mt-1 text-sm text-white/45">
@@ -32,6 +32,7 @@ export default async function StockOpnamePage({
         </p>
       </div>
       <StockOpnameClient
+        key={detail?.id ?? "new-opname"}
         sessions={sessions}
         detail={detail}
         canApprove={roles.includes("owner")}

@@ -118,7 +118,7 @@ const navGroups: NavGroup[] = [
       { href: "/inbound", label: "Barang Masuk", icon: i(QrCode) },
       { href: "/inventory/opname", label: "Stock Opname", icon: i(ClipboardList) },
       { href: "/penjualan/export-stok", label: "Update Stok Marketplace", icon: i(Download) },
-      { href: "/barcode-generate", label: "Generate Barcode", icon: i(QrCode) },
+      { href: "/barcode-generate", label: "Cetak Barcode", icon: i(QrCode) },
       { href: "/outbound", label: "Packing / Outbound", icon: i(PackageMinus) },
       { href: "/returns", label: "Retur", icon: i(RotateCcw) },
     ],

@@ -1,5 +1,7 @@
--- Reset only demo/business data. Auth users and profiles are kept intact so
--- existing login accounts remain usable.
+-- Reset only transactional/demo data. Accounts and configuration masters are
+-- intentionally kept intact: profiles, chart_of_accounts, expense_categories,
+-- app_settings, fiscal_periods, bank_accounts, notification_preferences, and
+-- suppliers.
 --
 -- Run before scripts/seed-demo-90-days.sql when you want a fresh demo story.
 
@@ -9,7 +11,6 @@ do $$
 declare
   table_name text;
   demo_tables text[] := array[
-    'notification_preferences',
     'internal_messages',
     'activity_logs',
     'delete_requests',
@@ -31,11 +32,9 @@ declare
     'journal_lines',
     'journal_entries',
     'bank_transactions',
-    'bank_accounts',
     'purchase_batches',
     'products',
-    'customers',
-    'suppliers'
+    'customers'
   ];
 begin
   foreach table_name in array demo_tables loop

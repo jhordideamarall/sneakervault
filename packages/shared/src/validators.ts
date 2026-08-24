@@ -20,6 +20,66 @@ export const productInputSchema = z.object({
 
 export type ProductInput = z.infer<typeof productInputSchema>;
 
+export const sharedProductSchema = z.object({
+  brand: z.string().trim().min(1, "Brand wajib diisi"),
+  model: z.string().trim().min(1, "Model wajib diisi"),
+  sku: z.string().trim().min(1, "SKU wajib diisi"),
+  color: z.string().trim().min(1, "Warna wajib diisi"),
+  image_url: z.string().url("URL foto tidak valid").nullable().optional(),
+  hpp: z.coerce.number().nonnegative("HPP tidak boleh negatif").default(0),
+});
+
+export const productVariantInputSchema = z.object({
+  size_label: z.string().trim().min(1, "Size wajib diisi"),
+  barcode: z.string().trim().min(1, "Barcode wajib diisi"),
+  sell_price: z.coerce.number().nonnegative("Harga online tidak boleh negatif"),
+  price_offline: z.coerce.number().nonnegative("Harga offline tidak boleh negatif"),
+  price_website: z.coerce.number().nonnegative("Harga website tidak boleh negatif"),
+  price_shopee: z.coerce.number().nonnegative("Harga Shopee tidak boleh negatif"),
+  price_tiktok: z.coerce.number().nonnegative("Harga TikTok tidak boleh negatif"),
+  price_tokopedia: z.coerce.number().nonnegative("Harga Tokopedia tidak boleh negatif"),
+});
+
+export const createProductVariantsBatchSchema = z
+  .object({
+    sharedProduct: sharedProductSchema,
+    variants: z
+      .array(productVariantInputSchema)
+      .min(1, "Minimal satu variant size")
+      .max(100, "Maksimal 100 variant dalam satu penyimpanan"),
+  })
+  .superRefine((value, ctx) => {
+    const sizes = new Set<string>();
+    const barcodes = new Set<string>();
+    value.variants.forEach((variant, index) => {
+      const sizeKey = variant.size_label.replace(/,/g, ".").toLowerCase();
+      if (sizes.has(sizeKey)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Size duplikat dalam daftar variant",
+          path: ["variants", index, "size_label"],
+        });
+      }
+      sizes.add(sizeKey);
+
+      const barcodeKey = variant.barcode.toLowerCase();
+      if (barcodes.has(barcodeKey)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Barcode duplikat dalam daftar variant",
+          path: ["variants", index, "barcode"],
+        });
+      }
+      barcodes.add(barcodeKey);
+    });
+  });
+
+export type SharedProductInput = z.infer<typeof sharedProductSchema>;
+export type ProductVariantInput = z.infer<typeof productVariantInputSchema>;
+export type CreateProductVariantsBatchInput = z.infer<
+  typeof createProductVariantsBatchSchema
+>;
+
 // ─── Product Condition Update ──────────────────────────────
 export const productConditionInputSchema = z
   .object({
@@ -46,7 +106,6 @@ export const productUpdateSchema = z.object({
   model: z.string().trim().min(1).optional(),
   sku: z.string().trim().min(1).optional(),
   size_label: z.string().trim().min(1).optional(),
-  barcode: z.string().trim().min(1).optional(),
   hpp: z.coerce.number().nonnegative().optional(),
   sell_price: z.coerce.number().nonnegative().optional(),
   price_offline: z.coerce.number().nonnegative().optional(),
@@ -620,8 +679,14 @@ export const stockOpnameCountSchema = z.object({
   lines: z.array(stockOpnameCountLineSchema).min(1, "Minimal 1 baris"),
 });
 
+export const incrementStockOpnameSchema = z.object({
+  session_id: z.string().uuid(),
+  barcode: z.string().trim().min(1, "Barcode wajib diisi"),
+});
+
 export type StartStockOpnameInput = z.infer<typeof startStockOpnameSchema>;
 export type StockOpnameCountInput = z.infer<typeof stockOpnameCountSchema>;
+export type IncrementStockOpnameInput = z.infer<typeof incrementStockOpnameSchema>;
 
 // ─── Fiscal Period Lock (PDF Scope A4) ────────────────────
 export const fiscalPeriodSchema = z.object({

@@ -18,7 +18,7 @@ import { updateProduct } from "@/lib/actions/products";
 import { useToast } from "@/components/toast";
 import { useRouter } from "next/navigation";
 import { createClient } from "@sneakervault/supabase/client";
-import { ImageOff, Trash2, Upload } from "lucide-react";
+import { ImageOff, Lock, Trash2, Upload } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -111,7 +111,6 @@ export function EditProductModal({
         patch.model = form.model;
         patch.sku = form.sku;
         patch.size_label = form.size_label;
-        patch.barcode = form.barcode;
         patch.color = form.color;
       }
       if (canEditPrice) {
@@ -149,13 +148,36 @@ export function EditProductModal({
         <DialogHeader>
           <DialogTitle>Edit Produk</DialogTitle>
           <DialogDescription>
-            {product.brand} {product.model} — Size {product.size_label}
+            Detail bersama akan disinkronkan ke semua size dalam SKU ini. Size dan harga hanya untuk variant terpilih.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
+          <Alert tone="info">
+            Barcode berasal dari Accurate dan terkunci setelah produk dibuat.
+          </Alert>
+          <div>
+            <FieldLabel htmlFor="barcode">Barcode</FieldLabel>
+            <div className="relative">
+              <Input
+                id="barcode"
+                value={form.barcode}
+                readOnly
+                aria-readonly="true"
+                className="pr-9 font-mono text-white/55"
+              />
+              <Lock
+                size={14}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/30"
+              />
+            </div>
+          </div>
           {canEditIdentity ? (
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-white/45">
+                Detail bersama semua size
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <FieldLabel htmlFor="brand">Brand</FieldLabel>
                 <Input
@@ -194,15 +216,6 @@ export function EditProductModal({
                 <FieldError message={fieldErrors.size_label} />
               </div>
               <div>
-                <FieldLabel htmlFor="barcode">Barcode</FieldLabel>
-                <Input
-                  id="barcode"
-                  value={form.barcode}
-                  onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-                />
-                <FieldError message={fieldErrors.barcode} />
-              </div>
-              <div>
                 <FieldLabel htmlFor="color">Warna</FieldLabel>
                 <Input
                   id="color"
@@ -212,6 +225,10 @@ export function EditProductModal({
                 />
                 <FieldError message={fieldErrors.color} />
               </div>
+              </div>
+              <p className="text-[11px] text-white/40">
+                Brand, model, SKU, warna, dan foto mengikuti seluruh variant. Size hanya berubah pada baris ini.
+              </p>
             </div>
           ) : null}
 
@@ -285,7 +302,7 @@ export function EditProductModal({
                   }
                 />
                 <p className="mt-1 text-[11px] text-white/40">
-                  Modal per SKU
+                  Disinkronkan ke semua size dalam SKU
                 </p>
                 <FieldError message={fieldErrors.hpp} />
               </div>
@@ -300,7 +317,7 @@ export function EditProductModal({
                   }
                 />
                 <p className="mt-1 text-[11px] text-white/40">
-                  Shopee, TikTok, marketplace
+                  Khusus size {product.size_label}
                 </p>
                 <FieldError message={fieldErrors.sell_price} />
               </div>
@@ -315,7 +332,7 @@ export function EditProductModal({
                   }
                 />
                 <p className="mt-1 text-[11px] text-white/40">
-                  WA, transfer langsung, website toko
+                  Khusus size {product.size_label}
                 </p>
                 <FieldError message={fieldErrors.price_offline} />
               </div>
@@ -397,8 +414,7 @@ export function EditProductModal({
                 (!form.brand.trim() ||
                   !form.model.trim() ||
                   !form.sku.trim() ||
-                  !form.size_label.trim() ||
-                  !form.barcode.trim()))
+                  !form.size_label.trim()))
             }
           >
             {pending ? "Menyimpan..." : "Simpan"}

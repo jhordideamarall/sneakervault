@@ -3,16 +3,46 @@
 import { useState, useTransition } from "react";
 import { generateBarcodeSvg } from "@sneakervault/barcode";
 import { Button, Card, Input } from "@sneakervault/ui";
-import { QrCode, Printer, RotateCcw, Package, Search, Check, Hash } from "lucide-react";
+import {
+  Hash,
+  Package,
+  Plus,
+  Printer,
+  QrCode,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { useToast } from "@/components/toast";
 import {
   searchProductsForLabel,
-  regenerateProductBarcode,
   type LabelProduct,
 } from "@/lib/actions/barcode";
 
+type LabelQueueItem = LabelProduct & {
+  labelQty: number;
+  widthMm: number;
+  heightMm: number;
+};
+
 function svgFor(barcode: string): string {
-  return generateBarcodeSvg(barcode, { width: 1.5, height: 40, displayValue: true });
+  return generateBarcodeSvg(barcode, {
+    width: 1.35,
+    height: 38,
+    displayValue: true,
+  });
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 export default function BarcodeGeneratePage() {
@@ -20,11 +50,10 @@ export default function BarcodeGeneratePage() {
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<LabelProduct[]>([]);
-  const [selected, setSelected] = useState<LabelProduct | null>(null);
-  const [qty, setQty] = useState(1);
-  const [previewSvg, setPreviewSvg] = useState("");
+  const [queue, setQueue] = useState<LabelQueueItem[]>([]);
 
   const today = new Date().toLocaleDateString("id-ID");
+  const totalLabels = queue.reduce((sum, item) => sum + item.labelQty, 0);
 
   function search(value: string) {
     setQuery(value);
@@ -35,167 +64,270 @@ export default function BarcodeGeneratePage() {
     startTransition(async () => setResults(await searchProductsForLabel(value)));
   }
 
-  function pick(p: LabelProduct) {
-    setSelected(p);
-    setPreviewSvg(svgFor(p.barcode));
+  function addToQueue(product: LabelProduct) {
+    setQueue((current) => {
+      const existing = current.find((item) => item.id === product.id);
+      if (existing) {
+        return current.map((item) =>
+          item.id === product.id
+            ? { ...item, labelQty: clamp(item.labelQty + 1, 1, 200) }
+            : item,
+        );
+      }
+      return [
+        ...current,
+        { ...product, labelQty: 1, widthMm: 50, heightMm: 25 },
+      ];
+    });
+    toast.push(`${product.brand} ${product.model} size ${product.size_label} masuk antrean`, "success");
   }
 
-  function regenerate() {
-    if (!selected) return;
-    startTransition(async () => {
-      const r = await regenerateProductBarcode(selected.id);
-      if (r.error || !r.barcode) {
-        toast.push(r.error ?? "Gagal generate barcode", "error");
-        return;
-      }
-      const updated = { ...selected, barcode: r.barcode };
-      setSelected(updated);
-      setPreviewSvg(svgFor(r.barcode));
-      setResults((rs) => rs.map((x) => (x.id === updated.id ? updated : x)));
-      toast.push("Barcode baru tersimpan ke produk", "success");
-    });
+  function updateQueueItem(
+    id: string,
+    patch: Partial<Pick<LabelQueueItem, "labelQty" | "widthMm" | "heightMm">>,
+  ) {
+    setQueue((current) =>
+      current.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
   }
 
   function handlePrint() {
-    if (!selected) return;
-    const w = window.open("", "_blank");
-    if (!w) return;
-    const barcodeSvg = svgFor(selected.barcode);
-    const label = `${selected.brand} ${selected.model}${selected.color ? " " + selected.color : ""} — Size ${selected.size}`;
-    w.document.write(`<!doctype html><html><head><title>Barcode</title><style>
-      body { margin: 0; padding: 10px; display: flex; flex-wrap: wrap; }
-      .label { width: 50mm; height: 25mm; border: 1px dashed #ccc; display: inline-flex;
-        flex-direction: column; align-items: center; justify-content: center;
-        padding: 2mm; box-sizing: border-box; page-break-inside: avoid; margin: 2mm; font-family: Arial, sans-serif; }
-      .date { font-size: 7pt; margin-bottom: 1mm; }
-      .info { font-size: 7pt; font-weight: bold; margin-top: 1mm; }
-      .barcode { display: flex; justify-content: center; }
-      .barcode svg { height: 12mm; width: auto; }
-      @media print { .label { border: none; margin: 1mm; } }
-    </style></head><body>`);
-    for (let i = 0; i < qty; i++) {
-      w.document.write(`<div class="label"><div class="date">${today}</div><div class="barcode">${barcodeSvg}</div><div class="info">${label}</div></div>`);
+    if (queue.length === 0) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      toast.push("Popup print diblokir browser. Izinkan popup lalu coba lagi.", "error");
+      return;
     }
-    w.document.write(`<script>setTimeout(()=>{window.print();window.onafterprint=()=>window.close();},300)<\/script></body></html>`);
-    w.document.close();
+
+    const labels = queue
+      .flatMap((item) => {
+        const barcodeSvg = svgFor(item.barcode);
+        const productLabel = escapeHtml(
+          `${item.brand} ${item.model}${item.color ? ` ${item.color}` : ""} — Size ${item.size_label}`,
+        );
+        return Array.from({ length: item.labelQty }, () => `
+          <section class="label" style="width:${item.widthMm}mm;height:${item.heightMm}mm">
+            <div class="date">${escapeHtml(today)}</div>
+            <div class="barcode">${barcodeSvg}</div>
+            <div class="info">${productLabel}</div>
+          </section>
+        `);
+      })
+      .join("");
+
+    printWindow.document.write(`<!doctype html>
+      <html lang="id">
+        <head>
+          <meta charset="utf-8" />
+          <title>Cetak Barcode Dewinst.id</title>
+          <style>
+            @page { margin: 5mm; }
+            * { box-sizing: border-box; }
+            body { margin: 0; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 2mm; font-family: Arial, sans-serif; }
+            .label { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; border: 0.25mm dashed #bbb; padding: 1.5mm; page-break-inside: avoid; break-inside: avoid; }
+            .date { margin-bottom: 0.5mm; font-size: 6.5pt; color: #555; }
+            .barcode { display: flex; min-height: 0; max-height: 55%; max-width: 100%; align-items: center; justify-content: center; overflow: hidden; }
+            .barcode svg { display: block; max-height: 100%; max-width: 100%; width: auto; }
+            .info { margin-top: 0.7mm; max-width: 100%; overflow: hidden; font-size: 6.5pt; font-weight: 700; line-height: 1.15; text-align: center; }
+            @media print { .label { border-color: transparent; } }
+          </style>
+        </head>
+        <body>${labels}<script>setTimeout(() => { window.print(); window.onafterprint = () => window.close(); }, 300)<\/script></body>
+      </html>`);
+    printWindow.document.close();
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 p-4 sm:p-6">
       <div className="flex flex-col gap-2">
-        <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-white">
+        <h1 className="flex items-center gap-3 text-2xl font-bold tracking-tight text-white sm:text-3xl">
           <QrCode className="text-white/40" size={28} />
-          Cetak Label Barcode
+          Cetak Barcode
         </h1>
         <p className="text-sm text-white/50">
-          Pilih produk yang ada di sistem — label memakai barcode asli produk, jadi nanti benar-benar bisa di-scan.
+          Klik beberapa produk untuk menambahkannya ke antrean, atur jumlah serta ukuran label dalam mm, lalu print sekali.
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left: search + select */}
-        <div className="space-y-4 lg:col-span-2">
-          <Card className="border-white/[0.06] bg-[#262626] p-5 shadow-xl">
-            <div className="relative">
-              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/35" />
-              <Input
-                autoFocus
-                value={query}
-                onChange={(e) => search(e.target.value)}
-                placeholder="Cari produk: brand, model, SKU, atau barcode…"
-                className="pl-9"
-              />
-            </div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
+        <Card className="border-white/[0.06] bg-[#262626] p-5 shadow-xl">
+          <div className="relative">
+            <Search
+              size={15}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/35"
+            />
+            <Input
+              autoFocus
+              value={query}
+              onChange={(event) => search(event.target.value)}
+              placeholder="Cari brand, model, SKU, atau barcode…"
+              className="pl-9"
+            />
+          </div>
 
-            <div className="mt-3 max-h-[420px] divide-y divide-white/[0.04] overflow-y-auto rounded-lg border border-white/[0.05]">
-              {query.trim().length < 1 ? (
-                <div className="px-4 py-10 text-center text-sm text-white/35">Ketik untuk mencari produk.</div>
-              ) : pending && results.length === 0 ? (
-                <div className="px-4 py-10 text-center text-sm text-white/35">Mencari…</div>
-              ) : results.length === 0 ? (
-                <div className="px-4 py-10 text-center text-sm text-white/35">
-                  Produk tidak ditemukan. Tambahkan dulu di Gudang → Barang Masuk atau Inventori.
-                </div>
-              ) : (
-                results.map((p) => {
-                  const active = selected?.id === p.id;
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => pick(p)}
-                      className={
-                        "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors " +
-                        (active ? "bg-white/[0.06]" : "hover:bg-white/[0.03]")
-                      }
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-sm text-white/85">
-                          {p.brand} {p.model}{" "}
-                          <span className="text-white/45">· {p.color ?? "—"} · Size {p.size}</span>
-                        </div>
-                        <div className="mt-0.5 font-mono text-[11px] text-white/40">
-                          SKU {p.sku} · Barcode {p.barcode} · Stok {p.quantity}
-                        </div>
-                      </div>
-                      {active ? <Check size={16} className="shrink-0 text-emerald-400" /> : null}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </Card>
-        </div>
-
-        {/* Right: preview + print */}
-        <div className="lg:col-span-1">
-          <Card className="flex min-h-[300px] flex-col items-center justify-center border-white/[0.06] bg-[#262626] p-6 text-center shadow-xl">
-            {selected ? (
-              <div className="flex w-full flex-col items-center">
-                <h3 className="mb-5 w-full text-left text-xs font-semibold uppercase tracking-wider text-white/40">
-                  Preview Label
-                </h3>
-
-                <div className="flex h-[25mm] w-[50mm] flex-col items-center justify-center rounded-sm bg-white p-2 shadow-2xl shadow-black/50">
-                  <span className="mb-1 text-[7pt] font-medium text-gray-500">{today}</span>
-                  <div className="flex h-[12mm] items-center justify-center" dangerouslySetInnerHTML={{ __html: previewSvg }} />
-                  <span className="mt-1 w-full truncate text-center text-[7pt] font-bold uppercase text-black">
-                    {selected.brand} {selected.model} — {selected.size}
-                  </span>
-                </div>
-
-                <div className="mt-5 flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/25">Barcode:</span>
-                  <span className="font-mono text-xs font-bold tracking-tight text-amber-400/80">{selected.barcode}</span>
-                </div>
-
-                <div className="mt-6 w-full">
-                  <label className="mb-1.5 block text-left text-[11px] text-white/40">Jumlah label</label>
-                  <div className="relative">
-                    <Hash size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25" />
-                    <Input type="number" min={1} max={200} value={qty} onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))} className="pl-9" />
-                  </div>
-                </div>
-
-                <div className="mt-4 flex w-full flex-col gap-2">
-                  <Button onClick={handlePrint} className="h-11 w-full bg-emerald-500 font-bold text-white hover:bg-emerald-400">
-                    <Printer size={16} className="mr-2" /> Print {qty} Label
-                  </Button>
-                  <Button variant="ghost" onClick={regenerate} disabled={pending} className="h-11 w-full text-white/45 hover:text-white/80">
-                    <RotateCcw size={14} className="mr-2" /> Generate barcode baru &amp; simpan
-                  </Button>
-                </div>
-                <p className="mt-3 text-[11px] leading-relaxed text-white/30">
-                  “Generate barcode baru” mengganti barcode produk ini dengan kode unik baru (untuk produk yang barcode-nya masih sementara).
-                </p>
+          <div className="mt-3 max-h-[620px] divide-y divide-white/[0.04] overflow-y-auto rounded-lg border border-white/[0.05]">
+            {query.trim().length < 1 ? (
+              <div className="px-4 py-10 text-center text-sm text-white/35">
+                Ketik untuk mencari produk.
+              </div>
+            ) : pending && results.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-white/35">Mencari…</div>
+            ) : results.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-white/35">
+                Produk tidak ditemukan. Tambahkan dahulu dari Inventori atau Barang Masuk.
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-4 opacity-20">
-                <Package size={64} strokeWidth={1} />
-                <p className="text-sm font-medium">Pilih produk untuk membuat label.</p>
-              </div>
+              results.map((product) => {
+                const queued = queue.find((item) => item.id === product.id);
+                return (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => addToQueue(product)}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.04]"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm text-white/85">
+                        {product.brand} {product.model}{" "}
+                        <span className="text-white/45">
+                          · {product.color ?? "—"} · Size {product.size_label}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 break-all font-mono text-[11px] text-white/40">
+                        SKU {product.sku} · Barcode {product.barcode} · Stok {product.quantity}
+                      </div>
+                    </div>
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-white/60">
+                      <Plus size={12} /> {queued ? queued.labelQty : "Tambah"}
+                    </span>
+                  </button>
+                );
+              })
             )}
-          </Card>
-        </div>
+          </div>
+        </Card>
+
+        <Card className="border-white/[0.06] bg-[#262626] p-5 shadow-xl">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-white">Antrean Label</h2>
+              <p className="mt-1 text-xs text-white/40">
+                {queue.length} produk · {totalLabels} label
+              </p>
+            </div>
+            {queue.length > 0 && (
+              <Button type="button" size="sm" variant="ghost" onClick={() => setQueue([])}>
+                Kosongkan
+              </Button>
+            )}
+          </div>
+
+          {queue.length === 0 ? (
+            <div className="flex min-h-[320px] flex-col items-center justify-center gap-4 text-center text-white/20">
+              <Package size={56} strokeWidth={1} />
+              <p className="max-w-xs text-sm">Klik produk di hasil pencarian untuk menambah label.</p>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              <div className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
+                {queue.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-white/80">
+                          {item.brand} {item.model} · Size {item.size_label}
+                        </p>
+                        <p className="mt-1 break-all font-mono text-[11px] text-amber-300/65">
+                          {item.barcode}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          setQueue((current) => current.filter((queued) => queued.id !== item.id))
+                        }
+                        aria-label={`Hapus ${item.brand} ${item.model} size ${item.size_label} dari antrean`}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <label className="text-[11px] text-white/40">
+                        Jumlah
+                        <span className="relative mt-1 block">
+                          <Hash size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25" />
+                          <Input
+                            aria-label={`Jumlah label ${item.brand} ${item.model} size ${item.size_label}`}
+                            type="number"
+                            min={1}
+                            max={200}
+                            value={item.labelQty}
+                            onChange={(event) =>
+                              updateQueueItem(item.id, {
+                                labelQty: clamp(Number(event.target.value), 1, 200),
+                              })
+                            }
+                            className="pl-7"
+                          />
+                        </span>
+                      </label>
+                      <label className="text-[11px] text-white/40">
+                        Lebar (mm)
+                        <Input
+                          aria-label={`Lebar label ${item.brand} ${item.model} size ${item.size_label}`}
+                          type="number"
+                          min={20}
+                          max={120}
+                          value={item.widthMm}
+                          onChange={(event) =>
+                            updateQueueItem(item.id, {
+                              widthMm: clamp(Number(event.target.value), 20, 120),
+                            })
+                          }
+                          className="mt-1"
+                        />
+                      </label>
+                      <label className="text-[11px] text-white/40">
+                        Tinggi (mm)
+                        <Input
+                          aria-label={`Tinggi label ${item.brand} ${item.model} size ${item.size_label}`}
+                          type="number"
+                          min={15}
+                          max={80}
+                          value={item.heightMm}
+                          onChange={(event) =>
+                            updateQueueItem(item.id, {
+                              heightMm: clamp(Number(event.target.value), 15, 80),
+                            })
+                          }
+                          className="mt-1"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <Button
+                type="button"
+                onClick={handlePrint}
+                className="h-11 w-full bg-emerald-500 font-bold text-white hover:bg-emerald-400"
+              >
+                <Printer size={16} />
+                Print {totalLabels} Label
+              </Button>
+              <p className="text-center text-[11px] leading-relaxed text-white/30">
+                Ukuran memakai satuan mm dan dapat berbeda untuk setiap produk dalam antrean.
+              </p>
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   );
