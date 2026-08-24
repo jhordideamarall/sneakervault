@@ -7,6 +7,8 @@ import { logActivity } from "./activity-log";
 import { notifyEvent } from "./notify";
 import { createStockMovement } from "./stock-movements";
 import {
+  addProductVariantsToSkuSchema,
+  createProductVariantsBatchSchema,
   productUpdateSchema,
   productConditionInputSchema,
 } from "@sneakervault/shared";
@@ -21,8 +23,11 @@ const importRowSchema = z.object({
   // numerik `size` diturunkan trigger DB. coerce agar angka CSV (40) jadi "40".
   size: z.coerce.string().trim().min(1),
   color: z.string().trim().optional(),
-  // Barcode opsional — auto-generate dari SKU + size kalau kosong.
-  barcode: z.string().trim().optional(),
+  // Barcode berasal dari Accurate dan wajib unik untuk setiap variant size.
+  barcode: z.preprocess(
+    (value) => (value == null ? "" : String(value)),
+    z.string().trim().min(1, "Barcode Accurate wajib diisi"),
+  ),
   quantity: z.preprocess(numberInputOrZero, z.coerce.number().int().nonnegative()),
   hpp: z.preprocess(numberInputOrZero, z.coerce.number().nonnegative()),
   sell_price: z.preprocess(numberInputOrZero, z.coerce.number().nonnegative()),
@@ -33,11 +38,6 @@ const importRowSchema = z.object({
   price_tiktok: z.preprocess(numberInputOrUndefined, z.coerce.number().nonnegative().optional()),
   price_tokopedia: z.preprocess(numberInputOrUndefined, z.coerce.number().nonnegative().optional()),
 });
-
-/** Barcode auto-generate: unik per SKU+size, alfanumerik, scannable (Code128). */
-function autoBarcode(sku: string, sizeLabel: string) {
-  return `${sku}-${sizeLabel}`.replace(/[^A-Za-z0-9-]/g, "").toUpperCase().slice(0, 120);
-}
 
 function normalizeNumberInput(value: unknown) {
   if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
@@ -136,7 +136,7 @@ function importPayload(row: ImportProductRow) {
     sku: row.sku,
     size_label: row.size,
     color: row.color || null,
-    barcode: row.barcode?.trim() || autoBarcode(row.sku, row.size),
+    barcode: row.barcode,
     quantity: row.quantity,
     hpp: row.hpp,
     sell_price: row.sell_price,
@@ -150,48 +150,157 @@ function importPayload(row: ImportProductRow) {
   };
 }
 
-const createProductSchema = z.object({
-  brand: z.string().min(1),
-  model: z.string().min(1),
-  sku: z.string().min(1),
-  size_label: z.string().trim().min(1),
-  color: z.string().optional(),
-  barcode: z.string().min(1),
-  sell_price: z.coerce.number().nonnegative().default(0),
-  price_offline: z.coerce.number().nonnegative().default(0),
-  image_url: z.string().url().nullable().optional().or(z.literal("")),
-  quantity: z.number().default(0),
-  hpp: z.number().default(0),
-});
-
-export async function createProduct(input: unknown) {
+export async function createProductVariantsBatch(input: unknown) {
   const profile = await requireRole(["owner", "admin_gudang", "finance"]);
-  const parsed = createProductSchema.safeParse(input);
+  const parsed = createProductVariantsBatchSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
   const supabase = await createClient();
-  const payload = {
-    ...parsed.data,
-    // price_offline default to sell_price if not set
-    price_offline: parsed.data.price_offline || parsed.data.sell_price,
-    image_url: parsed.data.image_url || null,
+  const canEditPrice =
+    profile.roles?.includes("owner") || profile.roles?.includes("finance");
+  const shared = parsed.data.sharedProduct;
+  const payload = parsed.data.variants.map((variant) => ({
+    brand: shared.brand,
+    model: shared.model,
+    sku: shared.sku,
+    color: shared.color,
+    image_url: shared.image_url || null,
+    hpp: canEditPrice ? shared.hpp : 0,
+    size_label: variant.size_label,
+    barcode: variant.barcode,
+    sell_price: canEditPrice ? variant.sell_price : 0,
+    price_offline: canEditPrice ? variant.price_offline : 0,
+    price_website: canEditPrice ? variant.price_website : 0,
+    price_shopee: canEditPrice ? variant.price_shopee : 0,
+    price_tiktok: canEditPrice ? variant.price_tiktok : 0,
+    price_tokopedia: canEditPrice ? variant.price_tokopedia : 0,
+    quantity: 0,
     is_active: true,
-  };
+  }));
 
   const { data, error } = await supabase
     .from("products")
     .insert(payload)
-    .select()
-    .single();
+    .select("id, sku, size_label, barcode");
 
-  if (error) return { error: { _form: [error.message] } };
+  if (error) {
+    if (error.code === "23505" && error.message.toLowerCase().includes("barcode")) {
+      return {
+        error: { _form: ["Salah satu barcode sudah dipakai. Tidak ada variant yang disimpan."] },
+      };
+    }
+    if (
+      error.code === "23505" &&
+      (error.message.includes("idx_products_sku_sizenum") ||
+        error.message.toLowerCase().includes("sku"))
+    ) {
+      return {
+        error: { _form: ["Salah satu size untuk SKU ini sudah terdaftar. Tidak ada variant yang disimpan."] },
+      };
+    }
+    return { error: { _form: [error.message] } };
+  }
+
   await logActivity({
     user_id: profile.id,
     action: "create",
     entity_type: "product",
-    entity_id: data.id,
-    new_data: data,
+    entity_id: data?.[0]?.id,
+    new_data: {
+      sku: shared.sku,
+      variants: data ?? [],
+      created_count: data?.length ?? 0,
+    },
   });
+
+  revalidatePath("/inventory");
+  revalidatePath("/barcode-generate");
+  return { data };
+}
+
+export async function addProductVariantsToSku(input: unknown) {
+  const profile = await requireRole(["owner", "admin_gudang", "finance"]);
+  const parsed = addProductVariantsToSkuSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+
+  const supabase = await createClient();
+  const canEditPrice =
+    profile.roles?.includes("owner") || profile.roles?.includes("finance");
+
+  const { data: source, error: sourceError } = await supabase
+    .from("products")
+    .select(
+      "brand, model, sku, color, image_url, hpp, default_supplier_id",
+    )
+    .eq("id", parsed.data.source_product_id)
+    .maybeSingle();
+
+  if (sourceError) return { error: { _form: [sourceError.message] } };
+  if (!source) {
+    return { error: { _form: ["Produk sumber tidak ditemukan"] } };
+  }
+
+  const payload = parsed.data.variants.map((variant) => ({
+    brand: source.brand,
+    model: source.model,
+    sku: source.sku,
+    color: source.color,
+    image_url: source.image_url,
+    hpp: source.hpp,
+    default_supplier_id: source.default_supplier_id,
+    size_label: variant.size_label,
+    barcode: variant.barcode,
+    sell_price: canEditPrice ? variant.sell_price : 0,
+    price_offline: canEditPrice ? variant.price_offline : 0,
+    price_website: canEditPrice ? variant.price_website : 0,
+    price_shopee: canEditPrice ? variant.price_shopee : 0,
+    price_tiktok: canEditPrice ? variant.price_tiktok : 0,
+    price_tokopedia: canEditPrice ? variant.price_tokopedia : 0,
+    quantity: 0,
+    is_active: true,
+  }));
+  const { data, error } = await supabase
+    .from("products")
+    .insert(payload)
+    .select("id, sku, size_label, barcode");
+
+  if (error) {
+    if (error.code === "23505" && error.message.toLowerCase().includes("barcode")) {
+      return {
+        error: {
+          _form: ["Salah satu barcode sudah dipakai. Tidak ada size yang disimpan."],
+        },
+      };
+    }
+    if (
+      error.code === "23505" &&
+      (error.message.includes("idx_products_sku_sizenum") ||
+        error.message.toLowerCase().includes("sku"))
+    ) {
+      return {
+        error: {
+          _form: ["Salah satu size sudah terdaftar. Tidak ada size yang disimpan."],
+        },
+      };
+    }
+    return { error: { _form: [error.message] } };
+  }
+
+  await logActivity({
+    user_id: profile.id,
+    action: "create",
+    entity_type: "product",
+    entity_id: data?.[0]?.id,
+    new_data: {
+      sku: source.sku,
+      variants: data ?? [],
+      created_count: data?.length ?? 0,
+      source_product_id: parsed.data.source_product_id,
+    },
+  });
+
+  revalidatePath("/inventory");
+  revalidatePath("/barcode-generate");
   return { data };
 }
 
@@ -222,10 +331,6 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
       });
       continue;
     }
-
-    // Barcode opsional → auto-generate dari SKU + size kalau kosong.
-    parsed.data.barcode =
-      parsed.data.barcode?.trim() || autoBarcode(parsed.data.sku, parsed.data.size);
 
     const sizeNum = seedSizeValue(parsed.data);
     if (sizeNum == null) {
@@ -293,7 +398,7 @@ export async function bulkImportProducts(rows: unknown[]): Promise<{
 
   const toInsert: ParsedImportProductRow[] = [];
   for (const row of parsedRows) {
-    if (existingProductKeys.has(row.seedKey) || existingBarcodes.has(row.data.barcode!)) {
+    if (existingProductKeys.has(row.seedKey) || existingBarcodes.has(row.data.barcode)) {
       skipped++;
     } else {
       toInsert.push(row);
@@ -368,9 +473,6 @@ export async function bulkImportMarketplaceProducts(
       });
       continue;
     }
-
-    parsed.data.barcode =
-      parsed.data.barcode?.trim() || autoBarcode(parsed.data.sku, parsed.data.size);
 
     const sizeNum = seedSizeValue(parsed.data);
     if (sizeNum == null) {
@@ -501,7 +603,7 @@ export async function bulkImportMarketplaceProducts(
     const byBarcode = new Map((data ?? []).map((product) => [product.barcode, product.id]));
     inserted += data?.length ?? 0;
     for (const row of batch) {
-      const productId = byBarcode.get(row.data.barcode!);
+      const productId = byBarcode.get(row.data.barcode);
       if (!productId) continue;
       mapRows.push({
         channel: parsedChannel.data,
@@ -634,7 +736,6 @@ export async function updateProduct(input: unknown) {
     delete (patch as { model?: string }).model;
     delete (patch as { sku?: string }).sku;
     delete (patch as { size_label?: string }).size_label;
-    delete (patch as { barcode?: string }).barcode;
     delete (patch as { color?: string }).color;
     delete (patch as { image_url?: string | null }).image_url;
   }
@@ -644,11 +745,14 @@ export async function updateProduct(input: unknown) {
     (patch as { image_url?: string | null }).image_url = null;
   }
 
-  const { error } = await supabase.from("products").update(patch).eq("id", id);
+  const { data, error } = await supabase.rpc(
+    "update_product_variant_and_sku_shared",
+    {
+      p_product_id: id,
+      p_patch: patch,
+    },
+  );
   if (error) {
-    if (error.code === "23505" && error.message.includes("idx_products_barcode")) {
-      return { error: { barcode: ["Barcode sudah dipakai produk lain"] } };
-    }
     if (error.code === "23505" && error.message.includes("idx_products_sku_sizenum")) {
       return { error: { size_label: ["Kombinasi SKU dan size sudah terdaftar"] } };
     }
@@ -660,9 +764,11 @@ export async function updateProduct(input: unknown) {
     action: "update",
     entity_type: "product",
     entity_id: id,
-    new_data: patch,
+    new_data: { patch, sync_result: data },
   });
 
+  revalidatePath("/inventory");
+  revalidatePath("/barcode-generate");
   return { success: true };
 }
 

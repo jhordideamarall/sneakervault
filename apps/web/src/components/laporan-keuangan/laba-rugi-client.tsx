@@ -9,13 +9,20 @@ import { exportToPDF, exportToExcel, type ReportSection } from "@/lib/export";
 import { QuickTip } from "@/components/ui/quick-tip";
 import { formatRupiahAccounting as fmtRupiah } from "@/lib/format";
 
+function statementValue(account: AccountBalance): number {
+  const expectedNormal = account.type === "revenue" ? "credit" : "debit";
+  return account.normal_balance === expectedNormal
+    ? account.balance
+    : -account.balance;
+}
+
 function sumLeaves(accounts: AccountBalance[]): number {
   const idsWithChildren = new Set(
     accounts.map((a) => a.parent_id).filter(Boolean) as string[],
   );
   return accounts
     .filter((a) => !idsWithChildren.has(a.account_id))
-    .reduce((sum, a) => sum + a.balance, 0);
+    .reduce((sum, a) => sum + statementValue(a), 0);
 }
 
 function Section({
@@ -70,7 +77,7 @@ function Section({
                   {isParent ? (
                     <span className="text-white/30">—</span>
                   ) : (
-                    <span className="text-white">{fmtRupiah(a.balance)}</span>
+                    <span className="text-white">{fmtRupiah(statementValue(a))}</span>
                   )}
                 </td>
               </tr>
@@ -127,7 +134,7 @@ export function LabaRugiClient({
         i + 1,
         a.code,
         a.name,
-        idsWithChildren.has(a.account_id) ? "—" : a.balance
+        idsWithChildren.has(a.account_id) ? "—" : statementValue(a)
       ]);
     };
 

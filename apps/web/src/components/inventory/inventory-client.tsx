@@ -22,8 +22,10 @@ import {
   ShieldAlert,
   Clock,
   ClipboardList,
+  Plus,
+  Trash2,
 } from "lucide-react";
-import { createProduct } from "@/lib/actions/products";
+import { createProductVariantsBatch } from "@/lib/actions/products";
 import { createClient } from "@sneakervault/supabase/client";
 import { useToast } from "@/components/toast";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -768,18 +770,61 @@ function ChannelPriceCell({
 }
 
 // ─── Add Product Form ───────────────────────────────────────────────────────
-type AddFormState = {
+type SharedAddFormState = {
   brand: string;
   model: string;
   sku: string;
-  size: string;
   color: string;
-  barcode: string;
   hpp: number;
-  sell_price: number;
-  price_offline: number;
   image_url: string;
 };
+
+type VariantAddFormState = {
+  key: string;
+  size_label: string;
+  barcode: string;
+  sell_price: number;
+  price_offline: number;
+  price_website: number;
+  price_shopee: number;
+  price_tiktok: number;
+  price_tokopedia: number;
+  channel_prices_open: boolean;
+  channel_prices_custom: boolean;
+};
+
+type VariantPriceKey = Exclude<
+  keyof VariantAddFormState,
+  | "key"
+  | "size_label"
+  | "barcode"
+  | "channel_prices_open"
+  | "channel_prices_custom"
+>;
+
+type VariantChannelPriceKey = Extract<
+  VariantPriceKey,
+  | "price_website"
+  | "price_shopee"
+  | "price_tiktok"
+  | "price_tokopedia"
+>;
+
+function emptyVariant(): VariantAddFormState {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    size_label: "",
+    barcode: "",
+    sell_price: 0,
+    price_offline: 0,
+    price_website: 0,
+    price_shopee: 0,
+    price_tiktok: 0,
+    price_tokopedia: 0,
+    channel_prices_open: false,
+    channel_prices_custom: false,
+  };
+}
 
 type TransitionFn = (scope: () => void | Promise<void>) => void;
 
@@ -798,20 +843,59 @@ function AddProductForm({
   toast: ReturnType<typeof useToast>;
   router: ReturnType<typeof useRouter>;
 }) {
-  const [form, setForm] = useState<AddFormState>({
+  const [shared, setShared] = useState<SharedAddFormState>({
     brand: "",
     model: "",
     sku: "",
-    size: "",
     color: "",
-    barcode: "",
     hpp: 0,
-    sell_price: 0,
-    price_offline: 0,
     image_url: "",
   });
+  const [variants, setVariants] = useState<VariantAddFormState[]>([
+    emptyVariant(),
+  ]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(false);
+
+  function updateVariant(
+    key: string,
+    patch: Partial<Omit<VariantAddFormState, "key">>,
+  ) {
+    setVariants((current) =>
+      current.map((variant) =>
+        variant.key === key ? { ...variant, ...patch } : variant,
+      ),
+    );
+  }
+
+  function updateVariantChannel(
+    key: string,
+    field: VariantChannelPriceKey,
+    value: number,
+  ) {
+    setVariants((current) =>
+      current.map((variant) => {
+        if (variant.key !== key) return variant;
+        return {
+          ...variant,
+          price_website: variant.channel_prices_custom
+            ? variant.price_website
+            : variant.sell_price,
+          price_shopee: variant.channel_prices_custom
+            ? variant.price_shopee
+            : variant.sell_price,
+          price_tiktok: variant.channel_prices_custom
+            ? variant.price_tiktok
+            : variant.sell_price,
+          price_tokopedia: variant.channel_prices_custom
+            ? variant.price_tokopedia
+            : variant.sell_price,
+          [field]: value,
+          channel_prices_custom: true,
+        };
+      }),
+    );
+  }
 
   async function handlePhotoUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -833,25 +917,48 @@ function AddProductForm({
       return;
     }
     const { data } = supabase.storage.from("product-photos").getPublicUrl(path);
-    setForm((f) => ({ ...f, image_url: data.publicUrl }));
+    setShared((current) => ({ ...current, image_url: data.publicUrl }));
     setUploading(false);
   }
 
   function handleSubmit() {
     setFieldErrors({});
     startTransition(async () => {
-      const result = await createProduct({
-        brand: form.brand,
-        model: form.model,
-        sku: form.sku,
-        size_label: form.size,
-        color: form.color,
-        barcode: form.barcode,
-        hpp: canEditPrice ? form.hpp : 0,
-        sell_price: form.sell_price,
-        price_offline: form.price_offline || form.sell_price,
-        image_url: form.image_url.trim() || null,
-        quantity: 0,
+      const result = await createProductVariantsBatch({
+        sharedProduct: {
+          brand: shared.brand,
+          model: shared.model,
+          sku: shared.sku,
+          color: shared.color,
+          hpp: canEditPrice ? shared.hpp : 0,
+          image_url: shared.image_url.trim() || null,
+        },
+        variants: variants.map((variant) => ({
+          size_label: variant.size_label,
+          barcode: variant.barcode,
+          sell_price: canEditPrice ? variant.sell_price : 0,
+          price_offline: canEditPrice ? variant.price_offline : 0,
+          price_website: canEditPrice
+            ? variant.channel_prices_custom
+              ? variant.price_website
+              : variant.sell_price
+            : 0,
+          price_shopee: canEditPrice
+            ? variant.channel_prices_custom
+              ? variant.price_shopee
+              : variant.sell_price
+            : 0,
+          price_tiktok: canEditPrice
+            ? variant.channel_prices_custom
+              ? variant.price_tiktok
+              : variant.sell_price
+            : 0,
+          price_tokopedia: canEditPrice
+            ? variant.channel_prices_custom
+              ? variant.price_tokopedia
+              : variant.sell_price
+            : 0,
+        })),
       });
       if ("error" in result && result.error) {
         const errs: Record<string, string> = {};
@@ -862,22 +969,41 @@ function AddProductForm({
         toast.push("Gagal menambah produk", "error");
         return;
       }
-      toast.push("Produk berhasil ditambahkan", "success");
+      toast.push(`${variants.length} variant size berhasil ditambahkan`, "success");
       onClose();
       router.refresh();
     });
   }
 
+  const sharedIncomplete =
+    !shared.brand.trim() ||
+    !shared.model.trim() ||
+    !shared.sku.trim() ||
+    !shared.color.trim();
+  const variantIncomplete = variants.some(
+    (variant) => !variant.size_label.trim() || !variant.barcode.trim(),
+  );
+
   return (
-    <Card>
-      <h3 className="mb-4 text-sm font-semibold text-white">Tambah Produk Baru</h3>
-      <div className="grid gap-4 sm:grid-cols-3">
+    <Card className="space-y-6">
+      <div>
+        <h3 className="text-base font-semibold text-white">Tambah Produk Banyak Size</h3>
+        <p className="mt-1 text-xs text-white/45">
+          Isi detail colorway satu kali, lalu tambahkan barcode dan harga untuk setiap size.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-white/45">
+          Detail bersama
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <FieldLabel htmlFor="add-brand">Brand</FieldLabel>
           <Input
             id="add-brand"
-            value={form.brand}
-            onChange={(e) => setForm({ ...form, brand: e.target.value })}
+            value={shared.brand}
+            onChange={(e) => setShared({ ...shared, brand: e.target.value })}
             placeholder="Adidas"
           />
         </div>
@@ -885,8 +1011,8 @@ function AddProductForm({
           <FieldLabel htmlFor="add-model">Model</FieldLabel>
           <Input
             id="add-model"
-            value={form.model}
-            onChange={(e) => setForm({ ...form, model: e.target.value })}
+            value={shared.model}
+            onChange={(e) => setShared({ ...shared, model: e.target.value })}
             placeholder="Samba White"
           />
         </div>
@@ -894,46 +1020,29 @@ function AddProductForm({
           <FieldLabel htmlFor="add-sku">SKU</FieldLabel>
           <Input
             id="add-sku"
-            value={form.sku}
-            onChange={(e) => setForm({ ...form, sku: e.target.value })}
-            placeholder="ADS-SAMBA-WHT-42"
-          />
-        </div>
-        <div>
-          <FieldLabel htmlFor="add-size">Size</FieldLabel>
-          <Input
-            id="add-size"
-            type="text"
-            value={form.size}
-            onChange={(e) => setForm({ ...form, size: e.target.value })}
-            placeholder="42 atau 42 2/3"
+            value={shared.sku}
+            onChange={(e) => setShared({ ...shared, sku: e.target.value })}
+            placeholder="ADS-SAMBA-WHT"
           />
         </div>
         <div>
           <FieldLabel htmlFor="add-color">Warna</FieldLabel>
           <Input
             id="add-color"
-            value={form.color}
-            onChange={(e) => setForm({ ...form, color: e.target.value })}
+            value={shared.color}
+            onChange={(e) => setShared({ ...shared, color: e.target.value })}
             placeholder="Cloud White"
           />
         </div>
-        <div>
-          <FieldLabel htmlFor="add-barcode">Barcode</FieldLabel>
-          <Input
-            id="add-barcode"
-            value={form.barcode}
-            onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-            placeholder="104163"
-          />
         </div>
-        <div className="sm:col-span-3">
+
+        <div>
           <FieldLabel htmlFor="add-image">Foto Produk</FieldLabel>
-          {form.image_url ? (
+          {shared.image_url ? (
             <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.04] p-2.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={form.image_url}
+                src={shared.image_url}
                 alt="Pratinjau"
                 className="size-12 flex-shrink-0 rounded-lg border border-white/10 object-cover"
               />
@@ -953,7 +1062,7 @@ function AddProductForm({
               </label>
               <button
                 type="button"
-                onClick={() => setForm({ ...form, image_url: "" })}
+                onClick={() => setShared({ ...shared, image_url: "" })}
                 className="flex-shrink-0 text-[12px] text-white/40 transition hover:text-rose-300"
               >
                 Hapus
@@ -979,8 +1088,8 @@ function AddProductForm({
               <Input
                 id="add-image"
                 type="url"
-                value={form.image_url}
-                onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                value={shared.image_url}
+                onChange={(e) => setShared({ ...shared, image_url: e.target.value })}
                 placeholder="atau paste link gambar…"
               />
             </div>
@@ -989,9 +1098,8 @@ function AddProductForm({
             Upload dari galeri/HP, atau paste URL gambar.
           </p>
         </div>
-        {canEditPrice && (
-          <>
-            <div>
+        {canEditPrice ? (
+          <div className="max-w-sm">
               <FieldLabel htmlFor="add-hpp">
                 HPP / Modal (Rp)
               </FieldLabel>
@@ -999,54 +1107,232 @@ function AddProductForm({
                 id="add-hpp"
                 align="left"
                 placeholder="0"
-                value={form.hpp}
-                onValueChange={(n) => setForm({ ...form, hpp: n })}
+                value={shared.hpp}
+                onValueChange={(n) => setShared({ ...shared, hpp: n })}
               />
               <p className="mt-1 text-[11px] text-white/40">
-                Modal awal per SKU
+                Satu HPP untuk seluruh size dalam SKU
               </p>
-            </div>
-            <div>
-              <FieldLabel htmlFor="add-price-online">
-                Harga Online (Rp)
-              </FieldLabel>
-              <NumberInput
-                id="add-price-online"
-                align="left"
-                placeholder="0"
-                value={form.sell_price}
-                onValueChange={(n) => setForm({ ...form, sell_price: n })}
-              />
-              <p className="mt-1 text-[11px] text-white/40">
-                Shopee / TikTok / marketplace
-              </p>
-            </div>
-            <div>
-              <FieldLabel htmlFor="add-price-offline">
-                Harga Offline (Rp)
-              </FieldLabel>
-              <NumberInput
-                id="add-price-offline"
-                align="left"
-                placeholder="0"
-                value={form.price_offline}
-                onValueChange={(n) => setForm({ ...form, price_offline: n })}
-              />
-              <p className="mt-1 text-[11px] text-white/40">
-                WA / transfer langsung / website
-              </p>
-            </div>
-          </>
+          </div>
+        ) : (
+          <Alert tone="info">
+            HPP dan harga jual akan disimpan 0. Owner/Finance dapat melengkapinya lewat Edit Produk.
+          </Alert>
         )}
       </div>
+
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/45">
+              Variant size
+            </p>
+            <p className="mt-1 text-[11px] text-white/35">
+              Isi empat data utama per size. Harga marketplace mengikuti harga online kecuali diatur khusus.
+            </p>
+          </div>
+          <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] text-white/45">
+            {variants.length} size
+          </span>
+        </div>
+
+        {variants.map((variant, index) => (
+          <div
+            key={variant.key}
+            className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold text-white/55">Size #{index + 1}</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={variants.length === 1}
+                onClick={() =>
+                  setVariants((current) =>
+                    current.filter((item) => item.key !== variant.key),
+                  )
+                }
+                aria-label={`Hapus variant size ${index + 1}`}
+              >
+                <Trash2 size={14} />
+              </Button>
+            </div>
+
+            <div
+              className={cn(
+                "grid gap-3",
+                canEditPrice
+                  ? "sm:grid-cols-2 xl:grid-cols-[minmax(100px,0.65fr)_minmax(180px,1.2fr)_minmax(145px,1fr)_minmax(145px,1fr)]"
+                  : "sm:grid-cols-2",
+              )}
+            >
+              <div>
+                <FieldLabel htmlFor={`add-size-${variant.key}`}>Size</FieldLabel>
+                <Input
+                  id={`add-size-${variant.key}`}
+                  value={variant.size_label}
+                  onChange={(event) =>
+                    updateVariant(variant.key, { size_label: event.target.value })
+                  }
+                  placeholder="42 atau 42 2/3"
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor={`add-barcode-${variant.key}`}>Barcode Accurate</FieldLabel>
+                <Input
+                  id={`add-barcode-${variant.key}`}
+                  value={variant.barcode}
+                  onChange={(event) =>
+                    updateVariant(variant.key, { barcode: event.target.value })
+                  }
+                  placeholder="104163"
+                  className="font-mono"
+                />
+              </div>
+              {canEditPrice && (
+                <>
+                  <div>
+                    <FieldLabel htmlFor={`sell-price-${variant.key}`}>
+                      Harga Online (Rp)
+                    </FieldLabel>
+                    <NumberInput
+                      id={`sell-price-${variant.key}`}
+                      min={0}
+                      align="left"
+                      value={variant.sell_price}
+                      onValueChange={(value) =>
+                        updateVariant(variant.key, { sell_price: value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel htmlFor={`offline-price-${variant.key}`}>
+                      Harga Offline (Rp)
+                    </FieldLabel>
+                    <NumberInput
+                      id={`offline-price-${variant.key}`}
+                      min={0}
+                      align="left"
+                      value={variant.price_offline}
+                      onValueChange={(value) =>
+                        updateVariant(variant.key, { price_offline: value })
+                      }
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] text-white/30">
+                Barcode dikunci setelah produk disimpan.
+              </p>
+              {canEditPrice && (
+                <button
+                  type="button"
+                  aria-expanded={variant.channel_prices_open}
+                  onClick={() =>
+                    updateVariant(variant.key, {
+                      channel_prices_open: !variant.channel_prices_open,
+                    })
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-medium text-cyan-300/75 transition hover:bg-cyan-400/[0.07] hover:text-cyan-200"
+                >
+                  {variant.channel_prices_custom
+                    ? "Harga marketplace khusus"
+                    : "Atur harga marketplace"}
+                  <ChevronDown
+                    size={13}
+                    className={cn(
+                      "transition-transform",
+                      variant.channel_prices_open && "rotate-180",
+                    )}
+                  />
+                </button>
+              )}
+            </div>
+
+            {canEditPrice && variant.channel_prices_open && (
+              <div className="mt-3 rounded-lg border border-white/[0.06] bg-black/10 p-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[11px] text-white/40">
+                    Kosong dari pengaturan khusus = mengikuti harga online.
+                  </p>
+                  {variant.channel_prices_custom && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateVariant(variant.key, {
+                          channel_prices_custom: false,
+                        })
+                      }
+                      className="text-[11px] font-medium text-cyan-300/75 hover:text-cyan-200"
+                    >
+                      Samakan dengan harga online
+                    </button>
+                  )}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {(
+                    [
+                      ["price_website", "Website"],
+                      ["price_shopee", "Shopee"],
+                      ["price_tiktok", "TikTok"],
+                      ["price_tokopedia", "Tokopedia"],
+                    ] as Array<[VariantChannelPriceKey, string]>
+                  ).map(([field, label]) => (
+                    <div key={field}>
+                      <FieldLabel htmlFor={`${field}-${variant.key}`}>
+                        {label} (Rp)
+                      </FieldLabel>
+                      <NumberInput
+                        id={`${field}-${variant.key}`}
+                        min={0}
+                        align="left"
+                        value={
+                          variant.channel_prices_custom
+                            ? variant[field]
+                            : variant.sell_price
+                        }
+                        onValueChange={(value) =>
+                          updateVariantChannel(variant.key, field, value)
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        <button
+          type="button"
+          onClick={() => setVariants((current) => [...current, emptyVariant()])}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/[0.12] px-4 py-3 text-sm font-medium text-white/55 transition hover:border-cyan-400/30 hover:bg-cyan-400/[0.04] hover:text-cyan-200"
+        >
+          <Plus size={15} />
+          Tambah size berikutnya
+        </button>
+      </div>
+
       {fieldErrors._form && (
-        <Alert tone="error" className="mt-3">
+        <Alert tone="error">
           {fieldErrors._form}
         </Alert>
       )}
-      <div className="mt-4 flex gap-2">
-        <Button size="sm" disabled={pending} onClick={handleSubmit}>
-          {pending ? "Menyimpan…" : "Simpan"}
+      {fieldErrors.sharedProduct && (
+        <Alert tone="error">{fieldErrors.sharedProduct}</Alert>
+      )}
+      {fieldErrors.variants && <Alert tone="error">{fieldErrors.variants}</Alert>}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          disabled={pending || uploading || sharedIncomplete || variantIncomplete}
+          onClick={handleSubmit}
+        >
+          {pending ? "Menyimpan semua…" : `Simpan ${variants.length} Variant`}
         </Button>
         <Button size="sm" variant="ghost" onClick={onClose}>
           Batal

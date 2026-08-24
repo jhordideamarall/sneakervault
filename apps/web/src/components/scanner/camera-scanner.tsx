@@ -1,12 +1,29 @@
 "use client";
 
+import { useRef } from "react";
 import { useCameraScanner } from "@sneakervault/barcode";
 
-export function CameraScanner({ onScan }: { onScan: (code: string) => void }) {
+export function CameraScanner({
+  onScan,
+  cooldownMs = 1800,
+}: {
+  onScan: (code: string) => void;
+  cooldownMs?: number;
+}) {
+  const lastScanRef = useRef({ code: "", at: 0 });
   const { ref } = useCameraScanner({
     onDecodeResult: (result) => {
-      // Play a short beep or haptic if supported? (optional, for later)
-      onScan(result.getText());
+      const code = result.getText().trim();
+      const now = Date.now();
+      if (!code) return;
+      if (
+        lastScanRef.current.code === code &&
+        now - lastScanRef.current.at < cooldownMs
+      ) {
+        return;
+      }
+      lastScanRef.current = { code, at: now };
+      onScan(code);
     },
     constraints: {
       video: {
@@ -21,7 +38,7 @@ export function CameraScanner({ onScan }: { onScan: (code: string) => void }) {
     <div className="relative mt-4 overflow-hidden rounded-xl border border-white/10 bg-black shadow-2xl">
       <video 
         ref={ref} 
-        className="w-full h-64 object-contain" // Use contain to see whole frame
+        className="h-56 w-full object-contain sm:h-64" // Use contain to see whole frame
       />
       
       {/* Visual Overlay for Alignment */}
@@ -40,4 +57,3 @@ export function CameraScanner({ onScan }: { onScan: (code: string) => void }) {
     </div>
   );
 }
-

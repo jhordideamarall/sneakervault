@@ -26,7 +26,7 @@ export function RightSidebarSlot(props: {
   // Collapsed rail — icons re-open the panel.
   if (mounted && collapsed) {
     return (
-      <div className="flex w-12 flex-shrink-0 flex-col items-center gap-1 rounded-md bg-[#262626] py-3">
+      <div className="hidden w-12 flex-shrink-0 flex-col items-center gap-1 rounded-md bg-[#262626] py-3 lg:flex">
         <RailButton title="Buka panel" onClick={() => setState(false)}>
           <PanelRightOpen size={18} />
         </RailButton>
@@ -46,7 +46,7 @@ export function RightSidebarSlot(props: {
   }
 
   return (
-    <div className="relative w-[300px] flex-shrink-0 overflow-y-auto rounded-md bg-[#262626]">
+    <div className="relative hidden w-[300px] flex-shrink-0 overflow-y-auto rounded-md bg-[#262626] lg:block">
       <button
         type="button"
         title="Sembunyikan panel"

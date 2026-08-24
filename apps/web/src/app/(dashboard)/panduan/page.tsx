@@ -512,19 +512,19 @@ const MENU_RULE_GROUPS: { title: string; rules: MenuRule[] }[] = [
         ],
       },
       {
-        menu: "Generate Barcode",
+        menu: "Cetak Barcode",
         akses: "Owner, Admin Gudang",
-        fungsi: "Membuat atau mencetak label barcode internal.",
+        fungsi: "Mencetak label dari barcode Accurate yang sudah tersimpan pada produk.",
         aturan: [
-          "Gunakan untuk produk yang belum punya barcode internal.",
-          "Pastikan brand, model, size, dan SKU benar sebelum cetak.",
+          "Pilih satu atau beberapa produk ke antrean cetak.",
+          "Atur jumlah serta ukuran label dalam milimeter per produk.",
         ],
         efek: [
           "Barcode bisa dipakai di inbound, POS, packing, dan opname.",
           "Label bisa dicetak untuk ditempel ke barang fisik.",
         ],
         koreksi: [
-          "Regenerate barcode hanya jika barcode lama salah atau tidak bisa dipakai.",
+          "Barcode terkunci setelah produk dibuat; koreksi data sumber Accurate sebelum registrasi produk.",
           "Audit scan jika barang fisik tidak match dengan SKU.",
         ],
       },
@@ -963,7 +963,7 @@ export default function PanduanPage() {
             <tbody className="text-white/65">
               {[
                 ["Owner", "Semua modul + Pengaturan + Panduan + chip “Lihat sebagai” role lain"],
-                ["Admin Gudang", "Inventori, Barang Masuk, Generate Barcode, Stock Opname, Retur, Supplier"],
+                ["Admin Gudang", "Inventori, Barang Masuk, Cetak Barcode, Stock Opname, Retur, Supplier"],
                 ["Admin Online", "Order Masuk, Invoice, Update Stok Marketplace, Customer, Terjual, Retur"],
                 ["Shopkeeper (Kasir)", "POS Kasir, Order Masuk, Inventori (cek stok), Packing"],
                 ["Finance", "Buku Besar, Kas & Bank, Pembelian, Rekonsiliasi Settlement, Laporan Keuangan, Overview"],
@@ -1017,7 +1017,7 @@ export default function PanduanPage() {
             <ol className="list-decimal space-y-1.5 pl-4">
               <li>Kalau barang baru belum ada, buat dari <b>Inventori</b>, <b>Import Produk</b>, atau dari Pembelian Barang saat barang diterima.</li>
               <li>Saat barang datang, buka <b>Barang Masuk</b>, scan/isi SKU, input qty, supplier, dan harga modal.</li>
-              <li>Gunakan <b>Generate Barcode</b> untuk produk yang belum punya label internal.</li>
+              <li>Gunakan <b>Cetak Barcode</b> untuk mencetak ulang barcode Accurate yang sudah terdaftar.</li>
               <li>Untuk cek fisik berkala, buat sesi <b>Stock Opname</b>, input hasil hitung dan alasan selisih, lalu minta owner mengunci hasil. Opname tidak otomatis mengubah stok.</li>
               <li>Untuk retur, verifikasi barang fisik dulu sebelum stok dikembalikan atau ditandai defect.</li>
             </ol>
@@ -1103,10 +1103,9 @@ export default function PanduanPage() {
             penerimaan harga beda). Kondisi: Normal / Defect / Lama Tidak Laku. Fitur: cari, Tambah Produk (+ upload foto),
             Import/Export Excel. HPP hanya terlihat Owner/Finance.
           </Sub>
-          <Sub icon={<Tags size={15} />} title="Generate Barcode">
-            Gudang → Generate Barcode. Isi brand/model/size/tanggal/qty → sistem buat kode unik + render <b>barcode</b> dan
-            tombol <Printer size={12} className="inline" /> <b>Cetak label</b> (ukuran 50×25mm, siap tempel di produk).
-            Pakai ini untuk produk yang belum punya barcode.
+          <Sub icon={<Tags size={15} />} title="Cetak Barcode">
+            Gudang → Cetak Barcode. Cari beberapa produk, masukkan ke antrean, lalu atur jumlah dan ukuran label dalam mm sebelum
+            menekan <Printer size={12} className="inline" /> <b>Print</b>. Sistem selalu memakai barcode Accurate yang tersimpan dan tidak membuat kode baru.
           </Sub>
           <Sub icon={<ClipboardList size={15} />} title="Stock Opname">
             Hitung fisik berkala. Buat sesi → input jumlah fisik → sistem hitung <b>selisih (variance)</b> vs sistem →

@@ -7,6 +7,7 @@ import type {
   ArApReportRow,
   GeneralLedgerReportRow,
   JournalReportRow,
+  ReturnReportRow,
   SalesReportRow,
   StockMovementReportRow,
 } from "@/lib/queries";
@@ -16,6 +17,7 @@ type MandatoryReportsData = {
   generalLedger: GeneralLedgerReportRow[];
   journals: JournalReportRow[];
   sales: SalesReportRow[];
+  returns: ReturnReportRow[];
   stockMovements: StockMovementReportRow[];
   arAp: ArApReportRow[];
 };
@@ -32,7 +34,7 @@ export function MandatoryReportsClient({
       <div className="border-b border-white/[0.04] px-6 py-4">
         <p className="text-sm font-medium text-white/80">Laporan Wajib Client</p>
         <p className="mt-1 text-[11px] text-white/60">
-          Buku besar, jurnal, penjualan, kartu stok mutasi, dan utang/piutang.
+          Buku besar, jurnal, penjualan, retur, kartu stok mutasi, dan utang/piutang.
         </p>
       </div>
       <div className="divide-y divide-white/[0.04]">
@@ -105,6 +107,41 @@ export function MandatoryReportsClient({
             row.customer_name,
             formatRupiah(row.total),
             row.status,
+          ])}
+          periodLabel={periodLabel}
+        />
+        <ReportBlock
+          title="Laporan Retur"
+          description="Jejak retur per item: order, produk, alasan, verifikasi fisik, dan penyelesaian refund atau tukar size."
+          columns={["Tanggal Dibuat", "Order", "Platform", "Produk Awal", "SKU", "Size Awal", "Tipe", "Alasan", "Status", "Diverifikasi", "Diproses", "Produk Pengganti", "SKU Pengganti", "Size Pengganti", "Nominal Refund", "Tanggal Refund", "Rekening Refund", "Referensi Refund"]}
+          rows={data.returns.map((row) => [
+            formatDate(row.created_at),
+            row.order_id,
+            row.platform,
+            row.original_product,
+            row.original_sku,
+            row.original_size,
+            returnTypeLabel[row.type],
+            row.reason,
+            returnStatusLabel[row.status],
+            row.verified_at ? formatDate(row.verified_at) : "-",
+            row.processed_at ? formatDate(row.processed_at) : "-",
+            row.replacement_product ?? "-",
+            row.replacement_sku ?? "-",
+            row.replacement_size ?? "-",
+            row.refund_amount ?? "-",
+            row.refund_date ? formatDate(row.refund_date) : "-",
+            row.refund_account ?? "-",
+            row.refund_reference_no ?? "-",
+          ])}
+          preview={data.returns.map((row) => [
+            formatDate(row.created_at),
+            row.order_id,
+            `${row.original_product} • ${row.original_sku}`,
+            returnTypeLabel[row.type],
+            returnStatusLabel[row.status],
+            row.refund_amount == null ? "-" : formatRupiah(row.refund_amount),
+            row.refund_account ?? "-",
           ])}
           periodLabel={periodLabel}
         />
@@ -284,3 +321,15 @@ function ReportBlock({
 function slug(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
+
+const returnTypeLabel: Record<ReturnReportRow["type"], string> = {
+  exchange_size: "Tukar Size",
+  refund: "Refund",
+};
+
+const returnStatusLabel: Record<ReturnReportRow["status"], string> = {
+  pending: "Menunggu Verifikasi",
+  verified: "Terverifikasi",
+  processed: "Selesai Diproses",
+  cancelled: "Dibatalkan",
+};

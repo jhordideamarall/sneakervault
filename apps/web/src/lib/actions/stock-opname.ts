@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@sneakervault/supabase/server";
 import {
+  incrementStockOpnameSchema,
   startStockOpnameSchema,
   stockOpnameCountSchema,
 } from "@sneakervault/shared";
@@ -149,6 +150,43 @@ export async function saveStockOpnameCounts(input: unknown) {
 
   revalidateOpname();
   return { success: true };
+}
+
+export type StockOpnameIncrementResult = {
+  line_id: string;
+  physical_qty: number;
+  product_label: string;
+  barcode: string;
+};
+
+export async function incrementStockOpnameCount(input: unknown) {
+  const profile = await requireRole([...WAREHOUSE_ROLES]);
+  const parsed = incrementStockOpnameSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("increment_stock_opname_count", {
+    p_session_id: parsed.data.session_id,
+    p_barcode: parsed.data.barcode,
+  });
+  if (error) return { error: { _form: [error.message] } };
+
+  const result = data as StockOpnameIncrementResult;
+  await logActivity({
+    user_id: profile.id,
+    action: "count",
+    entity_type: "stock_opname",
+    entity_id: parsed.data.session_id,
+    new_data: {
+      source: "barcode_scan",
+      barcode: result.barcode,
+      line_id: result.line_id,
+      physical_qty: result.physical_qty,
+    },
+  });
+
+  revalidateOpname();
+  return { data: result };
 }
 
 export async function submitStockOpnameForReview(sessionId: string) {

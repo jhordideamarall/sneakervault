@@ -1,24 +1,27 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Badge, Button, Card, FieldLabel, Input, Textarea } from "@sneakervault/ui";
+import { Badge, Button, Card, FieldLabel, Input, Textarea, cn } from "@sneakervault/ui";
 import { exportToExcel, exportToPDF } from "@/lib/export";
 import {
   approveStockOpname,
   cancelStockOpname,
+  incrementStockOpnameCount,
   saveStockOpnameCounts,
   startStockOpname,
   submitStockOpnameForReview,
 } from "@/lib/actions/stock-opname";
 import { useToast } from "@/components/toast";
+import { CameraScanner } from "@/components/scanner/camera-scanner";
 import type {
   StockOpnameDetail,
   StockOpnameSessionRow,
 } from "@/lib/queries";
 import {
   Check,
+  Camera,
   ClipboardCheck,
   Download,
   FileSpreadsheet,
@@ -63,6 +66,9 @@ export function StockOpnameClient({
   const [opnameDate, setOpnameDate] = useState(today());
   const [notes, setNotes] = useState("");
   const [scanCode, setScanCode] = useState("");
+  const [scanPending, setScanPending] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const scanPendingRef = useRef(false);
   const [counts, setCounts] = useState<Record<string, { qty: string; reason: string }>>(
     () =>
       Object.fromEntries(
@@ -213,34 +219,59 @@ export function StockOpnameClient({
     });
   }
 
-  function handleScanSubmit() {
+  async function persistScan(codeValue: string) {
     if (!detail) return;
-    const rawCode = scanCode.trim();
-    const code = rawCode.toLowerCase();
-    if (!code) return;
+    const barcode = codeValue.trim();
+    if (!barcode || scanPendingRef.current) return;
 
-    const line = detail.lines.find(
-      (item) =>
-        item.barcode.toLowerCase() === code || item.sku.toLowerCase() === code,
-    );
-    if (!line) {
-      toast.push(`Barcode/SKU ${rawCode} tidak ada di sesi ini`, "error");
-      setScanCode("");
-      return;
-    }
+    scanPendingRef.current = true;
+    setScanPending(true);
+    try {
+      const result = await incrementStockOpnameCount({
+        session_id: detail.id,
+        barcode,
+      });
+      const message = actionError(result);
+      if (message) {
+        toast.push(message, "error");
+        return;
+      }
 
-    setCounts((current) => {
-      const currentQty = Number(current[line.id]?.qty || 0);
-      return {
+      const data = (result as {
+        data: {
+          line_id: string;
+          physical_qty: number;
+          product_label: string;
+        };
+      }).data;
+      setCounts((current) => ({
         ...current,
-        [line.id]: {
-          qty: String(currentQty + 1),
-          reason: current[line.id]?.reason ?? "",
+        [data.line_id]: {
+          qty: String(data.physical_qty),
+          reason: current[data.line_id]?.reason ?? "",
         },
-      };
-    });
-    toast.push(`${line.product_label} dihitung +1`, "success");
-    setScanCode("");
+      }));
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        navigator.vibrate(60);
+      }
+      toast.push(`${data.product_label} tersimpan +1`, "success");
+      // One camera activation represents exactly one count. Closing the
+      // preview prevents a barcode held in frame from being counted twice.
+      setCameraOpen(false);
+    } catch (error) {
+      toast.push(
+        error instanceof Error ? error.message : "Gagal menyimpan hasil scan",
+        "error",
+      );
+    } finally {
+      setScanCode("");
+      scanPendingRef.current = false;
+      setScanPending(false);
+    }
+  }
+
+  function handleScanSubmit() {
+    void persistScan(scanCode);
   }
 
   function currentPhysicalQty(lineId: string, fallback: number | null) {
@@ -432,8 +463,8 @@ export function StockOpnameClient({
               </div>
               {["open", "counting"].includes(detail.status) ? (
                 <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
-                  <FieldLabel htmlFor="opname-scan">Scan Barcode/SKU Fisik</FieldLabel>
-                  <div className="mt-2 flex gap-2">
+                  <FieldLabel htmlFor="opname-scan">Barcode Fisik</FieldLabel>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                     <Input
                       id="opname-scan"
                       value={scanCode}
@@ -444,16 +475,33 @@ export function StockOpnameClient({
                           handleScanSubmit();
                         }
                       }}
-                      placeholder="Scan barcode, setiap scan menambah qty fisik +1"
+                      placeholder="Scan atau ketik barcode, lalu Enter"
                       autoFocus
                     />
-                    <Button type="button" onClick={handleScanSubmit} disabled={pending}>
+                    <Button type="button" onClick={handleScanSubmit} disabled={pending || scanPending}>
                       <ScanLine size={16} />
-                      Hitung
+                      {scanPending ? "Menyimpan…" : "Hitung +1"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setCameraOpen((open) => !open)}
+                      disabled={pending}
+                    >
+                      <Camera size={16} />
+                      {cameraOpen ? "Tutup Kamera" : "Kamera HP"}
                     </Button>
                   </div>
+                  {cameraOpen && (
+                    <CameraScanner
+                      onScan={(code) => {
+                        setScanCode(code);
+                        void persistScan(code);
+                      }}
+                    />
+                  )}
                   <p className="mt-2 text-xs text-white/40">
-                    Input manual tetap tersedia di tabel untuk koreksi hitungan.
+                    Setiap scan langsung tersimpan ke Supabase sebagai +1. Input manual tetap tersedia untuk koreksi.
                   </p>
                 </div>
               ) : null}
@@ -475,7 +523,95 @@ export function StockOpnameClient({
               </div>
             </Card>
 
-            <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+            <div className="space-y-3 md:hidden">
+              {detail.lines.map((line) => {
+                const raw = counts[line.id]?.qty ?? "";
+                const physical = raw === "" ? line.physical_qty : Number(raw);
+                const variance = physical === null ? null : physical - line.system_qty;
+                return (
+                  <Card key={line.id} className="space-y-4 p-4">
+                    <div>
+                      <p className="text-sm font-medium text-white/85">{line.product_label}</p>
+                      <p className="mt-1 break-all font-mono text-[11px] text-white/35">
+                        {line.sku} · {line.barcode}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-lg bg-white/[0.03] p-2">
+                        <p className="text-[10px] uppercase tracking-wider text-white/30">Sistem</p>
+                        <p className="mt-1 font-semibold text-white/70">{line.system_qty}</p>
+                      </div>
+                      <div className="rounded-lg bg-white/[0.03] p-2">
+                        <p className="text-[10px] uppercase tracking-wider text-white/30">Fisik</p>
+                        <p className="mt-1 font-semibold text-white/70">{physical ?? "—"}</p>
+                      </div>
+                      <div className="rounded-lg bg-white/[0.03] p-2">
+                        <p className="text-[10px] uppercase tracking-wider text-white/30">Selisih</p>
+                        <p className={cn(
+                          "mt-1 font-semibold",
+                          variance === null
+                            ? "text-white/30"
+                            : variance < 0
+                              ? "text-red-300"
+                              : variance > 0
+                                ? "text-emerald-300"
+                                : "text-white/50",
+                        )}>
+                          {variance ?? "—"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid gap-3">
+                      <div>
+                        <FieldLabel htmlFor={`mobile-qty-${line.id}`}>Jumlah fisik</FieldLabel>
+                        <Input
+                          id={`mobile-qty-${line.id}`}
+                          type="number"
+                          min={0}
+                          disabled={![
+                            "open",
+                            "counting",
+                          ].includes(detail.status)}
+                          value={raw}
+                          onChange={(event) =>
+                            setCounts((current) => ({
+                              ...current,
+                              [line.id]: {
+                                qty: event.target.value,
+                                reason: current[line.id]?.reason ?? "",
+                              },
+                            }))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel htmlFor={`mobile-reason-${line.id}`}>Alasan selisih</FieldLabel>
+                        <Input
+                          id={`mobile-reason-${line.id}`}
+                          disabled={![
+                            "open",
+                            "counting",
+                          ].includes(detail.status)}
+                          value={counts[line.id]?.reason ?? ""}
+                          onChange={(event) =>
+                            setCounts((current) => ({
+                              ...current,
+                              [line.id]: {
+                                qty: current[line.id]?.qty ?? "",
+                                reason: event.target.value,
+                              },
+                            }))
+                          }
+                          placeholder={variance !== null && variance !== 0 ? "Wajib jelaskan selisih" : "Opsional"}
+                        />
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+
+            <div className="hidden overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] md:block">
               <div className="max-h-[680px] overflow-auto">
                 <table className="w-full min-w-[920px] text-left">
                   <thead className="sticky top-0 bg-[#151515] text-[11px] uppercase tracking-wider text-white/30">
